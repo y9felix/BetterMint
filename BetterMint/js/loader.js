@@ -1,24 +1,14 @@
 "use strict";
 
 let inputObjects = {
-  "option-api-stockfish": { default_value: true },
   "option-url-api-stockfish": { default_value: "ws://localhost:8000/ws" },
   "option-depth": { default_value: 3 },
-  "option-multipv": { default_value: 3 },
-  "option-hashtable-ram": { default_value: 1024 },
-  "option-num-cores": { default_value: 1 },
-  "option-highmatechance": { default_value: false },
-  "option-mate-finder-value": { default_value: 5 },
   "option-evaluation-bar": { default_value: true },
   "option-show-hints": { default_value: true },
   "option-move-analysis": { default_value: true },
-  "option-text-to-speech": { default_value: false },
   "option-notifications": { default_value: false },
   "option-auto-queue": { default_value: false },
   "option-legit-auto-move": { default_value: false },
-  "option-random-best-move": { default_value: false },
-  "option-best-move-chance": { default_value: 30 },
-  "option-max-legit-auto-move-depth": { default_value: 10 },
   "option-human-like-moves": { default_value: true },
   "option-move-pace": { default_value: 1.5 },
   "option-advanced-timing": { default_value: false },
@@ -41,7 +31,6 @@ for (let key in inputObjects) {
   DefaultExtensionOptions[key] = inputObjects[key].default_value;
 }
 
-// Function to inject the script (your extension script)
 function injectScript(file) {
   let script = document.createElement("script");
   script.src = chrome.runtime.getURL(file);
@@ -52,7 +41,6 @@ function injectScript(file) {
   };
 }
 
-// Listen for messages
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.data !== "popout") {
     window.dispatchEvent(
@@ -65,7 +53,6 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   }
 });
 
-// Respond to BetterMintGetOptions events
 window.addEventListener("BetterMintGetOptions", function (evt) {
   chrome.storage.sync.get(DefaultExtensionOptions, function (opts) {
     let request = evt.detail;
@@ -81,7 +68,6 @@ window.addEventListener("BetterMintGetOptions", function (evt) {
   });
 });
 
-// Initialize Config object for Mint.js
 window.Config = {
   threadedEnginePaths: {
     stockfish: {
@@ -98,5 +84,4 @@ window.Config = {
   pathToEcoJson: chrome.runtime.getURL("js/eco.json")
 };
 
-// Inject other necessary scripts automatically
-injectScript("js/Mint.js"); // Injects Mint.js for web-side functionality
+injectScript("js/Mint.js");
