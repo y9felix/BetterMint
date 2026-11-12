@@ -34,12 +34,12 @@
                 <input id="option-url-api-stockfish" type="text" class="text-input" spellcheck="false" autocomplete="off" />
             </div>
 
-            <div class="control-col options-slider" data-min="1" data-max="30">
+            <div class="control-col options-slider" data-min="1" data-max="50">
                 <div class="slider-header">
                     <span class="title">Search Depth</span>
                     <span class="badge" id="badge-option-depth">3</span>
                 </div>
-                <input id="option-depth" type="range" min="1" max="30" value="3" class="range-slider" />
+                <input id="option-depth" type="range" min="1" max="50" value="3" class="range-slider" />
             </div>
 
             <div class="control-col options-slider" data-min="1" data-max="10">
@@ -138,12 +138,12 @@
                 <input id="option-best-move-chance" type="range" min="0" max="100" value="30" class="range-slider" />
             </div>
 
-            <div class="control-col options-slider" data-min="1" data-max="25">
+            <div class="control-col options-slider" data-min="1" data-max="50">
                 <div class="slider-header">
                     <span class="title">Max Auto Move Depth</span>
                     <span class="badge" id="badge-option-max-legit-auto-move-depth">10</span>
                 </div>
-                <input id="option-max-legit-auto-move-depth" type="range" min="1" max="25" value="10" class="range-slider" />
+                <input id="option-max-legit-auto-move-depth" type="range" min="1" max="50" value="10" class="range-slider" />
             </div>
         </section>
 
@@ -164,12 +164,12 @@
                 </label>
 
                 <div id="human-pace-group" class="sub-panel">
-                    <div class="control-col options-slider" data-min="0.5" data-max="5.0">
+                    <div class="control-col options-slider" data-min="0.5" data-max="15.0">
                         <div class="slider-header">
                             <span class="title">Move Pace (Seconds)</span>
                             <span class="badge" id="badge-option-move-pace">1.5</span>
                         </div>
-                        <input id="option-move-pace" type="range" min="0.5" max="5.0" step="0.1" value="1.5" class="range-slider" />
+                        <input id="option-move-pace" type="range" min="0.5" max="15.0" step="0.1" value="1.5" class="range-slider" />
                     </div>
 
                     <label class="control-row options-checkbox" for="option-advanced-timing">
@@ -190,9 +190,9 @@
                         <div class="control-col options-slider" data-min="0.10" data-max="1.00">
                             <div class="slider-header">
                                 <span class="title">Timing Spread (σ)</span>
-                                <span class="badge" id="badge-option-timing-spread">0.45</span>
+                                <span class="badge" id="badge-option-timing-spread">1.00</span>
                             </div>
-                            <input id="option-timing-spread" type="range" min="0.10" max="1.00" step="0.05" value="0.45" class="range-slider" />
+                            <input id="option-timing-spread" type="range" min="0.10" max="1.00" step="0.05" value="1.00" class="range-slider" />
                         </div>
 
                         <label class="control-row options-checkbox" for="option-fast-recaptures">

@@ -46,9 +46,6 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding-left: 8px;
-    border-left: 2px solid var(--border-color);
-    margin-top: 4px;
 }
 
 .app-header {
