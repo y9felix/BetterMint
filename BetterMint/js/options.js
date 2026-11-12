@@ -171,17 +171,11 @@ function InitOptions() {
 }
 
 window.addEventListener("DOMContentLoaded", function () {
-  const popoutBtn = document.getElementById("popoutb");
-  if (popoutBtn) {
-    popoutBtn.addEventListener("click", function () {
-      chrome.tabs.query({ url: "*://*.chess.com/*" }, function (tabs) {
-        tabs.forEach(function (tab) {
-          chrome.tabs.sendMessage(tab.id, {
-            type: "popout",
-            data: "popout",
-          }).catch(function () {});
-        });
-      });
+  const githubLink = document.getElementById("github-link");
+  if (githubLink) {
+    githubLink.addEventListener("click", function (event) {
+      event.preventDefault();
+      chrome.tabs.create({ url: "https://github.com/BotSolvers/BetterMint" });
     });
   }
 

@@ -423,10 +423,8 @@ class GameController {
     }
   }
   UpdateEngine(isNewGame) {
-    // console.log("UpdateEngine", isNewGame);
     let FENs = this.controller.getFEN();
     this.BetterMintmaster.engine.UpdatePosition(FENs, isNewGame);
-    this.SetCurrentDepth(0);
   }
   ResetGame() {
     // Refresh options from the controller to get the correct player color for the new game
@@ -719,11 +717,9 @@ class StockfishEngine {
 
   send(cmd) {
     if (this.isWebSocketOpen()) {
-      if (!getValueConfig(enumOptions.ApiStockfish)) {
-        this.stockfish.postMessage(cmd);
-      } else {
-        this.stockfish.send(cmd);
-      }
+      this.stockfish.send(cmd);
+    } else if (this.stockfish && typeof this.stockfish.postMessage === "function") {
+      this.stockfish.postMessage(cmd);
     } else {
       console.warn("Attempted to send command while WebSocket is not open.");
     }

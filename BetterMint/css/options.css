@@ -17,6 +17,17 @@
     box-sizing: border-box;
 }
 
+html, body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
 body {
     width: 380px;
     background-color: var(--bg-primary);
@@ -25,23 +36,6 @@ body {
     font-size: 13px;
     line-height: 1.4;
     user-select: none;
-}
-
-::-webkit-scrollbar {
-    width: 6px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bg-primary);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
 }
 
 .app-header {
@@ -83,6 +77,7 @@ body {
     justify-content: center;
     color: var(--text-muted);
     cursor: pointer;
+    text-decoration: none;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
