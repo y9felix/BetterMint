@@ -118,7 +118,6 @@ var enumOptions = {
   ShowHints: "option-show-hints",
   TextToSpeech: "option-text-to-speech",
   MoveAnalysis: "option-move-analysis",
-  DepthBar: "option-depth-bar",
   EvaluationBar: "option-evaluation-bar",
   AutoQueue: "option-auto-queue",
   PanicMode: "option-panic-mode",
@@ -191,7 +190,6 @@ class GameController {
     this.chessboard = chessboard;
     this.controller = chessboard.game;
     this.options = this.controller.getOptions();
-    this.depthBar = null;
     this.evalBar = null;
     this.evalBarFill = null;
     this.evalScore = null;
@@ -370,14 +368,6 @@ class GameController {
 
       clearInterval(interval1);
 
-      if (getValueConfig(enumOptions.DepthBar) && this.depthBar == null) {
-        // create depth bar
-        let depthBar = document.createElement("div");
-        depthBar.classList.add("depthBarLayoutt");
-        depthBar.innerHTML = `<div class="depthBarr"><span class="depthBarProgress"></span></div>`;
-        layoutMain.insertBefore(depthBar, layoutChessboard.nextSibling);
-        this.depthBar = depthBar.querySelector(".depthBarProgress");
-      }
       if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
         // create eval bar
         let evalBar = document.createElement("div");
@@ -519,29 +509,10 @@ class GameController {
       this.currentMarkings.reverse();
       this.controller.markings.addMany(this.currentMarkings);
     }
-    if (getValueConfig(enumOptions.DepthBar)) {
-      let depthPercent =
-        ((isBestMove ? bestMove.depth : bestMove.depth - 1) /
-          getValueConfig(enumOptions.Depth)) *
-        100;
-      this.SetCurrentDepth(depthPercent);
-    }
     if (getValueConfig(enumOptions.EvaluationBar)) {
       let score = bestMove.mate != null ? bestMove.mate : bestMove.cp;
       if (this.controller.getTurn() == 2) score *= -1;
       this.SetEvaluation(score, bestMove.mate != null);
-    }
-  }
-  SetCurrentDepth(percentage) {
-    if (this.depthBar == null) return;
-    let style = this.depthBar.style;
-    if (percentage <= 0) {
-      this.depthBar.classList.add("disable-transition");
-      style.width = `0%`;
-      this.depthBar.classList.remove("disable-transition");
-    } else {
-      if (percentage > 100) percentage = 100;
-      style.width = `${percentage}%`;
     }
   }
   SetEvaluation(score, isMate) {

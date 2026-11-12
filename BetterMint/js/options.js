@@ -61,9 +61,6 @@ let inputObjects = {
   "option-move-analysis": {
     default_value: true,
   },
-  "option-depth-bar": {
-    default_value: true,
-  },
   "option-evaluation-bar": {
     default_value: true,
   },

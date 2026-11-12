@@ -20,7 +20,6 @@ let inputObjects = {
   "option-show-hints": { default_value: true },
   "option-text-to-speech": { default_value: false },
   "option-move-analysis": { default_value: true },
-  "option-depth-bar": { default_value: true },
   "option-evaluation-bar": { default_value: true },
   "option-auto-queue": { default_value: false },
   "option-panic-mode": { default_value: false },

@@ -23,7 +23,6 @@
                 "js/loader.js"
             ],
             "css": [
-                "css/depthbar.css",
                 "css/evalbar.css",
                 "css/material-icon.css"
             ],
