@@ -847,7 +847,7 @@ class StockfishEngine {
     }
     const movePace = parseFloat(getValueConfig(enumOptions.MovePace)) || 1.5;
     const physicalFloor = parseInt(getValueConfig(enumOptions.PhysicalFloor), 10) || 200;
-    const timingSpread = parseFloat(getValueConfig(enumOptions.TimingSpread)) || 0.45;
+    const timingSpread = parseFloat(getValueConfig(enumOptions.TimingSpread)) || 0.80;
 
     let median = movePace * 1000;
 
@@ -862,11 +862,11 @@ class StockfishEngine {
       const recapMult = parseFloat(getValueConfig(enumOptions.RecaptureMultiplier)) || 0.50;
       median *= recapMult;
     } else if (getValueConfig(enumOptions.FastOpening)) {
-      const openingThreshold = parseInt(getValueConfig(enumOptions.OpeningMovesThreshold), 10) || 7;
+      const openingThreshold = parseInt(getValueConfig(enumOptions.OpeningMovesThreshold), 10) || 8;
       const fenParts = controller.getFEN().split(" ");
       const fullMoveNumber = parseInt(fenParts[5], 10) || 1;
       if (fullMoveNumber <= openingThreshold) {
-        const openingMult = parseFloat(getValueConfig(enumOptions.OpeningMultiplier)) || 0.65;
+        const openingMult = parseFloat(getValueConfig(enumOptions.OpeningMultiplier)) || 0.35;
         median *= openingMult;
       }
     }
