@@ -1,84 +1,39 @@
 "use strict";
 
 let inputObjects = {
-  "option-url-api-stockfish": {
-    default_value: "ws://localhost:8000/ws",
-  },
-  "option-api-stockfish": {
-    default_value: true,
-  },
-  "option-num-cores": {
-    default_value: 1,
-  },
-  "option-hashtable-ram": {
-    default_value: 1024,
-  },
-  "option-depth": {
-    default_value: 3,
-  },
-  "option-mate-finder-value": {
-    default_value: 5,
-  },
-  "option-multipv": {
-    default_value: 3,
-  },
-  "option-highmatechance": {
-    default_value: false,
-  },
-  "option-auto-move-time": {
-    default_value: 0,
-  },
-  "option-auto-move-time-random": {
-    default_value: 10000,
-  },
-  "option-auto-move-time-random-div": {
-    default_value: 10,
-  },
-  "option-auto-move-time-random-multi": {
-    default_value: 1000,
-  },
-  "option-max-legit-auto-move-depth": {
-    default_value: 10,
-  },
-  "option-legit-auto-move": {
-    default_value: false,
-  },
-  "option-best-move-chance": {
-    default_value: 30,
-  },
-  "option-random-best-move": {
-    default_value: false,
-  },
-  "option-show-hints": {
-    default_value: true,
-  },
-  "option-text-to-speech": {
-    default_value: false,
-  },
-  "option-move-analysis": {
-    default_value: true,
-  },
-  "option-evaluation-bar": {
-    default_value: true,
-  },
-  "option-auto-queue": {
-    default_value: false,
-  },
-  "option-panic-mode": {
-    default_value: false,
-  },
-  "option-panic-time": {
-    default_value: 10,
-  },
-  "option-notifications": {
-    default_value: true,
-  },
-  "option-fast-opening-moves": {
-    default_value: false,
-  },
-  "option-fast-opening-speed": {
-    default_value: 50,
-  },
+  "option-api-stockfish": { default_value: true },
+  "option-url-api-stockfish": { default_value: "ws://localhost:8000/ws" },
+  "option-depth": { default_value: 3 },
+  "option-multipv": { default_value: 3 },
+  "option-hashtable-ram": { default_value: 1024 },
+  "option-num-cores": { default_value: 1 },
+  "option-highmatechance": { default_value: false },
+  "option-mate-finder-value": { default_value: 5 },
+  "option-evaluation-bar": { default_value: true },
+  "option-show-hints": { default_value: true },
+  "option-move-analysis": { default_value: true },
+  "option-text-to-speech": { default_value: false },
+  "option-notifications": { default_value: false },
+  "option-auto-queue": { default_value: false },
+  "option-legit-auto-move": { default_value: false },
+  "option-random-best-move": { default_value: false },
+  "option-best-move-chance": { default_value: 30 },
+  "option-max-legit-auto-move-depth": { default_value: 10 },
+  "option-human-like-moves": { default_value: true },
+  "option-move-pace": { default_value: 1.5 },
+  "option-advanced-timing": { default_value: false },
+  "option-physical-floor": { default_value: 200 },
+  "option-timing-spread": { default_value: 0.45 },
+  "option-fast-recaptures": { default_value: true },
+  "option-recapture-multiplier": { default_value: 0.50 },
+  "option-fast-forced-moves": { default_value: true },
+  "option-forced-multiplier": { default_value: 0.35 },
+  "option-fast-opening": { default_value: true },
+  "option-opening-moves-threshold": { default_value: 7 },
+  "option-opening-multiplier": { default_value: 0.65 },
+  "option-clock-scaling": { default_value: true },
+  "option-clock-threshold": { default_value: 60 },
+  "option-clock-min-multiplier": { default_value: 0.30 }
 };
 
 let DefaultExtensionOptions = {};
