@@ -41,6 +41,26 @@ for (let key in inputObjects) {
   DefaultExtensionOptions[key] = inputObjects[key].default_value;
 }
 
+function UpdateVisibility() {
+  const legitAutoMove = document.getElementById("option-legit-auto-move");
+  const pacingGroup = document.getElementById("pacing-group");
+  if (legitAutoMove && pacingGroup) {
+    pacingGroup.classList.toggle("hidden", !legitAutoMove.checked);
+  }
+
+  const humanLike = document.getElementById("option-human-like-moves");
+  const humanPaceGroup = document.getElementById("human-pace-group");
+  if (humanLike && humanPaceGroup) {
+    humanPaceGroup.classList.toggle("hidden", !humanLike.checked);
+  }
+
+  const advancedTiming = document.getElementById("option-advanced-timing");
+  const advancedPanel = document.getElementById("advanced-timing-panel");
+  if (advancedTiming && advancedPanel) {
+    advancedPanel.classList.toggle("hidden", !advancedTiming.checked);
+  }
+}
+
 function RestoreOptions() {
   chrome.storage.sync.get(DefaultExtensionOptions, function (opts) {
     let options = opts || {};
@@ -49,7 +69,7 @@ function RestoreOptions() {
       if (!field) continue;
 
       if (field.type === "checkbox") {
-        field.checked = Boolean(options[key]);
+        field.checked = options[key] !== undefined ? Boolean(options[key]) : Boolean(inputObjects[key].default_value);
       } else if (field.type === "range") {
         field.value = options[key] !== undefined ? options[key] : inputObjects[key].default_value;
         const badge = document.getElementById("badge-" + key);
@@ -58,6 +78,7 @@ function RestoreOptions() {
         field.value = options[key] !== undefined ? options[key] : inputObjects[key].default_value;
       }
     }
+    UpdateVisibility();
   });
 }
 
@@ -70,11 +91,14 @@ function OnOptionsChange() {
     if (field.type === "checkbox") {
       options[key] = field.checked;
     } else if (field.type === "range") {
-      options[key] = parseInt(field.value, 10);
+      const val = parseFloat(field.value);
+      options[key] = isNaN(val) ? 0 : val;
     } else if (field.type === "text") {
       options[key] = field.value.trim();
     }
   }
+
+  UpdateVisibility();
 
   chrome.storage.sync.set(options);
   chrome.tabs.query({ url: "*://*.chess.com/*" }, function (tabs) {
