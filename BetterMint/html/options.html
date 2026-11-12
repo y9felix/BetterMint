@@ -23,12 +23,6 @@
         <section class="card">
             <h2 class="card-title">Engine Server</h2>
 
-            <label class="control-row options-checkbox" for="option-api-stockfish">
-                <span class="control-label-text">Enable Engine Server</span>
-                <input id="option-api-stockfish" type="checkbox" class="toggle-input" checked />
-                <span class="toggle-slider"></span>
-            </label>
-
             <div class="control-col options-text">
                 <label class="control-label-text" for="option-url-api-stockfish">WebSocket API URL</label>
                 <input id="option-url-api-stockfish" type="text" class="text-input" spellcheck="false" autocomplete="off" />
@@ -41,44 +35,6 @@
                 </div>
                 <input id="option-depth" type="range" min="1" max="50" value="3" class="range-slider" />
             </div>
-
-            <div class="control-col options-slider" data-min="1" data-max="10">
-                <div class="slider-header">
-                    <span class="title">MultiPV (Lines)</span>
-                    <span class="badge" id="badge-option-multipv">3</span>
-                </div>
-                <input id="option-multipv" type="range" min="1" max="10" value="3" class="range-slider" />
-            </div>
-
-            <div class="control-col options-slider" data-min="16" data-max="4096">
-                <div class="slider-header">
-                    <span class="title">Hash RAM (MB)</span>
-                    <span class="badge" id="badge-option-hashtable-ram">1024</span>
-                </div>
-                <input id="option-hashtable-ram" type="range" min="16" max="4096" step="16" value="1024" class="range-slider" />
-            </div>
-
-            <div class="control-col options-slider" data-min="1" data-max="16">
-                <div class="slider-header">
-                    <span class="title">CPU Cores</span>
-                    <span class="badge" id="badge-option-num-cores">1</span>
-                </div>
-                <input id="option-num-cores" type="range" min="1" max="16" value="1" class="range-slider" />
-            </div>
-
-            <label class="control-row options-checkbox" for="option-highmatechance">
-                <span class="control-label-text">Mate Finder</span>
-                <input id="option-highmatechance" type="checkbox" class="toggle-input" />
-                <span class="toggle-slider"></span>
-            </label>
-
-            <div class="control-col options-slider" data-min="1" data-max="10">
-                <div class="slider-header">
-                    <span class="title">Mate Finder Max Depth</span>
-                    <span class="badge" id="badge-option-mate-finder-value">5</span>
-                </div>
-                <input id="option-mate-finder-value" type="range" min="1" max="10" value="5" class="range-slider" />
-            </div>
         </section>
 
         <section class="card">
@@ -86,31 +42,19 @@
 
             <label class="control-row options-checkbox" for="option-evaluation-bar">
                 <span class="control-label-text">Evaluation Bar</span>
-                <input id="option-evaluation-bar" type="checkbox" class="toggle-input" />
+                <input id="option-evaluation-bar" type="checkbox" class="toggle-input" checked />
                 <span class="toggle-slider"></span>
             </label>
 
             <label class="control-row options-checkbox" for="option-show-hints">
-                <span class="control-label-text">Show Move Hints</span>
-                <input id="option-show-hints" type="checkbox" class="toggle-input" />
+                <span class="control-label-text">Show Hint Arrows</span>
+                <input id="option-show-hints" type="checkbox" class="toggle-input" checked />
                 <span class="toggle-slider"></span>
             </label>
 
             <label class="control-row options-checkbox" for="option-move-analysis">
                 <span class="control-label-text">Move Analysis</span>
-                <input id="option-move-analysis" type="checkbox" class="toggle-input" />
-                <span class="toggle-slider"></span>
-            </label>
-
-            <label class="control-row options-checkbox" for="option-text-to-speech">
-                <span class="control-label-text">Text-to-Speech</span>
-                <input id="option-text-to-speech" type="checkbox" class="toggle-input" />
-                <span class="toggle-slider"></span>
-            </label>
-
-            <label class="control-row options-checkbox" for="option-notifications">
-                <span class="control-label-text">Toast Notifications</span>
-                <input id="option-notifications" type="checkbox" class="toggle-input" />
+                <input id="option-move-analysis" type="checkbox" class="toggle-input" checked />
                 <span class="toggle-slider"></span>
             </label>
 
@@ -119,32 +63,12 @@
                 <input id="option-auto-queue" type="checkbox" class="toggle-input" />
                 <span class="toggle-slider"></span>
             </label>
-        </section>
 
-        <section class="card">
-            <h2 class="card-title">Move Selection</h2>
-
-            <label class="control-row options-checkbox" for="option-random-best-move">
-                <span class="control-label-text">Randomize Top Moves</span>
-                <input id="option-random-best-move" type="checkbox" class="toggle-input" />
+            <label class="control-row options-checkbox" for="option-notifications">
+                <span class="control-label-text">Toast Notifications</span>
+                <input id="option-notifications" type="checkbox" class="toggle-input" />
                 <span class="toggle-slider"></span>
             </label>
-
-            <div class="control-col options-slider" data-min="0" data-max="100">
-                <div class="slider-header">
-                    <span class="title">Best Move Chance (%)</span>
-                    <span class="badge" id="badge-option-best-move-chance">30</span>
-                </div>
-                <input id="option-best-move-chance" type="range" min="0" max="100" value="30" class="range-slider" />
-            </div>
-
-            <div class="control-col options-slider" data-min="1" data-max="50">
-                <div class="slider-header">
-                    <span class="title">Max Auto Move Depth</span>
-                    <span class="badge" id="badge-option-max-legit-auto-move-depth">10</span>
-                </div>
-                <input id="option-max-legit-auto-move-depth" type="range" min="1" max="50" value="10" class="range-slider" />
-            </div>
         </section>
 
         <section class="card">
@@ -156,7 +80,7 @@
                 <span class="toggle-slider"></span>
             </label>
 
-            <div id="pacing-group" class="sub-panel">
+            <div id="pacing-group" class="sub-panel hidden">
                 <label class="control-row options-checkbox" for="option-human-like-moves">
                     <span class="control-label-text">Human-like Moves</span>
                     <input id="option-human-like-moves" type="checkbox" class="toggle-input" checked />
