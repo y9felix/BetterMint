@@ -108,23 +108,31 @@ var enumOptions = {
   MateFinderValue: "option-mate-finder-value",
   MultiPV: "option-multipv",
   HighMateChance: "option-highmatechance",
-  AutoMoveTime: "option-auto-move-time",
-  AutoMoveTimeRandom: "option-auto-move-time-random",
-  AutoMoveTimeRandomDiv: "option-auto-move-time-random-div",
-  AutoMoveTimeRandomMulti: "option-auto-move-time-random-multi",
   LegitAutoMove: "option-legit-auto-move",
+  HumanLikeMoves: "option-human-like-moves",
+  MovePace: "option-move-pace",
+  AdvancedTiming: "option-advanced-timing",
+  PhysicalFloor: "option-physical-floor",
+  TimingSpread: "option-timing-spread",
+  FastRecaptures: "option-fast-recaptures",
+  RecaptureMultiplier: "option-recapture-multiplier",
+  FastForcedMoves: "option-fast-forced-moves",
+  ForcedMultiplier: "option-forced-multiplier",
+  FastOpening: "option-fast-opening",
+  OpeningMovesThreshold: "option-opening-moves-threshold",
+  OpeningMultiplier: "option-opening-multiplier",
+  ClockScaling: "option-clock-scaling",
+  ClockThreshold: "option-clock-threshold",
+  ClockMinMultiplier: "option-clock-min-multiplier",
   BestMoveChance: "option-best-move-chance",
   RandomBestMove: "option-random-best-move",
+  MaxLegitAutoMoveDepth: "option-max-legit-auto-move-depth",
   ShowHints: "option-show-hints",
   TextToSpeech: "option-text-to-speech",
   MoveAnalysis: "option-move-analysis",
   EvaluationBar: "option-evaluation-bar",
   AutoQueue: "option-auto-queue",
-  PanicMode: "option-panic-mode",
-  PanicTime: "option-panic-time",
-  Notifications: "option-notifications",
-  FastOpeningMoves: "option-fast-opening-moves",
-  FastOpeningSpeed: "option-fast-opening-speed",
+  Notifications: "option-notifications"
 };
 
 // helper to parse remaining time for current player
@@ -195,10 +203,17 @@ class GameController {
     this.evalScore = null;
     this.evalScoreAbbreviated = null;
     this.currentMarkings = [];
+    this.turnStartTime = performance.now();
+    this.autoMoveTimer = null;
     let self = this;
     this.controller.on("Move", (event) => {
-      console.log("On Move", event.data);
-      
+      if (this.autoMoveTimer !== null) {
+        clearTimeout(this.autoMoveTimer);
+        this.autoMoveTimer = null;
+      }
+      if (this.controller.getPlayingAs() === this.controller.getTurn()) {
+        this.turnStartTime = performance.now();
+      }
       this.UpdateEngine(false);
     });
     // check if a new game has started
@@ -427,9 +442,14 @@ class GameController {
     this.BetterMintmaster.engine.UpdatePosition(FENs, isNewGame);
   }
   ResetGame() {
-    // Refresh options from the controller to get the correct player color for the new game
+    if (this.autoMoveTimer !== null) {
+      clearTimeout(this.autoMoveTimer);
+      this.autoMoveTimer = null;
+    }
     this.options = this.controller.getOptions();
-    console.log("ResetGame - Player Color Updated:", this.options.isPlayerBlack ? "Black" : "White");
+    if (this.controller.getPlayingAs() === this.controller.getTurn()) {
+      this.turnStartTime = performance.now();
+    }
     this.UpdateEngine(true);
     BetterMintmaster.game.RefreshEvalutionBar();
   }
@@ -819,6 +839,53 @@ class StockfishEngine {
       const callback = this.goDoneCallbacks.shift();
       callback();
     }
+  }
+
+  calculateTargetDelay(bestMove) {
+    if (!getValueConfig(enumOptions.HumanLikeMoves)) {
+      return 0;
+    }
+    const movePace = parseFloat(getValueConfig(enumOptions.MovePace)) || 1.5;
+    const physicalFloor = parseInt(getValueConfig(enumOptions.PhysicalFloor), 10) || 200;
+    const timingSpread = parseFloat(getValueConfig(enumOptions.TimingSpread)) || 0.45;
+
+    let median = movePace * 1000;
+
+    const controller = this.BetterMintmaster.game.controller;
+    const legalMoves = controller.getLegalMoves();
+    const lastMove = controller.getLastMove();
+
+    if (getValueConfig(enumOptions.FastForcedMoves) && legalMoves && legalMoves.length === 1) {
+      const forcedMult = parseFloat(getValueConfig(enumOptions.ForcedMultiplier)) || 0.35;
+      median *= forcedMult;
+    } else if (getValueConfig(enumOptions.FastRecaptures) && lastMove && bestMove && bestMove.to === lastMove.to) {
+      const recapMult = parseFloat(getValueConfig(enumOptions.RecaptureMultiplier)) || 0.50;
+      median *= recapMult;
+    } else if (getValueConfig(enumOptions.FastOpening)) {
+      const openingThreshold = parseInt(getValueConfig(enumOptions.OpeningMovesThreshold), 10) || 7;
+      const fenParts = controller.getFEN().split(" ");
+      const fullMoveNumber = parseInt(fenParts[5], 10) || 1;
+      if (fullMoveNumber <= openingThreshold) {
+        const openingMult = parseFloat(getValueConfig(enumOptions.OpeningMultiplier)) || 0.65;
+        median *= openingMult;
+      }
+    }
+
+    if (getValueConfig(enumOptions.ClockScaling)) {
+      const remainingSeconds = getRemainingPlayerTimeSeconds();
+      const clockThreshold = parseInt(getValueConfig(enumOptions.ClockThreshold), 10) || 60;
+      if (remainingSeconds !== null && remainingSeconds !== undefined && remainingSeconds < clockThreshold) {
+        const minMult = parseFloat(getValueConfig(enumOptions.ClockMinMultiplier)) || 0.30;
+        const factor = Math.max(minMult, remainingSeconds / clockThreshold);
+        median *= factor;
+      }
+    }
+
+    const u1 = Math.max(1e-7, Math.random());
+    const u2 = Math.random();
+    const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+    const mu = Math.log(Math.max(50, median - physicalFloor));
+    return Math.round(physicalFloor + Math.exp(mu + timingSpread * z));
   }
 
   UpdatePosition(FENs = null, isNewGame = true) {
@@ -1247,53 +1314,17 @@ class StockfishEngine {
           top_pv_moves = [fastestMateMove];
         }
       }
-      let panicActive = false;
-      if (getValueConfig(enumOptions.PanicMode) && getValueConfig(enumOptions.LegitAutoMove)) {
-        const remaining = getRemainingPlayerTimeSeconds();
-        const threshold = parseInt(getValueConfig(enumOptions.PanicTime));
-        if (remaining !== null && remaining <= threshold) panicActive = true;
-      }
+      const targetDelay = this.calculateTargetDelay(bestMove);
+      const elapsed = performance.now() - (this.BetterMintmaster.game.turnStartTime || performance.now());
+      const remainingDelay = Math.max(0, targetDelay - elapsed);
 
-      let auto_move_time;
-      if (panicActive) {
-        auto_move_time = Math.floor(Math.random() * 600); // 0-599 ms
-      } else {
-        auto_move_time =
-          getValueConfig(enumOptions.AutoMoveTime) +
-          (Math.floor(
-            Math.random() * getValueConfig(enumOptions.AutoMoveTimeRandom)
-          ) %
-            getValueConfig(enumOptions.AutoMoveTimeRandomDiv)) *
-            getValueConfig(enumOptions.AutoMoveTimeRandomMulti);
-      }
-
-
-      if (getValueConfig(enumOptions.FastOpeningMoves)) {
-        const fenParts = this.BetterMintmaster.game.controller.getFEN().split(" ");
-        const fullMoveNumber = parseInt(fenParts[5], 10) || 1;
-        if (fullMoveNumber <= 7) {
-          const speedPercentage = parseInt(getValueConfig(enumOptions.FastOpeningSpeed), 10);
-          const speedMultiplier = 1 + (speedPercentage * 2) / 100;
-          if (speedMultiplier > 0) {
-            auto_move_time /= speedMultiplier;
-          }
-        }
-      }
-
-      if (
-        isNaN(auto_move_time) ||
-        auto_move_time === null ||
-        auto_move_time === undefined
-      ) {
-        auto_move_time = 100;
-      }
-      const secondsTillAutoMove = (auto_move_time / 1000).toFixed(1);
-      if (getValueConfig(enumOptions.Notifications) && window.toaster) {
+      const secondsTillAutoMove = (remainingDelay / 1000).toFixed(1);
+      if (getValueConfig(enumOptions.Notifications) && window.toaster && remainingDelay > 0) {
         window.toaster.add({
           id: "chess.com",
           duration: (parseFloat(secondsTillAutoMove) + 1) * 1000,
           icon: "circle-info",
-          message: `BetterMint: Auto move in ${secondsTillAutoMove} seconds`,
+          message: `BetterMint: Auto move in ${secondsTillAutoMove}s`,
           style: {
             position: "fixed",
             bottom: "60px",
@@ -1307,9 +1338,25 @@ class StockfishEngine {
           },
         });
       }
-      setTimeout(() => {
-        this.BetterMintmaster.game.controller.move(moveData);
-      }, auto_move_time);
+
+      const controller = this.BetterMintmaster.game.controller;
+      if (this.BetterMintmaster.game.autoMoveTimer !== null) {
+        clearTimeout(this.BetterMintmaster.game.autoMoveTimer);
+        this.BetterMintmaster.game.autoMoveTimer = null;
+      }
+
+      if (remainingDelay <= 0) {
+        requestAnimationFrame(() => {
+          controller.move(moveData);
+        });
+      } else {
+        this.BetterMintmaster.game.autoMoveTimer = setTimeout(() => {
+          this.BetterMintmaster.game.autoMoveTimer = null;
+          requestAnimationFrame(() => {
+            controller.move(moveData);
+          });
+        }, remainingDelay);
+      }
     }
   }
   SortTopMoves() {
