@@ -847,7 +847,7 @@ class StockfishEngine {
     }
     const movePace = parseFloat(getValueConfig(enumOptions.MovePace)) || 1.5;
     const physicalFloor = parseInt(getValueConfig(enumOptions.PhysicalFloor), 10) || 200;
-    const timingSpread = parseFloat(getValueConfig(enumOptions.TimingSpread)) || 1.0;
+    const timingSpread = parseFloat(getValueConfig(enumOptions.TimingSpread)) || 0.45;
 
     let median = movePace * 1000;
 

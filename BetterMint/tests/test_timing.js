@@ -30,7 +30,7 @@ const baseConfig = {
   humanLikeMoves: true,
   movePace: 1.5,
   physicalFloor: 200,
-  timingSpread: 1.0,
+  timingSpread: 0.45,
   fastForcedMoves: true,
   forcedMultiplier: 0.35,
   fastRecaptures: true,
