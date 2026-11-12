@@ -101,13 +101,12 @@ function getGradientColor(start_color, end_color, percent) {
 
 var enumOptions = {
   UrlApiStockfish: "option-url-api-stockfish",
-  ApiStockfish: "option-api-stockfish",
-  NumCores: "option-num-cores",
-  HashtableRam: "option-hashtable-ram",
   Depth: "option-depth",
-  MateFinderValue: "option-mate-finder-value",
-  MultiPV: "option-multipv",
-  HighMateChance: "option-highmatechance",
+  EvaluationBar: "option-evaluation-bar",
+  ShowHints: "option-show-hints",
+  MoveAnalysis: "option-move-analysis",
+  AutoQueue: "option-auto-queue",
+  Notifications: "option-notifications",
   LegitAutoMove: "option-legit-auto-move",
   HumanLikeMoves: "option-human-like-moves",
   MovePace: "option-move-pace",
@@ -123,16 +122,7 @@ var enumOptions = {
   OpeningMultiplier: "option-opening-multiplier",
   ClockScaling: "option-clock-scaling",
   ClockThreshold: "option-clock-threshold",
-  ClockMinMultiplier: "option-clock-min-multiplier",
-  BestMoveChance: "option-best-move-chance",
-  RandomBestMove: "option-random-best-move",
-  MaxLegitAutoMoveDepth: "option-max-legit-auto-move-depth",
-  ShowHints: "option-show-hints",
-  TextToSpeech: "option-text-to-speech",
-  MoveAnalysis: "option-move-analysis",
-  EvaluationBar: "option-evaluation-bar",
-  AutoQueue: "option-auto-queue",
-  Notifications: "option-notifications"
+  ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
 // helper to parse remaining time for current player
@@ -591,86 +581,15 @@ class GameController {
   }
 }
 
-function getPieceFromFen(fen, square) {
-    const fenBoard = fen.split(' ')[0];
-    const ranks = fenBoard.split('/');
-
-    const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
-    const rank = 8 - parseInt(square.charAt(1), 10);
-
-    if (rank < 0 || rank > 7 || file < 0 || file > 7) {
-        return null; // Invalid square
-    }
-
-    const rankStr = ranks[rank];
-    let fileIdx = 0;
-    for (let i = 0; i < rankStr.length; i++) {
-        const char = rankStr.charAt(i);
-        if (/\d/.test(char)) { // it's a number for empty squares
-            fileIdx += parseInt(char, 10);
-        } else {
-            if (fileIdx === file) {
-                return char;
-            }
-            fileIdx++;
-        }
-    }
-    return null; // Should be an empty square
-}
-
-function getVerboseMove(move, fen) {
-    const piece = getPieceFromFen(fen, move.from);
-    // if (!piece) return move.move; // fallback - let's be optimistic
-
-    const pieceNames = {
-        'p': 'pawn', 'n': 'knight', 'b': 'bishop', 'r': 'rook', 'q': 'queen', 'k': 'king'
-    };
-
-    const pieceName = pieceNames[piece.toLowerCase()];
-
-    let verboseMove = `${pieceName} to ${move.to}`;
-
-    const capturedPiece = getPieceFromFen(fen, move.to);
-    if (capturedPiece) {
-        const capturedPieceName = pieceNames[capturedPiece.toLowerCase()];
-        verboseMove = `${pieceName} takes ${capturedPieceName} on ${move.to}`;
-    }
-
-    // basic castling detection
-    if (piece.toLowerCase() === 'k') {
-        const fromFile = move.from.charCodeAt(0);
-        const toFile = move.to.charCodeAt(0);
-        if (Math.abs(fromFile - toFile) > 1) {
-            if (toFile > fromFile) return "castles kingside";
-            else return "castles queenside";
-        }
-    }
-
-    // en passant detection
-    if (piece.toLowerCase() === 'p' && !capturedPiece && move.from.charAt(0) !== move.to.charAt(0)) {
-         verboseMove = `pawn takes on ${move.to}`;
-    }
-
-    if (move.promotion) {
-        const promotionPieceName = pieceNames[move.promotion.toLowerCase()];
-        verboseMove += ` promoting to a ${promotionPieceName}`;
-    }
-
-    return verboseMove;
-}
-
-
 class StockfishEngine {
   constructor(BetterMintmaster) {
-    let stockfishJsURL;
-    let stockfishPathConfig = Config && Config.threadedEnginePaths ? Config.threadedEnginePaths.stockfish : null;
     this.BetterMintmaster = BetterMintmaster;
     this.loaded = false;
     this.stopInFlight = false;
     this.ready = false;
     this.isEvaluating = false;
     this.isRequestedStop = false;
-    this.isGameStarted = false; // New state to track if a game has started
+    this.isGameStarted = false;
     this.readyCallbacks = [];
     this.goDoneCallbacks = [];
     this.topMoves = [];
@@ -679,50 +598,15 @@ class StockfishEngine {
     this.lastMoveScore = null;
     this.depth = getValueConfig(enumOptions.Depth);
     this.options = {
-      // "Move Overhead": "",
-   "Slow Mover": "10",
-   "MultiPV": getValueConfig(enumOptions.MultiPV),
+      "Slow Mover": "10",
+      "MultiPV": "1"
     };
 
-    // Initialize Stockfish
-    if (!getValueConfig(enumOptions.ApiStockfish)) {
-      if (stockfishPathConfig) {
-        try {
-          new SharedArrayBuffer(getValueConfig(enumOptions.HashtableRam));
-          stockfishJsURL = `${stockfishPathConfig.multiThreaded.loader}#${stockfishPathConfig.multiThreaded.engine}`;
-        } catch (e) {
-          stockfishJsURL = `${stockfishPathConfig.singleThreaded.loader}#${stockfishPathConfig.singleThreaded.engine}`;
-        }
-        this.initializeWorker(stockfishJsURL);
-      } else {
-        console.warn("Stockfish path config not found, falling back to WebSocket API");
-        this.initializeWebSocket(getValueConfig(enumOptions.UrlApiStockfish));
-      }
-    } else {
-      this.initializeWebSocket(getValueConfig(enumOptions.UrlApiStockfish));
-    }
+    this.initializeWebSocket(getValueConfig(enumOptions.UrlApiStockfish));
 
-    // Reconnect variables
     this.reconnectDelay = 500;
     this.maxReconnectDelay = 3000;
     this.reconnectAttempts = 5;
-  }
-
-  initializeWorker(stockfishJsURL) {
-    try {
-      this.stockfish = new Worker(stockfishJsURL);
-      this.stockfish.onmessage = (e) => {
-        this.ProcessMessage(e);
-      };
-      this.send("uci");
-      this.onReady(() => {
-        this.UpdateOptions();
-        this.send("ucinewgame");
-      });
-    } catch (e) {
-      alert("Failed to load stockfish");
-      throw e;
-    }
   }
 
   initializeWebSocket(url) {
@@ -776,20 +660,7 @@ class StockfishEngine {
       this.stopEvaluation(() => {
         if (this.isEvaluating) return;
         this.isEvaluating = true;
-
-        // Panic mode logic
-        let cmd = null;
-        if (getValueConfig(enumOptions.PanicMode) && getValueConfig(enumOptions.LegitAutoMove)) {
-          const remaining = getRemainingPlayerTimeSeconds();
-          const threshold = parseInt(getValueConfig(enumOptions.PanicTime));
-          if (remaining !== null && remaining <= threshold) {
-            cmd = `go depth 1`;
-          }
-        }
-        if (!cmd) {
-          cmd = `go depth ${this.depth}`;
-        }
-        this.send(cmd);
+        this.send(`go depth ${this.depth}`);
       });
     });
   }
@@ -1145,56 +1016,34 @@ class StockfishEngine {
   }
 
   onTopMoves(move = null, isBestMove = false) {
-    window.top_pv_moves = []; // Initialize top_pv_moves as an empty array
-    var bestMoveSelected = false;
+    window.top_pv_moves = [];
+    let bestMoveSelected = false;
     if (move != null) {
-        const index = this.topMoves.findIndex(
-            (object) => object.move === move.move
-        );
-        if (isBestMove) {
-            // Basically, engine just finished evaluation
-            bestMoveSelected = true; // A best move has been selected
-            if (index === -1) {
-                this.topMoves.push(move);
-                this.SortTopMoves();
-            }
-        } else {
-            if (index === -1) {
-                // If move not found, just push it to topMoves
-                this.topMoves.push(move);
-                this.SortTopMoves();
-            } else {
-                // If move found, compare depths and update if necessary
-                if (move.depth >= this.topMoves[index].depth) {
-                    this.topMoves[index] = move;
-                    this.SortTopMoves();
-                }
-            }
+      const index = this.topMoves.findIndex(
+        (object) => object.move === move.move
+      );
+      if (isBestMove) {
+        bestMoveSelected = true;
+        if (index === -1) {
+          this.topMoves.push(move);
+          this.SortTopMoves();
         }
+      } else {
+        if (index === -1) {
+          this.topMoves.push(move);
+          this.SortTopMoves();
+        } else {
+          if (move.depth >= this.topMoves[index].depth) {
+            this.topMoves[index] = move;
+            this.SortTopMoves();
+          }
+        }
+      }
     }
 
-    if (getValueConfig(enumOptions.TextToSpeech)) {
-      const topMove = this.topMoves[0]; // Select the top move from the PV list
-      const currentFEN = this.BetterMintmaster.game.controller.getFEN();
-      const verboseMove = getVerboseMove(topMove, currentFEN);
-      const msg = new SpeechSynthesisUtterance(verboseMove); // Use topMove.move for the spoken text
-      const voices = window.speechSynthesis.getVoices();
-      const femaleVoices = voices.filter((voice) =>
-        voice.voiceURI.includes("Google UK English Female")
-      );
-      if (femaleVoices.length > 0) {
-        msg.voice = femaleVoices[0];
-      }
-      msg.volume = 0.75; // Set the volume to 75%
-      msg.rate = 1;
-      window.speechSynthesis.cancel(); // Stop any previous text-to-speech
-      window.speechSynthesis.speak(msg);
-    }
+    top_pv_moves = this.topMoves.slice(0, 1);
 
     if (bestMoveSelected) {
-      // If a best move has been selected, consider all moves in topMoves
-      top_pv_moves = this.topMoves.slice(0, this.options["MultiPV"]);
-      // sort by rank in multipv
       this.BetterMintmaster.game.HintMoves(
         top_pv_moves,
         this.lastTopMoves,
@@ -1204,138 +1053,28 @@ class StockfishEngine {
       if (getValueConfig(enumOptions.MoveAnalysis)) {
         this.AnalyzeLastMove();
       }
-    } else {
-      // if da best move aint been selected yet
-      if (getValueConfig(enumOptions.LegitAutoMove)) {
-        // legit move stuff, ignore
-        const movesWithAccuracy = this.topMoves.filter(
-          (move) => move.accuracy !== undefined
-        );
-
-        if (movesWithAccuracy.length > 0) {
-          // Sort the moves by accuracy in descending order
-          movesWithAccuracy.sort((a, b) => b.accuracy - a.accuracy);
-
-          // Calculate the total accuracy
-          const totalAccuracy = movesWithAccuracy.reduce(
-            (sum, move) => sum + move.accuracy,
-            0
-          );
-
-          // Calculate the cumulative probabilities
-          const cumulativeProbabilities = movesWithAccuracy.reduce(
-            (arr, move) => {
-              const lastProbability = arr.length > 0 ? arr[arr.length - 1] : 0;
-              const probability = move.accuracy / totalAccuracy;
-              arr.push(lastProbability + probability);
-              return arr;
-            },
-            []
-          );
-
-          // Generate a random number between 0 and 1
-          const random = Math.random();
-
-          // Select a move based on the cumulative probabilities
-          let selectedMove;
-          for (let i = 0; i < cumulativeProbabilities.length; i++) {
-            if (random <= cumulativeProbabilities[i]) {
-              selectedMove = movesWithAccuracy[i];
-              break;
-            }
-          }
-
-          // Move the selected move to the front of the PV moves
-          top_pv_moves = [
-            selectedMove,
-            ...this.topMoves.filter((move) => move !== selectedMove),
-          ];
-        } else {
-          // If no moves have accuracy information, use the normal PV moves
-          top_pv_moves = this.topMoves.slice(0, this.options["MultiPV"]);
-        }
-      } // end ignore
-      if (getValueConfig(enumOptions.LegitAutoMove)) {
-        // random crap with auto move
-        const randomMoveIndex = Math.floor(Math.random() * top_pv_moves.length);
-        const randomMove = top_pv_moves[randomMoveIndex];
-        top_pv_moves = [
-          randomMove,
-          ...top_pv_moves.filter((move) => move !== randomMove),
-        ]; // Move the random move to the front of the PV moves
-      } else {
-        // if no auto move and engine aint even done, idfk what this is doing
-        top_pv_moves = this.topMoves.slice(0, this.options["MultiPV"]);
-      }
     }
 
-    const bestMoveChance = getValueConfig(enumOptions.BestMoveChance);
-    if (
-      Math.random() * 100 < bestMoveChance &&
-      getValueConfig(enumOptions.LegitAutoMove)
-    ) {
-      top_pv_moves = [top_pv_moves[0]]; // Only consider the top move
-    } else {
-      // const randomMoveIndex = Math.floor(Math.random() * top_pv_moves.length);
-      // const randomMove = top_pv_moves[randomMoveIndex];
-      // top_pv_moves = [randomMove, ...top_pv_moves.filter(move => move !== randomMove)]; // Move the random move to the front of the PV moves
-    }
     if (
       bestMoveSelected &&
       getValueConfig(enumOptions.LegitAutoMove) &&
       this.BetterMintmaster.game.controller.getPlayingAs() ===
         this.BetterMintmaster.game.controller.getTurn()
     ) {
-      let bestMove;
-      if (getValueConfig(enumOptions.RandomBestMove)) {
-        const random_best_move_index = Math.floor(
-          Math.random() * top_pv_moves.length
-        );
-        bestMove = top_pv_moves[random_best_move_index];
-      } else {
-        bestMove = top_pv_moves[0];
-      }
+      const bestMove = top_pv_moves[0];
+      if (!bestMove) return;
       const legalMoves = this.BetterMintmaster.game.controller.getLegalMoves();
       const index = legalMoves.findIndex(
         (move) => move.from === bestMove.from && move.to === bestMove.to
       );
       console.assert(index !== -1, "Illegal best move");
+      if (index === -1) return;
       const moveData = legalMoves[index];
       moveData.userGenerated = true;
       if (bestMove.promotion !== null) {
         moveData.promotion = bestMove.promotion;
       }
-      if (getValueConfig(enumOptions.HighMateChance)) {
-        const sortedMoves = this.topMoves.sort((a, b) => {
-          if (a.mateIn !== null && b.mateIn === null) {
-            return -1;
-          } else if (a.mateIn === null && b.mateIn !== null) {
-            return 1;
-          } else if (a.mateIn !== null && b.mateIn !== null) {
-            if (
-              a.mateIn <= getValueConfig(enumOptions.MateFinderValue) &&
-              b.mateIn <= getValueConfig(enumOptions.MateFinderValue)
-            ) {
-              return a.mateIn - b.mateIn;
-            } else {
-              return 0;
-            }
-          } else {
-            return 0;
-          }
-        });
-        top_pv_moves = sortedMoves.slice(
-          0,
-          Math.min(this.options["MultiPV"], this.topMoves.length)
-        );
-        const mateMoves = top_pv_moves.filter((move) => move.mateIn !== null);
-        if (mateMoves.length > 0) {
-          const fastestMateMove = mateMoves.reduce((a, b) =>
-            a.mateIn < b.mateIn ? a : b
-          );
-          top_pv_moves = [fastestMateMove];
-        }
-      }
+
       const targetDelay = this.calculateTargetDelay(bestMove);
       const elapsed = performance.now() - (this.BetterMintmaster.game.turnStartTime || performance.now());
       const remainingDelay = Math.max(0, targetDelay - elapsed);
