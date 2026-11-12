@@ -268,14 +268,79 @@ class GameController {
       this.setupAutoQueueObserver();
     });
 
-    // Setup auto-queue observer initially if enabled
+    this.lastAutoQueueClick = 0;
     this.setupAutoQueueObserver();
   }
 
-  // Observe DOM for the "New" game button and click it when Auto Queue is enabled
+  dispatchButtonClick(element) {
+    const rect = element.getBoundingClientRect();
+    const opts = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2
+    };
+    element.dispatchEvent(new PointerEvent("pointerdown", opts));
+    element.dispatchEvent(new MouseEvent("mousedown", opts));
+    element.dispatchEvent(new PointerEvent("pointerup", opts));
+    element.dispatchEvent(new MouseEvent("mouseup", opts));
+    element.click();
+  }
+
+  triggerAutoQueue() {
+    if (!getValueConfig(enumOptions.AutoQueue)) return false;
+    const now = Date.now();
+    if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < 4000) return false;
+
+    const selectors = [
+      ".game-over-button-primary",
+      ".game-over-button-button",
+      ".game-over-buttons-playAgain",
+      '[data-action="next-game"]',
+      '[data-testid="next-game"]',
+      "button.game-over-button",
+      ".game-over-modal-container button",
+      ".board-modal-container button",
+      ".game-over-modal button",
+      ".game-over-dialog button",
+      ".game-over-buttons-component button",
+      ".ui_v5-button-component.ui_v5-button-primary",
+      ".cc-button-primary"
+    ];
+
+    const keywords = ["play again", "new opponent", "next game", "new game", "rematch", "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"];
+
+    for (const sel of selectors) {
+      const elements = document.querySelectorAll(sel);
+      for (const el of elements) {
+        if (el && el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled) {
+          const text = el.textContent.trim().toLowerCase();
+          if (keywords.some(kw => text.includes(kw))) {
+            this.lastAutoQueueClick = now;
+            this.dispatchButtonClick(el);
+            return true;
+          }
+        }
+      }
+    }
+
+    const fallbackButtons = document.querySelectorAll("button:not([disabled]), [role='button']:not([disabled])");
+    for (const btn of fallbackButtons) {
+      if (btn && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+        const text = btn.textContent.trim().toLowerCase();
+        if (text && (text === "new" || text === "play again" || text === "next game" || text === "rematch" || text.startsWith("new "))) {
+          this.lastAutoQueueClick = now;
+          this.dispatchButtonClick(btn);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   setupAutoQueueObserver() {
     if (this.autoQueueObserver) {
-      // If observer exists but AutoQueue is disabled, disconnect it.
       if (!getValueConfig(enumOptions.AutoQueue)) {
         this.autoQueueObserver.disconnect();
         this.autoQueueObserver = null;
@@ -288,67 +353,23 @@ class GameController {
     let lastCheckTime = 0;
     this.autoQueueObserver = new MutationObserver(() => {
       const now = Date.now();
-      // Debounce: only check every 200ms to avoid excessive DOM queries
-      if (now - lastCheckTime < 200) return;
+      if (now - lastCheckTime < 250) return;
       lastCheckTime = now;
-
-      // Try multiple selectors for better compatibility
-      const selectors = [
-        'button.game-over-buttons-button',
-        'button[data-test-id="game-over-buttons-button"]',
-        'button.btn-primary:not([disabled])'
-      ];
-
-      for (const selector of selectors) {
-        const buttons = document.querySelectorAll(selector);
-        for (const btn of buttons) {
-          const text = btn.textContent.trim().toLowerCase();
-          // Look for "new game" or just "new" button
-          if (text.includes('new')) {
-            console.log("Auto Queue: Clicking New Game button");
-            btn.click();
-            return;
-          }
-        }
-      }
+      this.triggerAutoQueue();
     });
 
     this.autoQueueObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   handleGameOver() {
-    if (getValueConfig(enumOptions.AutoQueue)) {
-      const maxAttempts = 60; // Poll for 30 seconds
-      let attempts = 0;
-      const intervalId = setInterval(() => {
-        attempts++;
-        if (attempts > maxAttempts) {
-          clearInterval(intervalId);
-          return;
-        }
-
-        // Try multiple selectors for better compatibility
-        const selectors = [
-          '.game-over-buttons-button',
-          'button[data-test-id="game-over-buttons-button"]',
-          'button.btn-primary:not([disabled])'
-        ];
-
-        for (const selector of selectors) {
-          const buttons = document.querySelectorAll(selector);
-          for (const button of buttons) {
-            const text = button.textContent.trim().toLowerCase();
-            // Look for "new game" or just "new" button
-            if (text.includes('new')) {
-              console.log("Auto Queue: Clicking New Game button from handleGameOver");
-              button.click();
-              clearInterval(intervalId);
-              return;
-            }
-          }
-        }
-      }, 500);
-    }
+    if (!getValueConfig(enumOptions.AutoQueue)) return;
+    let attempts = 0;
+    const intervalId = setInterval(() => {
+      attempts++;
+      if (attempts > 60 || this.triggerAutoQueue()) {
+        clearInterval(intervalId);
+      }
+    }, 500);
   }
   UpdateExtensionOptions() {
     if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null)
@@ -442,6 +463,7 @@ class GameController {
     this.BetterMintmaster.engine.UpdatePosition(FENs, isNewGame);
   }
   ResetGame() {
+    this.lastAutoQueueClick = 0;
     if (this.autoMoveTimer !== null) {
       clearTimeout(this.autoMoveTimer);
       this.autoMoveTimer = null;
@@ -1346,15 +1368,11 @@ class StockfishEngine {
       }
 
       if (remainingDelay <= 0) {
-        requestAnimationFrame(() => {
-          controller.move(moveData);
-        });
+        controller.move(moveData);
       } else {
         this.BetterMintmaster.game.autoMoveTimer = setTimeout(() => {
           this.BetterMintmaster.game.autoMoveTimer = null;
-          requestAnimationFrame(() => {
-            controller.move(moveData);
-          });
+          controller.move(moveData);
         }, remainingDelay);
       }
     }
