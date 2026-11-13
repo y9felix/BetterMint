@@ -49,27 +49,24 @@ This design introduces dynamic UCI option discovery, real-time command logging i
 - Parse and store engine-reported options in `this.engineUciOptions = {}` on `option name ...` lines during UCI negotiation.
 - Store custom values in `this.customEngineOptions = {}`. Only send `setoption` for recognized engine options.
 
-### 3. Dynamic UI Generation in [BetterMint/html/options.html](file:///home/felix/documents/extensions/BetterMint/BetterMint/html/options.html) & [BetterMint/js/options.js](file:///home/felix/documents/extensions/BetterMint/BetterMint/js/options.js)
-- In `options.html`, within the "Engine Server" card:
-  - Keep `WebSocket API URL` and `Search Depth`.
-  - Add a collapsible toggle container:
-    ```html
-    <details id="engine-options-details" class="sub-panel">
-        <summary class="toggle-summary">Engine UCI Options</summary>
-        <div id="engine-options-container" class="dynamic-options-list">
-            <span class="status-text">Connecting to engine...</span>
-        </div>
-    </details>
-    ```
-- In `options.js`:
-  - Connect a temporary discovery WebSocket to the configured URL (or request options via `chrome.runtime` / active tab `Mint.js`).
-  - Query `uci`, parse lines matching `option name (\S+(?: \S+)*) type (\w+)(?: default (.*?))?(?: min (-?\d+))?(?: max (-?\d+))?(?: var (.*?))*`:
-    - `spin`: render slider with min/max, badge, and number input.
-    - `check`: render boolean toggle slider.
-    - `combo`: render `<select>` with `<option>` for each `var`.
-    - `string`: render text input.
-    - `button`: render button that emits `setoption name <name>`.
-  - On change: save to `chrome.storage.local` under `engine_options_${engineId}` and dispatch `BetterMintUpdateOptions`.
+### 3. Unified Disclosure Controls in [BetterMint/html/options.html](file:///home/felix/documents/extensions/BetterMint/BetterMint/html/options.html) & [BetterMint/js/options.js](file:///home/felix/documents/extensions/BetterMint/BetterMint/js/options.js)
+- **Advanced Timing Settings Behavior:**
+  - In [BetterMint/js/Mint.js](file:///home/felix/documents/extensions/BetterMint/BetterMint/js/Mint.js#L733-L778), `calculateTargetDelay` always applies the configured advanced parameters (`PhysicalFloor`, `FastForcedMoves`, `FastRecaptures`, `FastOpening`, `ClockScaling`). It never gated them on an on/off switch.
+  - The previous `option-advanced-timing` was drawn as a feature toggle switch, mistakenly suggesting it enabled/disabled the features rather than merely hiding the UI.
+- **Unified Disclosure Pattern (`<details class="collapse-group">`):**
+  - Implement a dedicated disclosure button style with a rotating chevron indicator, completely distinct from setting toggles.
+  - Clicking either disclosure button purely toggles DOM visibility (expand/collapse) without modifying, resetting, or overriding any underlying values.
+  - Apply this identical pattern to two locations:
+    1. **Engine Server Card:** `<details id="engine-options-details" class="collapse-group">` with summary label `Engine UCI Options` and a dynamic container for parsed UCI options.
+    2. **Auto Move Pacing Card:** `<details id="advanced-timing-details" class="collapse-group">` with summary label `Advanced Timing Settings`, replacing the former toggle switch and enclosing the advanced timing controls.
+- **Dynamic UCI Rendering in `options.js`:**
+  - Probe the active engine WebSocket URL, query `uci`, and parse `option name ... type ...`:
+    - `spin`: slider with min/max bounds and badge.
+    - `check`: boolean toggle switch.
+    - `combo`: `<select>` dropdown.
+    - `string`: text input.
+    - `button`: action trigger emitting `setoption name <name>`.
+  - Persist values in `chrome.storage.local` under `engine_options_${engineId}` and dispatch `BetterMintUpdateOptions`.
 
 ## Verification Plan
 1. **Live URL Switching:** Change URL from `/stockfish` to `/patricia` in options; verify in `run.sh` console that the old engine terminates, the new engine spawns, and evaluation resumes on the chessboard without reloading.
