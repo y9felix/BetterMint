@@ -24,8 +24,7 @@
                 "js/loader.js"
             ],
             "css": [
-                "css/evalbar.css",
-                "css/material-icon.css"
+                "css/evalbar.css"
             ],
             "matches": [
                 "https://*.chess.com/*"

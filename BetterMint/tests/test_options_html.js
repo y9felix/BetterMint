@@ -56,4 +56,16 @@ for (const id of prunedInputs) {
 const cardCount = (html.match(/<section class="card">/g) || []).length;
 assert.strictEqual(cardCount, 3, `Expected exactly 3 cards, found ${cardCount}`);
 
+const manifest = JSON.parse(fs.readFileSync("BetterMint/manifest.json", "utf8"));
+const script = manifest.content_scripts[0];
+assert.deepStrictEqual(script.css, ["css/evalbar.css"], "Only evalbar.css may be injected");
+const refs = []
+  .concat(script.js, script.css)
+  .concat([manifest.action.default_popup])
+  .concat(Object.values(manifest.icons));
+for (const rel of refs) assert.ok(fs.existsSync("BetterMint/" + rel), "Missing manifest asset: " + rel);
+for (const m of html.matchAll(/(?:href|src)="\.\.\/([^"]+)"/g)) {
+  assert.ok(fs.existsSync("BetterMint/" + m[1]), "Missing page asset: " + m[1]);
+}
+
 console.log("HTML structure tests passed.");
