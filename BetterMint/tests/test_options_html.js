@@ -14,7 +14,6 @@ const expectedInputs = [
   "option-legit-auto-move",
   "option-human-like-moves",
   "option-move-pace",
-  "option-advanced-timing",
   "option-physical-floor",
   "option-timing-spread",
   "option-fast-recaptures",
@@ -32,6 +31,10 @@ const expectedInputs = [
 for (const id of expectedInputs) {
   assert.ok(html.includes(`id="${id}"`), `Missing expected input: ${id}`);
 }
+
+assert.ok(html.includes('id="engine-options-details"'), "Missing engine-options-details element");
+assert.ok(html.includes('id="advanced-timing-details"'), "Missing advanced-timing-details element");
+assert.ok(!html.includes('id="option-advanced-timing"'), "Former toggle switch must be replaced by details");
 
 const prunedInputs = [
   "option-api-stockfish",

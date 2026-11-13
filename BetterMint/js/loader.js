@@ -11,7 +11,6 @@ let inputObjects = {
   "option-legit-auto-move": { default_value: false },
   "option-human-like-moves": { default_value: true },
   "option-move-pace": { default_value: 1.5 },
-  "option-advanced-timing": { default_value: false },
   "option-physical-floor": { default_value: 200 },
   "option-timing-spread": { default_value: 0.80 },
   "option-fast-recaptures": { default_value: true },

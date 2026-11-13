@@ -35,6 +35,13 @@
                 </div>
                 <input id="option-depth" type="range" min="1" max="50" value="3" class="range-slider" />
             </div>
+
+            <details id="engine-options-details" class="collapse-group">
+                <summary class="collapse-summary">Engine UCI Options</summary>
+                <div id="engine-options-container" class="collapse-content">
+                    <span class="status-text">Connecting to engine...</span>
+                </div>
+            </details>
         </section>
 
         <section class="card">
@@ -96,14 +103,10 @@
                         <input id="option-move-pace" type="range" min="0.5" max="30.0" step="0.1" value="1.5" class="range-slider" />
                     </div>
 
-                    <label class="control-row options-checkbox" for="option-advanced-timing">
-                        <span class="control-label-text">Advanced Settings</span>
-                        <input id="option-advanced-timing" type="checkbox" class="toggle-input" />
-                        <span class="toggle-slider"></span>
-                    </label>
-
-                    <div id="advanced-timing-panel" class="sub-panel hidden">
-                        <div class="control-col options-slider" data-min="50" data-max="500">
+                    <details id="advanced-timing-details" class="collapse-group">
+                        <summary class="collapse-summary">Advanced Timing Settings</summary>
+                        <div id="advanced-timing-panel" class="collapse-content">
+                            <div class="control-col options-slider" data-min="50" data-max="500">
                             <div class="slider-header">
                                 <span class="title">Physical Floor (ms)</span>
                                 <span class="badge" id="badge-option-physical-floor">200</span>
@@ -191,7 +194,8 @@
                             <input id="option-clock-min-multiplier" type="range" min="0.10" max="0.80" step="0.05" value="0.30" class="range-slider" />
                         </div>
                     </div>
-                </div>
+                </details>
+            </div>
             </div>
         </section>
     </main>

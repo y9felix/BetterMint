@@ -22,7 +22,6 @@ const optionsKeys = extractKeys(optionsSrc);
 assert.deepStrictEqual(loaderKeys, optionsKeys, "loader.js and options.js keys must match");
 
 const expectedKeys = [
-  "option-advanced-timing",
   "option-auto-queue",
   "option-clock-min-multiplier",
   "option-clock-scaling",
