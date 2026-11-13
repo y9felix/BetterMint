@@ -592,6 +592,7 @@ class StockfishEngine {
     this.isGameStarted = false;
     this.readyCallbacks = [];
     this.goDoneCallbacks = [];
+    this.stopTimeout = null;
     this.topMoves = [];
     this.lastTopMoves = [];
     this.isInTheory = false;
@@ -644,8 +645,6 @@ class StockfishEngine {
   send(cmd) {
     if (this.isWebSocketOpen()) {
       this.stockfish.send(cmd);
-    } else if (this.stockfish && typeof this.stockfish.postMessage === "function") {
-      this.stockfish.postMessage(cmd);
     } else {
       console.warn("Attempted to send command while WebSocket is not open.");
     }
@@ -668,7 +667,13 @@ class StockfishEngine {
   handleDisconnect() {
     this.ready = false;
     this.loaded = false;
-    this.isEvaluating = false; // Reset evaluation state
+    this.isEvaluating = false;
+    this.stopInFlight = false;
+    this.isRequestedStop = false;
+    if (this.stopTimeout !== null) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
     this.attemptReconnect();
   }
 
@@ -696,41 +701,32 @@ class StockfishEngine {
 
   stopEvaluation(callback) {
     if (this.isEvaluating) {
-      if (!this.stopInFlight) {
-        this.stopInFlight = true;
-        // Wrap callback to reset state
-        this.goDoneCallbacks = [() => {
-          this.isEvaluating = false; // Explicitly set to false
-          this.isRequestedStop = false;
-          callback();
-        }];
-        this.isRequestedStop = true;
-        this.send("stop");
-        this.send("ucinewgame");
-        this.stopInFlight = false;
-        this.goDoneCallbacks.forEach(cb => cb());
-        this.goDoneCallbacks = [];
-      } else {
+      if (typeof callback === "function") {
         this.goDoneCallbacks.push(callback);
       }
+      if (!this.stopInFlight) {
+        this.stopInFlight = true;
+        this.isRequestedStop = true;
+        this.send("stop");
+        if (this.stopTimeout !== null) {
+          clearTimeout(this.stopTimeout);
+        }
+        this.stopTimeout = setTimeout(() => {
+          this.stopTimeout = null;
+          if (this.stopInFlight) {
+            this.stopInFlight = false;
+            this.isRequestedStop = false;
+            this.isEvaluating = false;
+            const callbacks = this.goDoneCallbacks;
+            this.goDoneCallbacks = [];
+            callbacks.forEach((cb) => cb());
+          }
+        }, 150);
+      }
     } else {
-      callback();
-    }
-  }
-
-  onStockfishResponse() {
-    if (this.isRequestedStop) {
-      this.isRequestedStop = false;
-      this.stopInFlight = false;
-      this.isEvaluating = false;
-      this.executeCallbacks();
-    }
-  }
-
-  executeCallbacks() {
-    while (this.goDoneCallbacks.length) {
-      const callback = this.goDoneCallbacks.shift();
-      callback();
+      if (typeof callback === "function") {
+        callback();
+      }
     }
   }
 
@@ -866,15 +862,20 @@ class StockfishEngine {
           this.onTopMoves(move, false);
         }
       } else if (bestMoveMatch) {
-        this.isEvaluating = false;
-        if (this.goDoneCallbacks.length > 0) {
-          let copy = this.goDoneCallbacks;
-          this.goDoneCallbacks = [];
-          copy.forEach(function (callback) {
-            callback();
-          });
+        if (this.stopTimeout !== null) {
+          clearTimeout(this.stopTimeout);
+          this.stopTimeout = null;
         }
-        if (!this.isRequestedStop && bestMoveMatch[1] !== undefined) {
+        this.isEvaluating = false;
+        const wasRequestedStop = this.isRequestedStop;
+        this.isRequestedStop = false;
+        this.stopInFlight = false;
+
+        const callbacks = this.goDoneCallbacks;
+        this.goDoneCallbacks = [];
+        callbacks.forEach((cb) => cb());
+
+        if (!wasRequestedStop && bestMoveMatch[1] !== undefined) {
           const bestMove = bestMoveMatch[1];
           const ponderMove = bestMoveMatch[2];
           const index = this.topMoves.findIndex((object) => object.move === bestMove);
@@ -892,7 +893,6 @@ class StockfishEngine {
             this.onTopMoves(this.topMoves[index], true);
           }
         }
-        this.isRequestedStop = false;
       }
     }
   }
@@ -1041,7 +1041,7 @@ class StockfishEngine {
       }
     }
 
-    top_pv_moves = this.topMoves.slice(0, 1);
+    let top_pv_moves = this.topMoves.slice(0, 1);
 
     if (bestMoveSelected) {
       this.BetterMintmaster.game.HintMoves(
