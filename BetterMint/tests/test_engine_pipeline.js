@@ -17,4 +17,7 @@ for (const gone of ["__awaiter", "ChromeRequest", "pathToEcoJson", "threadedEngi
   assert.ok(!src.includes(gone), gone + " must be removed");
 }
 
+assert.ok(!src.includes("RTCPeerConnection"), "WebRTC block must be removed");
+assert.ok(!src.includes("iceServers"), "WebRTC config must be removed");
+
 console.log("Engine pipeline tests passed.");
