@@ -603,6 +603,9 @@ class StockfishEngine {
       "MultiPV": "1"
     };
     this.currentUrl = getValueConfig(enumOptions.UrlApiStockfish);
+    this.targetUrl = this.currentUrl;
+    this.isSwitching = false;
+    this.onEngineSwitchedCallback = null;
     this.engineUciOptions = {};
     this.customEngineOptions = {};
 
@@ -616,53 +619,73 @@ class StockfishEngine {
   initializeWebSocket(url) {
     try {
       this.stockfish = new WebSocket(url);
-      this.stockfish.addEventListener("open", () => {
-        console.log("WebSocket connection opened.");
-        this.reconnectAttempts = 0;
-        this.send("uci");
-        this.onReady(() => {
-          this.UpdateOptions();
-          this.send("ucinewgame");
-        });
-      });
-
-      this.stockfish.addEventListener("message", (event) => {
-        this.ProcessMessage(event.data);
-      });
-
-      this.stockfish.addEventListener("close", () => {
-        console.error("WebSocket connection closed.");
-        this.handleDisconnect();
-      });
-
-      this.stockfish.addEventListener("error", (error) => {
-        console.error("WebSocket error:", error);
-        this.handleDisconnect();
-      });
     } catch (e) {
-      console.error("Failed to load stockfish socket");
-      throw e;
+      console.error("Failed to initialize WebSocket:", e);
+      this.handleDisconnect();
+      return;
     }
+
+    const ws = this.stockfish;
+    ws.addEventListener("open", () => {
+      if (this.stockfish !== ws) return;
+      console.log("WebSocket connection opened.");
+      this.reconnectAttempts = 0;
+      this.send("uci");
+      this.onReady(() => {
+        this.UpdateOptions();
+        this.send("ucinewgame");
+        if (this.onEngineSwitchedCallback) {
+          const cb = this.onEngineSwitchedCallback;
+          this.onEngineSwitchedCallback = null;
+          cb();
+        }
+      });
+    });
+
+    ws.addEventListener("message", (event) => {
+      if (this.stockfish !== ws) return;
+      this.ProcessMessage(event.data);
+    });
+
+    ws.addEventListener("close", () => {
+      if (this.stockfish !== ws || this.isSwitching) return;
+      console.error("WebSocket connection closed.");
+      this.handleDisconnect();
+    });
+
+    ws.addEventListener("error", (error) => {
+      if (this.stockfish !== ws) return;
+      console.error("WebSocket error:", error);
+    });
   }
 
   switchEngine(newUrl) {
-    if (!newUrl || newUrl === this.currentUrl) return;
+    if (!newUrl || newUrl === this.targetUrl) return;
+    this.targetUrl = newUrl;
+    this.isSwitching = true;
     this.stopEvaluation(() => {
       if (this.stockfish) {
+        const oldWs = this.stockfish;
+        this.stockfish = null;
         try {
-          this.stockfish.close();
+          oldWs.onopen = null;
+          oldWs.onmessage = null;
+          oldWs.onclose = null;
+          oldWs.onerror = null;
+          oldWs.close();
         } catch (e) {}
       }
       this.currentUrl = newUrl;
       this.ready = false;
       this.loaded = false;
+      this.isSwitching = false;
       this.engineUciOptions = {};
-      this.initializeWebSocket(newUrl);
-      this.onReady(() => {
+      this.onEngineSwitchedCallback = () => {
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
           this.BetterMintmaster.game.UpdateEngine(false);
         }
-      });
+      };
+      this.initializeWebSocket(newUrl);
     });
   }
 
@@ -847,15 +870,41 @@ class StockfishEngine {
     this.ready = false;
     let line = event && typeof event === "object" ? event.data : event;
 
-    let optMatch = line && line.match(/^option name (.+?) type (\w+)(?: default (.*?))?(?: min (-?\d+))?(?: max (-?\d+))?(?: var .*)?$/);
-    if (optMatch) {
-      this.engineUciOptions[optMatch[1]] = {
-        type: optMatch[2],
-        default: optMatch[3],
-        min: optMatch[4] !== undefined ? parseInt(optMatch[4]) : undefined,
-        max: optMatch[5] !== undefined ? parseInt(optMatch[5]) : undefined
-      };
-      return;
+    if (line && typeof line === "string" && line.startsWith("option name ")) {
+      const rest = line.substring("option name ".length);
+      const typeIndex = rest.indexOf(" type ");
+      if (typeIndex !== -1) {
+        const name = rest.substring(0, typeIndex).trim();
+        const tokens = rest.substring(typeIndex + " type ".length).split(" ");
+        const type = tokens[0];
+        let defVal = "";
+        let minVal = null;
+        let maxVal = null;
+        let vars = [];
+        for (let i = 1; i < tokens.length; i++) {
+          if (tokens[i] === "default") {
+            i++;
+            defVal = tokens[i] !== undefined ? tokens[i] : "";
+          } else if (tokens[i] === "min") {
+            i++;
+            minVal = tokens[i] !== undefined ? parseInt(tokens[i], 10) : null;
+          } else if (tokens[i] === "max") {
+            i++;
+            maxVal = tokens[i] !== undefined ? parseInt(tokens[i], 10) : null;
+          } else if (tokens[i] === "var") {
+            i++;
+            if (tokens[i] !== undefined) vars.push(tokens[i]);
+          }
+        }
+        this.engineUciOptions[name] = {
+          type: type,
+          default: defVal,
+          min: minVal,
+          max: maxVal,
+          vars: vars
+        };
+        return;
+      }
     }
 
     if (line === "uciok") {

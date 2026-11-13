@@ -99,48 +99,61 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
     if (opt.type === "spin") {
       const col = document.createElement("div");
       col.className = "control-col options-slider";
-      const min = opt.min !== null ? opt.min : 0;
-      const max = opt.max !== null ? opt.max : 100;
-      col.innerHTML = `
-        <div class="slider-header">
-          <span class="title">${opt.name}</span>
-          <span class="badge">${currentVal}</span>
-        </div>
-        <input type="range" min="${min}" max="${max}" value="${currentVal}" class="range-slider" />
-      `;
-      const input = col.querySelector("input");
-      const badge = col.querySelector(".badge");
+      const header = document.createElement("div");
+      header.className = "slider-header";
+      const title = document.createElement("span");
+      title.className = "title";
+      title.textContent = opt.name;
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = currentVal;
+      header.appendChild(title);
+      header.appendChild(badge);
+      col.appendChild(header);
+
+      const input = document.createElement("input");
+      input.type = "range";
+      input.className = "range-slider";
+      input.min = opt.min !== null ? opt.min : 0;
+      input.max = opt.max !== null ? opt.max : 100;
+      input.value = currentVal;
       input.addEventListener("input", function () {
         badge.textContent = input.value;
         if (typeof onOptionChange === "function") {
           onOptionChange(opt.name, parseInt(input.value, 10));
         }
       });
+      col.appendChild(input);
       container.appendChild(col);
     } else if (opt.type === "check") {
       const label = document.createElement("label");
       label.className = "control-row options-checkbox";
-      const isChecked = currentVal === true || currentVal === "true";
-      label.innerHTML = `
-        <span class="control-label-text">${opt.name}</span>
-        <input type="checkbox" class="toggle-input"${isChecked ? " checked" : ""} />
-        <span class="toggle-slider"></span>
-      `;
-      const input = label.querySelector("input");
+      const labelText = document.createElement("span");
+      labelText.className = "control-label-text";
+      labelText.textContent = opt.name;
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.className = "toggle-input";
+      input.checked = currentVal === true || currentVal === "true";
+      const slider = document.createElement("span");
+      slider.className = "toggle-slider";
       input.addEventListener("change", function () {
         if (typeof onOptionChange === "function") {
           onOptionChange(opt.name, input.checked);
         }
       });
+      label.appendChild(labelText);
+      label.appendChild(input);
+      label.appendChild(slider);
       container.appendChild(label);
     } else if (opt.type === "combo") {
       const col = document.createElement("div");
       col.className = "control-col";
-      col.innerHTML = `
-        <label class="control-label-text">${opt.name}</label>
-        <select class="select-input"></select>
-      `;
-      const select = col.querySelector("select");
+      const label = document.createElement("label");
+      label.className = "control-label-text";
+      label.textContent = opt.name;
+      const select = document.createElement("select");
+      select.className = "select-input";
       opt.vars.forEach(function (v) {
         const option = document.createElement("option");
         option.value = v;
@@ -153,46 +166,69 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
           onOptionChange(opt.name, select.value);
         }
       });
+      col.appendChild(label);
+      col.appendChild(select);
       container.appendChild(col);
     } else if (opt.type === "string") {
       const col = document.createElement("div");
       col.className = "control-col options-text";
-      col.innerHTML = `
-        <label class="control-label-text">${opt.name}</label>
-        <input type="text" class="text-input" value="${currentVal || ""}" spellcheck="false" autocomplete="off" />
-      `;
-      const input = col.querySelector("input");
+      const label = document.createElement("label");
+      label.className = "control-label-text";
+      label.textContent = opt.name;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "text-input";
+      input.value = currentVal != null ? String(currentVal) : "";
+      input.spellcheck = false;
+      input.autocomplete = "off";
       input.addEventListener("change", function () {
         if (typeof onOptionChange === "function") {
           onOptionChange(opt.name, input.value.trim());
         }
       });
+      col.appendChild(label);
+      col.appendChild(input);
       container.appendChild(col);
     } else if (opt.type === "button") {
       const row = document.createElement("div");
       row.className = "control-row";
-      row.innerHTML = `
-        <span class="control-label-text">${opt.name}</span>
-        <button type="button" class="action-btn">Execute</button>
-      `;
-      const btn = row.querySelector("button");
+      const label = document.createElement("span");
+      label.className = "control-label-text";
+      label.textContent = opt.name;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "action-btn";
+      btn.textContent = "Execute";
       btn.addEventListener("click", function () {
         if (typeof onOptionChange === "function") {
           onOptionChange(opt.name, "");
         }
       });
+      row.appendChild(label);
+      row.appendChild(btn);
       container.appendChild(row);
     }
   });
 }
 
 let activeProbeWs = null;
+let probeTimeout = null;
+
 function probeEngine(url) {
   const container = document.getElementById("engine-options-container");
   if (!container) return;
+  if (probeTimeout) {
+    clearTimeout(probeTimeout);
+    probeTimeout = null;
+  }
   if (activeProbeWs) {
-    try { activeProbeWs.close(); } catch (e) {}
+    const oldProbe = activeProbeWs;
     activeProbeWs = null;
+    oldProbe.onopen = null;
+    oldProbe.onmessage = null;
+    oldProbe.onclose = null;
+    oldProbe.onerror = null;
+    try { oldProbe.close(); } catch (e) {}
   }
   if (!url || typeof WebSocket === "undefined") {
     container.innerHTML = '<span class="status-text">Invalid WebSocket URL.</span>';
@@ -204,35 +240,58 @@ function probeEngine(url) {
   try {
     const ws = new WebSocket(url);
     activeProbeWs = ws;
-    const timeout = setTimeout(function () {
-      if (ws.readyState !== WebSocket.OPEN) {
-        ws.close();
-        container.innerHTML = '<span class="status-text">Connection timed out.</span>';
-      }
+    probeTimeout = setTimeout(function () {
+      if (activeProbeWs !== ws) return;
+      activeProbeWs = null;
+      try { ws.close(); } catch (e) {}
+      container.innerHTML = '<span class="status-text">Connection timed out.</span>';
     }, 4000);
 
     ws.addEventListener("open", function () {
-      clearTimeout(timeout);
+      if (activeProbeWs !== ws) return;
+      if (probeTimeout) clearTimeout(probeTimeout);
+      probeTimeout = setTimeout(function () {
+        if (activeProbeWs !== ws) return;
+        activeProbeWs = null;
+        try { ws.close(); } catch (e) {}
+        container.innerHTML = '<span class="status-text">Engine handshake timed out.</span>';
+      }, 4000);
       ws.send("uci\n");
     });
 
     ws.addEventListener("message", function (event) {
+      if (activeProbeWs !== ws) return;
       const line = event.data;
       if (!line) return;
       const opt = parseUciOptionLine(line);
       if (opt) {
         discovered.push(opt);
       } else if (line.trim() === "uciok") {
-        ws.close();
+        if (probeTimeout) {
+          clearTimeout(probeTimeout);
+          probeTimeout = null;
+        }
+        activeProbeWs = null;
+        try { ws.close(); } catch (e) {}
         loadAndRenderEngineOptions(url, discovered, container);
       }
     });
 
     ws.addEventListener("error", function () {
-      clearTimeout(timeout);
+      if (activeProbeWs !== ws) return;
+      if (probeTimeout) {
+        clearTimeout(probeTimeout);
+        probeTimeout = null;
+      }
+      activeProbeWs = null;
       container.innerHTML = '<span class="status-text">Unable to connect to engine.</span>';
     });
   } catch (err) {
+    if (probeTimeout) {
+      clearTimeout(probeTimeout);
+      probeTimeout = null;
+    }
+    activeProbeWs = null;
     container.innerHTML = '<span class="status-text">Failed to initialize engine socket.</span>';
   }
 }
