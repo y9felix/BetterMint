@@ -103,8 +103,10 @@ class MockWebSocket {
 MockWebSocket.instances = [];
 
 const jsSource = fs.readFileSync("BetterMint/js/options.js", "utf8");
-const lines = jsSource.split("\n");
-const uciSection = lines.slice(46, 297).join("\n");
+const uciStart = jsSource.indexOf("function parseUciOptionLine");
+const uciEnd = jsSource.indexOf("function loadAndRenderEngineOptions");
+assert.ok(uciStart !== -1 && uciEnd > uciStart, "UCI option section must be locatable");
+const uciSection = jsSource.slice(uciStart, uciEnd);
 
 const containerElement = new MockElement("div");
 let loadedOptionsArgs = null;

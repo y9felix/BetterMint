@@ -10,8 +10,10 @@ assert.ok(src.includes("this.isSwitching"), "StockfishEngine must track isSwitch
 assert.ok(src.includes("this.engineUciOptions"), "StockfishEngine must track engineUciOptions");
 assert.ok(!src.includes("setoption name option-depth"), "Must not emit extension settings keys as UCI options");
 
-const lines = src.split("\n");
-const classCode = lines.slice(583, 1245).join("\n");
+const start = src.indexOf("class StockfishEngine {");
+const end = src.indexOf("class BetterMint {");
+assert.ok(start !== -1 && end > start, "StockfishEngine class must be locatable");
+const classCode = src.slice(start, end);
 
 class MockWebSocket {
   constructor(url) {
