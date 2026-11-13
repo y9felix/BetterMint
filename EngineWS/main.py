@@ -69,11 +69,13 @@ app.add_middleware(
 
 async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: list[str] | None = None):
     await websocket.accept()
+    print(f"[ENGINE SPAWN] {' '.join(cmd)}", flush=True)
     engine = EngineProcess(cmd, init_commands)
 
     async def read_socket():
         try:
             async for msg in websocket.iter_text():
+                print(f"[UCI IN] {msg}", flush=True)
                 engine.put(msg)
         except Exception:
             pass
@@ -94,6 +96,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
     finally:
         task.cancel()
         engine.terminate()
+        print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
 
 @app.websocket("/stockfish")
 async def ws_stockfish(websocket: WebSocket):
