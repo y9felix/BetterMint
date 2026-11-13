@@ -90,6 +90,7 @@ const masterMock = {
   }
 };
 const engine = createEngine(masterMock);
+assert.strictEqual(Object.prototype.toString.call(engine.engineUciOptions), "[object Set]", "engineUciOptions must be a Set");
 assert.strictEqual(MockWebSocket.instances.length, 1);
 const ws1 = MockWebSocket.instances[0];
 assert.strictEqual(ws1.url, "ws://localhost:8000/engineA");
@@ -98,31 +99,18 @@ ws1.triggerOpen();
 assert.deepStrictEqual(ws1.sent, ["uci", "isready"]);
 
 engine.ProcessMessage("option name Hash type spin min 1 max 33554432 default 16");
-assert.deepStrictEqual(JSON.parse(JSON.stringify(engine.engineUciOptions["Hash"])), {
-  type: "spin",
-  default: "16",
-  min: 1,
-  max: 33554432,
-  vars: []
-});
+assert.ok(engine.engineUciOptions.has("Hash"));
 
 engine.ProcessMessage("option name MultiPV type spin default 1 min 1 max 500");
-assert.deepStrictEqual(JSON.parse(JSON.stringify(engine.engineUciOptions["MultiPV"])), {
-  type: "spin",
-  default: "1",
-  min: 1,
-  max: 500,
-  vars: []
-});
+assert.ok(engine.engineUciOptions.has("MultiPV"));
 
 engine.ProcessMessage("option name Style type combo default Normal var Solid var Normal var Risky");
-assert.deepStrictEqual(JSON.parse(JSON.stringify(engine.engineUciOptions["Style"])), {
-  type: "combo",
-  default: "Normal",
-  min: null,
-  max: null,
-  vars: ["Solid", "Normal", "Risky"]
-});
+assert.ok(engine.engineUciOptions.has("Style"));
+assert.strictEqual(engine.engineUciOptions.size, 3);
+engine.ProcessMessage("option name Broken");
+assert.strictEqual(engine.engineUciOptions.size, 3, "A line without a type token must be ignored");
+engine.ProcessMessage("option name Clear Hash type button");
+assert.ok(engine.engineUciOptions.has("Clear Hash"), "Names with spaces must be kept whole");
 
 engine.ProcessMessage("uciok");
 assert.strictEqual(engine.loaded, true);
@@ -170,5 +158,11 @@ assert.strictEqual(engine.reconnectAttempts, preErrorAttempts, "Error event must
 assert.doesNotThrow(() => {
   engine.initializeWebSocket("invalid://bad-scheme");
 });
+
+MockWebSocket.instances = [];
+const fresh = createEngine(masterMock);
+MockWebSocket.instances[0].triggerOpen();
+fresh.UpdateOptions({ Foo: 1 });
+assert.ok(MockWebSocket.instances[0].sent.includes("setoption name Foo value 1"), "Empty option set must forward custom options");
 
 console.log("All live engine switching behavioral tests passed.");

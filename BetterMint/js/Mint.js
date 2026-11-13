@@ -533,7 +533,7 @@ class StockfishEngine {
     this.targetUrl = this.currentUrl;
     this.isSwitching = false;
     this.onEngineSwitchedCallback = null;
-    this.engineUciOptions = {};
+    this.engineUciOptions = new Set();
     this.customEngineOptions = { "MultiPV": "1" };
 
     this.initializeWebSocket(this.currentUrl);
@@ -606,7 +606,7 @@ class StockfishEngine {
       this.ready = false;
       this.loaded = false;
       this.isSwitching = false;
-      this.engineUciOptions = {};
+      this.engineUciOptions = new Set();
       this.onEngineSwitchedCallback = () => {
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
           this.BetterMintmaster.game.UpdateEngine(false);
@@ -779,7 +779,7 @@ class StockfishEngine {
     let opts = options || this.customEngineOptions;
     if (!opts || typeof opts !== "object") return;
     Object.keys(opts).forEach((key) => {
-      if (Object.keys(this.engineUciOptions).length === 0 || this.engineUciOptions[key]) {
+      if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(key)) {
         this.send(`setoption name ${key} value ${opts[key]}`);
       }
     });
@@ -789,40 +789,11 @@ class StockfishEngine {
     let line = event && typeof event === "object" ? event.data : event;
 
     if (line && typeof line === "string" && line.startsWith("option name ")) {
-      const rest = line.substring("option name ".length);
-      const typeIndex = rest.indexOf(" type ");
+      const typeIndex = line.indexOf(" type ");
       if (typeIndex !== -1) {
-        const name = rest.substring(0, typeIndex).trim();
-        const tokens = rest.substring(typeIndex + " type ".length).split(" ");
-        const type = tokens[0];
-        let defVal = "";
-        let minVal = null;
-        let maxVal = null;
-        let vars = [];
-        for (let i = 1; i < tokens.length; i++) {
-          if (tokens[i] === "default") {
-            i++;
-            defVal = tokens[i] !== undefined ? tokens[i] : "";
-          } else if (tokens[i] === "min") {
-            i++;
-            minVal = tokens[i] !== undefined ? parseInt(tokens[i], 10) : null;
-          } else if (tokens[i] === "max") {
-            i++;
-            maxVal = tokens[i] !== undefined ? parseInt(tokens[i], 10) : null;
-          } else if (tokens[i] === "var") {
-            i++;
-            if (tokens[i] !== undefined) vars.push(tokens[i]);
-          }
-        }
-        this.engineUciOptions[name] = {
-          type: type,
-          default: defVal,
-          min: minVal,
-          max: maxVal,
-          vars: vars
-        };
-        return;
+        this.engineUciOptions.add(line.substring("option name ".length, typeIndex).trim());
       }
+      return;
     }
 
     if (line === "uciok") {
