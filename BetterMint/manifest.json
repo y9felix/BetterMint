@@ -20,6 +20,7 @@
     "content_scripts": [
         {
             "js": [
+                "js/defaults.js",
                 "js/loader.js"
             ],
             "css": [

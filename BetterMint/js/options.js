@@ -1,34 +1,7 @@
 "use strict";
 
-let inputObjects = {
-  "option-url-api-stockfish": { default_value: "ws://localhost:8000/ws" },
-  "option-depth": { default_value: 3 },
-  "option-evaluation-bar": { default_value: true },
-  "option-show-hints": { default_value: true },
-  "option-move-analysis": { default_value: true },
-  "option-notifications": { default_value: false },
-  "option-auto-queue": { default_value: false },
-  "option-legit-auto-move": { default_value: false },
-  "option-human-like-moves": { default_value: true },
-  "option-move-pace": { default_value: 1.5 },
-  "option-physical-floor": { default_value: 200 },
-  "option-timing-spread": { default_value: 0.80 },
-  "option-fast-recaptures": { default_value: true },
-  "option-recapture-multiplier": { default_value: 0.50 },
-  "option-fast-forced-moves": { default_value: true },
-  "option-forced-multiplier": { default_value: 0.35 },
-  "option-fast-opening": { default_value: true },
-  "option-opening-moves-threshold": { default_value: 8 },
-  "option-opening-multiplier": { default_value: 0.35 },
-  "option-clock-scaling": { default_value: true },
-  "option-clock-threshold": { default_value: 60 },
-  "option-clock-min-multiplier": { default_value: 0.30 }
-};
-
-let DefaultExtensionOptions = {};
-for (let key in inputObjects) {
-  DefaultExtensionOptions[key] = inputObjects[key].default_value;
-}
+const optionKeys = Object.keys(DefaultExtensionOptions);
+let fields = {};
 
 function UpdateVisibility() {
   const legitAutoMove = document.getElementById("option-legit-auto-move");
@@ -329,22 +302,22 @@ function notifyTabsOfEngineOptions(customOptions) {
 function RestoreOptions() {
   chrome.storage.sync.get(DefaultExtensionOptions, function (opts) {
     let options = opts || {};
-    for (let key in inputObjects) {
-      const field = inputObjects[key].inputField;
-      if (!field) continue;
+    optionKeys.forEach(function (key) {
+      const field = fields[key];
+      if (!field) return;
 
       if (field.type === "checkbox") {
-        field.checked = options[key] !== undefined ? Boolean(options[key]) : Boolean(inputObjects[key].default_value);
+        field.checked = options[key] !== undefined ? Boolean(options[key]) : Boolean(DefaultExtensionOptions[key]);
       } else if (field.type === "range") {
-        field.value = options[key] !== undefined ? options[key] : inputObjects[key].default_value;
+        field.value = options[key] !== undefined ? options[key] : DefaultExtensionOptions[key];
         const badge = document.getElementById("badge-" + key);
         if (badge) badge.textContent = field.value;
       } else if (field.type === "text") {
-        field.value = options[key] !== undefined ? options[key] : inputObjects[key].default_value;
+        field.value = options[key] !== undefined ? options[key] : DefaultExtensionOptions[key];
       }
-    }
+    });
     UpdateVisibility();
-    const urlField = inputObjects["option-url-api-stockfish"] && inputObjects["option-url-api-stockfish"].inputField;
+    const urlField = fields["option-url-api-stockfish"];
     if (urlField && urlField.value) {
       probeEngine(urlField.value.trim());
     }
@@ -353,9 +326,9 @@ function RestoreOptions() {
 
 function OnOptionsChange(changedKey) {
   let options = {};
-  for (let key in inputObjects) {
-    const field = inputObjects[key].inputField;
-    if (!field) continue;
+  optionKeys.forEach(function (key) {
+    const field = fields[key];
+    if (!field) return;
 
     if (field.type === "checkbox") {
       options[key] = field.checked;
@@ -365,7 +338,7 @@ function OnOptionsChange(changedKey) {
     } else if (field.type === "text") {
       options[key] = field.value.trim();
     }
-  }
+  });
 
   UpdateVisibility();
   if (changedKey === "option-url-api-stockfish" && options["option-url-api-stockfish"]) {
@@ -384,9 +357,9 @@ function OnOptionsChange(changedKey) {
 }
 
 function InitOptions() {
-  for (let key in inputObjects) {
-    inputObjects[key].inputField = document.getElementById(key);
-  }
+  optionKeys.forEach(function (key) {
+    fields[key] = document.getElementById(key);
+  });
 
   document.querySelectorAll(".options-slider").forEach(function (slider) {
     const input = slider.querySelector("input[type='range']");
