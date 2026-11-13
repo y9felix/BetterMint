@@ -602,8 +602,11 @@ class StockfishEngine {
       "Slow Mover": "10",
       "MultiPV": "1"
     };
+    this.currentUrl = getValueConfig(enumOptions.UrlApiStockfish);
+    this.engineUciOptions = {};
+    this.customEngineOptions = {};
 
-    this.initializeWebSocket(getValueConfig(enumOptions.UrlApiStockfish));
+    this.initializeWebSocket(this.currentUrl);
 
     this.reconnectDelay = 500;
     this.maxReconnectDelay = 3000;
@@ -640,6 +643,27 @@ class StockfishEngine {
       console.error("Failed to load stockfish socket");
       throw e;
     }
+  }
+
+  switchEngine(newUrl) {
+    if (!newUrl || newUrl === this.currentUrl) return;
+    this.stopEvaluation(() => {
+      if (this.stockfish) {
+        try {
+          this.stockfish.close();
+        } catch (e) {}
+      }
+      this.currentUrl = newUrl;
+      this.ready = false;
+      this.loaded = false;
+      this.engineUciOptions = {};
+      this.initializeWebSocket(newUrl);
+      this.onReady(() => {
+        if (this.BetterMintmaster && this.BetterMintmaster.game) {
+          this.BetterMintmaster.game.UpdateEngine(false);
+        }
+      });
+    });
   }
 
   send(cmd) {
@@ -795,27 +819,48 @@ class StockfishEngine {
   }
 
   UpdateExtensionOptions(options) {
-    // Handle both null/undefined cases
-    if (options == null) options = this.options;
-    Object.keys(options).forEach((key) => {
-      this.send(`setoption name ${key} value ${options[key]}`);
-    });
+    if (options == null) options = {};
+    let newUrl = options[enumOptions.UrlApiStockfish];
+    if (newUrl && newUrl !== this.currentUrl) {
+      this.switchEngine(newUrl);
+      return;
+    }
+    let custom = options.customEngineOptions || options.engine_options;
+    if (custom && typeof custom === "object") {
+      this.customEngineOptions = Object.assign(this.customEngineOptions, custom);
+      this.UpdateOptions(this.customEngineOptions);
+    }
     this.depth = getValueConfig(enumOptions.Depth);
     if (this.topMoves.length > 0) this.onTopMoves(null, !this.isEvaluating);
   }
 
   UpdateOptions(options = null) {
-    if (options === null) options = this.options;
-    Object.keys(options).forEach((key) => {
-      this.send(`setoption name ${key} value ${options[key]}`);
+    let opts = options || this.customEngineOptions;
+    if (!opts || typeof opts !== "object") return;
+    Object.keys(opts).forEach((key) => {
+      if (Object.keys(this.engineUciOptions).length === 0 || this.engineUciOptions[key]) {
+        this.send(`setoption name ${key} value ${opts[key]}`);
+      }
     });
   }
   ProcessMessage(event) {
     this.ready = false;
     let line = event && typeof event === "object" ? event.data : event;
 
+    let optMatch = line && line.match(/^option name (.+?) type (\w+)(?: default (.*?))?(?: min (-?\d+))?(?: max (-?\d+))?(?: var .*)?$/);
+    if (optMatch) {
+      this.engineUciOptions[optMatch[1]] = {
+        type: optMatch[2],
+        default: optMatch[3],
+        min: optMatch[4] !== undefined ? parseInt(optMatch[4]) : undefined,
+        max: optMatch[5] !== undefined ? parseInt(optMatch[5]) : undefined
+      };
+      return;
+    }
+
     if (line === "uciok") {
       this.loaded = true;
+      this.UpdateOptions();
       this.BetterMintmaster.onEngineLoaded();
     } else if (line === "readyok") {
       this.ready = true;
