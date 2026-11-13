@@ -1,63 +1,20 @@
 "use strict";
-var __awaiter =
-  (this && this.__awaiter) ||
-  function (thisArg, _arguments, P, generator) {
-    function adopt(value) {
-      return value instanceof P
-        ? value
-        : new P(function (resolve) {
-            resolve(value);
-          });
-    }
-    return new (P || (P = Promise))(function (resolve, reject) {
-      function fulfilled(value) {
-        try {
-          step(generator.next(value));
-        } catch (e) {
-          reject(e);
-        }
+var requestId = 0;
+function requestOptions() {
+  var id = requestId++;
+  return new Promise(function (resolve) {
+    var listener = function (evt) {
+      if (evt.detail.requestId == id) {
+        window.removeEventListener("BetterMintSendOptions", listener);
+        resolve(evt.detail.data);
       }
-      function rejected(value) {
-        try {
-          step(generator["throw"](value));
-        } catch (e) {
-          reject(e);
-        }
-      }
-      function step(result) {
-        result.done
-          ? resolve(result.value)
-          : adopt(result.value).then(fulfilled, rejected);
-      }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-  };
-
-var ChromeRequest = (function () {
-  // Options listener and sender
-  var requestId = 0;
-  function getData(data) {
-    var id = requestId++;
-    return new Promise(function (resolve, reject) {
-      var listener = function (evt) {
-        if (evt.detail.requestId == id) {
-          // Deregister self
-          window.removeEventListener("BetterMintSendOptions", listener);
-          resolve(evt.detail.data);
-        }
-      };
-      window.addEventListener("BetterMintSendOptions", listener);
-      var payload = {
-        data: data,
-        id: id,
-      };
-      window.dispatchEvent(
-        new CustomEvent("BetterMintGetOptions", { detail: payload })
-      );
-    });
-  }
-  return { getData: getData };
-})();
+    };
+    window.addEventListener("BetterMintSendOptions", listener);
+    window.dispatchEvent(
+      new CustomEvent("BetterMintGetOptions", { detail: { id: id } })
+    );
+  });
+}
 
 function getGradientColor(start_color, end_color, percent) {
   // strip the leading # if it's there
@@ -110,7 +67,6 @@ var enumOptions = {
   LegitAutoMove: "option-legit-auto-move",
   HumanLikeMoves: "option-human-like-moves",
   MovePace: "option-move-pace",
-  AdvancedTiming: "option-advanced-timing",
   PhysicalFloor: "option-physical-floor",
   TimingSpread: "option-timing-spread",
   FastRecaptures: "option-fast-recaptures",
@@ -156,12 +112,9 @@ function getRemainingPlayerTimeSeconds() {
 }
 
 var BetterMintmaster;
-var Config = window.Config || {};
-var context = undefined;
-var eTable = null;
 
 var tempOptions = {};
-ChromeRequest.getData().then(function (options) {
+requestOptions().then(function (options) {
   tempOptions = options;
 });
 function getValueConfig(key) {
@@ -195,7 +148,6 @@ class GameController {
     this.currentMarkings = [];
     this.turnStartTime = performance.now();
     this.autoMoveTimer = null;
-    let self = this;
     this.controller.on("Move", (event) => {
       if (this.autoMoveTimer !== null) {
         clearTimeout(this.autoMoveTimer);
@@ -221,12 +173,9 @@ class GameController {
         this.handleGameOver();
       }
     });
-    let checkEventOne = false;
     this.controller.on("RendererSet", (event) => {
-      // Execute immediately without setTimeout
       this.ResetGame();
       this.RefreshEvalutionBar();
-      checkEventOne = true;
     });
     this.controller.on("ResetGame", (event) => {
       // Defer slightly to let chess.com update the board visually first
@@ -234,17 +183,6 @@ class GameController {
         this.UpdateEngine(true);
         this.RefreshEvalutionBar();
       }, 50);
-    });
-    setTimeout(() => {
-        if(!checkEventOne){
-            // Fallback - just for safety, no action needed
-        }
-    }, 1100);
-    this.controller.onAll((event) => {
-      // Debug: log all events to see what fires during new games
-      if (event.type && (event.type.includes("Reset") || event.type.includes("Game") || event.type.includes("Mode") || event.type.includes("Renderer"))) {
-        console.log("GameController Event:", event.type, event.data);
-      }
     });
 
     this.controller.on("UpdateOptions", (event) => {
@@ -488,8 +426,7 @@ class GameController {
           let hlColor = getGradientColor(
             "#ff0000",
             "#0000ff",
-            Math.min(((move.cp + 250) / 500) ** 4),
-            1
+            Math.min(((move.cp + 250) / 500) ** 4)
           );
           this.currentMarkings.push({
             data: {
@@ -575,10 +512,6 @@ class GameController {
     this.evalScore.classList.add(classSideAdd);
     this.evalScoreAbbreviated.classList.add(classSideAdd);
   }
-  getPlayingAs() {
-    // Return 2 if player chose black
-    return this.options.isPlayerBlack ? 2 : 1;
-  }
 }
 
 class StockfishEngine {
@@ -589,25 +522,19 @@ class StockfishEngine {
     this.ready = false;
     this.isEvaluating = false;
     this.isRequestedStop = false;
-    this.isGameStarted = false;
     this.readyCallbacks = [];
     this.goDoneCallbacks = [];
     this.stopTimeout = null;
     this.topMoves = [];
     this.lastTopMoves = [];
-    this.isInTheory = false;
     this.lastMoveScore = null;
     this.depth = getValueConfig(enumOptions.Depth);
-    this.options = {
-      "Slow Mover": "10",
-      "MultiPV": "1"
-    };
     this.currentUrl = getValueConfig(enumOptions.UrlApiStockfish);
     this.targetUrl = this.currentUrl;
     this.isSwitching = false;
     this.onEngineSwitchedCallback = null;
     this.engineUciOptions = {};
-    this.customEngineOptions = {};
+    this.customEngineOptions = { "MultiPV": "1" };
 
     this.initializeWebSocket(this.currentUrl);
 
@@ -832,15 +759,6 @@ class StockfishEngine {
     });
   }
 
-  restartGame() {
-    this.stopEvaluation(() => {
-      this.isGameStarted = false;
-      this.send("ucinewgame");
-      this.isGameStarted = true;
-      this.go();
-    });
-  }
-
   UpdateExtensionOptions(options) {
     if (options == null) options = {};
     let newUrl = options[enumOptions.UrlApiStockfish];
@@ -848,7 +766,7 @@ class StockfishEngine {
       this.switchEngine(newUrl);
       return;
     }
-    let custom = options.customEngineOptions || options.engine_options;
+    let custom = options.customEngineOptions;
     if (custom && typeof custom === "object") {
       this.customEngineOptions = Object.assign(this.customEngineOptions, custom);
       this.UpdateOptions(this.customEngineOptions);
@@ -932,27 +850,21 @@ class StockfishEngine {
       }
     } else {
       let depthMatch = line.match(/^info .*?depth (\d+)/);
-      let seldepthMatch = line.match(/^info .*?seldepth (\d+)/);
-      let timeMatch = line.match(/^info .*?time (\d+)/);
       let scoreMatch = line.match(/^info .*?score (\w+) (-?\d+)/);
       let pvMatch = line.match(/^info .*?pv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)(?: .*)?/);
-      let multipvMatch = line.match(/^info .*?multipv (\d+)/);
       let bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)(?: ponder ([a-h][1-8][a-h][1-8][qrbn]?))?/);
 
       if (depthMatch && scoreMatch && pvMatch) {
         let depth = parseInt(depthMatch[1]);
-        let seldepth = seldepthMatch ? parseInt(seldepthMatch[1]) : null;
-        let time = timeMatch ? parseInt(timeMatch[1]) : null;
         let scoreType = scoreMatch[1];
         let score = parseInt(scoreMatch[2]);
-        let multipv = multipvMatch ? parseInt(multipvMatch[1]) : 1;
         let pv = pvMatch[1];
 
         let cpScore = scoreType === "cp" ? score : null;
         let mateScore = scoreType === "mate" ? score : null;
 
         if (!this.isRequestedStop) {
-          let move = new TopMove(pv, depth, cpScore, mateScore, multipv);
+          let move = new TopMove(pv, depth, cpScore, mateScore);
           this.onTopMoves(move, false);
         }
       } else if (bestMoveMatch) {
@@ -991,27 +903,12 @@ class StockfishEngine {
     }
   }
 
-  executeReadyCallbacks() {
-    while (this.readyCallbacks.length > 0) {
-      const callback = this.readyCallbacks.shift();
-      callback();
-    }
-  }
   MoveAndGo(FENs = null, isNewGame = true) {
     // let it go, let it gooo
     let go = () => {
       this.lastTopMoves = isNewGame ? [] : this.topMoves;
       this.lastMoveScore = null;
       this.topMoves = [];
-      if (isNewGame) this.isInTheory = eTable != null;
-      if (this.isInTheory) {
-        let shortFen = this.BetterMintmaster.game.controller
-          .getFEN()
-          .split(" ")
-          .slice(0, 3)
-          .join(" ");
-        if (eTable.get(shortFen) !== true) this.isInTheory = false;
-      }
       if (FENs != null) this.send(`position fen ${FENs}`);
       this.go();
     };
@@ -1028,9 +925,7 @@ class StockfishEngine {
     this.lastMoveScore = null;
     let lastMove = this.BetterMintmaster.game.controller.getLastMove();
     if (lastMove === undefined) return;
-    if (this.isInTheory) {
-      this.lastMoveScore = "Book";
-    } else if (this.lastTopMoves.length > 0) {
+    if (this.lastTopMoves.length > 0) {
       let lastBestMove = this.lastTopMoves[0];
       // check if last move is the best move
       if (
@@ -1077,7 +972,6 @@ class StockfishEngine {
         BestMove: "#9eba5a",
         Excellent: "#96bc4b",
         Good: "#96af8b",
-        Book: "#a88865",
         Inaccuracy: "#f0c15c",
         Mistake: "#e6912c",
         Blunder: "#b33430",
@@ -1110,7 +1004,6 @@ class StockfishEngine {
   }
 
   onTopMoves(move = null, isBestMove = false) {
-    window.top_pv_moves = [];
     let bestMoveSelected = false;
     if (move != null) {
       const index = this.topMoves.findIndex(
@@ -1298,29 +1191,9 @@ class BetterMint {
   }
 }
 
-/* The above code defines a JavaScript module named `ChromeRequest` that exports a single function
-`getData`. This function takes a `data` parameter and returns a Promise that resolves with the data
-received from a custom event dispatched on the `window` object. The custom event is named
-"BetterMintGetOptions" and is expected to be handled by an event listener that will send a response
-event named "BetterMintSendOptions" with the requested data. The `requestId` variable is used to
-uniquely identify each request and match the response to the correct request. */
-
 function InitBetterMint(chessboard) {
-  // Fetch the ECO table
-  if (Config && Config.pathToEcoJson) {
-    fetch(Config.pathToEcoJson).then(function (response) {
-      return __awaiter(this, void 0, void 0, function* () {
-        let table = yield response.json();
-        eTable = new Map(table.map((data) => [data.f, true]));
-      });
-    }).catch(function(error) {
-      console.warn("Could not load ECO table:", error);
-      eTable = null;
-    });
-  }
-
   // Get the extension options
-  ChromeRequest.getData().then(function (options) {
+  requestOptions().then(function (options) {
     try {
       BetterMintmaster = new BetterMint(chessboard, options);
 
@@ -1487,13 +1360,4 @@ if (oldPeerConnection) {
     return pc;
   };
 }
-window.addEventListener(
-  "bm",
-  function (event) {
-    // get
-    if (event.source === window && event.data) {
-      this.alert("best move: " + event);
-    }
-  },
-  false
-);
+

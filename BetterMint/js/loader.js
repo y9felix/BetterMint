@@ -37,20 +37,4 @@ window.addEventListener("BetterMintGetOptions", function (evt) {
   });
 });
 
-window.Config = {
-  threadedEnginePaths: {
-    stockfish: {
-      multiThreaded: {
-        loader: chrome.runtime.getURL("js/stockfish.js"),
-        engine: "stockfish.wasm"
-      },
-      singleThreaded: {
-        loader: chrome.runtime.getURL("js/stockfish.js"),
-        engine: "stockfish.wasm"
-      }
-    }
-  },
-  pathToEcoJson: chrome.runtime.getURL("js/eco.json")
-};
-
 injectScript("js/Mint.js");

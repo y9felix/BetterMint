@@ -13,4 +13,8 @@ assert.ok(!src.includes("MaxLegitAutoMoveDepth"), "MaxLegitAutoMoveDepth should 
 assert.ok(src.includes('"MultiPV": "1"'), 'MultiPV must be locked to "1"');
 assert.ok(!src.includes("requestAnimationFrame"), "requestAnimationFrame must remain removed from automove");
 
+for (const gone of ["__awaiter", "ChromeRequest", "pathToEcoJson", "threadedEnginePaths", "isInTheory", "executeReadyCallbacks", "restartGame", "checkEventOne", "window.top_pv_moves", "getPlayingAs() {"]) {
+  assert.ok(!src.includes(gone), gone + " must be removed");
+}
+
 console.log("Engine pipeline tests passed.");
