@@ -23,19 +23,26 @@ class HealthCheckLogFilter(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(HealthCheckLogFilter())
 
+_config_cache: dict[str, tuple[tuple[int, int], dict]] = {}
+
 def load_config(path: str = CONFIG_PATH) -> dict:
-    if not os.path.exists(path):
+    try:
+        st = os.stat(path)
+        sig = (st.st_mtime_ns, st.st_size)
+        cached = _config_cache.get(path)
+        if cached and cached[0] == sig:
+            return cached[1]
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                _config_cache[path] = (sig, data)
+                return data
+    except FileNotFoundError:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_CONFIG, f, indent=2)
         except OSError:
             pass
-        return dict(DEFAULT_CONFIG)
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                return data
     except (OSError, json.JSONDecodeError):
         pass
     return dict(DEFAULT_CONFIG)
@@ -49,9 +56,8 @@ def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
     return [cmd] if isinstance(cmd, str) else [str(c) for c in cmd]
 
 class EngineProcess:
-    def __init__(self, cmd: list[str], init_commands: list[str] | None = None):
+    def __init__(self, cmd: list[str]):
         self.cmd = cmd
-        self.init_commands = init_commands
         self._proc = None
         self._quit_sent = False
 
@@ -62,9 +68,6 @@ class EngineProcess:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        if self.init_commands:
-            for c in self.init_commands:
-                self.put(c)
         return self
 
     def put(self, cmd: str):
@@ -80,6 +83,13 @@ class EngineProcess:
                     self._quit_sent = True
             except OSError:
                 break
+
+    async def drain(self):
+        if self._proc and self._proc.stdin and self._proc.returncode is None and not self._quit_sent:
+            try:
+                await self._proc.stdin.drain()
+            except OSError:
+                pass
 
     async def read_line(self) -> str | None:
         if not self._proc or not self._proc.stdout:
@@ -146,7 +156,7 @@ app.add_middleware(
 async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
-async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: list[str] | None = None):
+async def handle_engine(websocket: WebSocket, cmd: list[str]):
     if not is_allowed_ws_origin(websocket):
         await websocket.close(code=1008)
         return
@@ -158,7 +168,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
         await websocket.accept()
         print(f"[ENGINE SPAWN] {' '.join(cmd)}", flush=True)
         try:
-            engine = EngineProcess(cmd, init_commands)
+            engine = EngineProcess(cmd)
             start_op = engine.start()
             if asyncio.iscoroutine(start_op):
                 await start_op
@@ -177,6 +187,11 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
                     safe_msg = msg.replace("\r", "\\r").replace("\n", "\\n")
                     print(f"[UCI IN] {safe_msg}", flush=True)
                     engine.put(msg)
+                    drain_op = getattr(engine, "drain", None)
+                    if callable(drain_op):
+                        res = drain_op()
+                        if asyncio.iscoroutine(res):
+                            await res
             except WebSocketDisconnect:
                 pass
             except Exception as e:

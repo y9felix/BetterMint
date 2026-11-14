@@ -182,13 +182,22 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
     return;
   }
 
+  const target =
+    typeof document !== "undefined" && typeof document.createDocumentFragment === "function"
+      ? document.createDocumentFragment()
+      : container;
+
   optionsList.forEach((opt) => {
     const renderer = uciRenderers[opt.type];
     if (!renderer) return;
     const currentVal = savedValues?.[opt.name] ?? opt.default;
     const el = renderer(opt, currentVal, onOptionChange);
-    if (el) container.appendChild(el);
+    if (el) target.appendChild(el);
   });
+
+  if (target !== container) {
+    container.appendChild(target);
+  }
 }
 
 let activeProbeWs = null;
@@ -290,20 +299,34 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
     renderDynamicUciOptions(optionsList, {}, container, null);
     return;
   }
-  const storageKey = "engine_opts_" + encodeURIComponent(url).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const storageKey = getEngineOptionsStorageKey(url);
   chrome.storage.local.get([storageKey], (result) => {
     const saved = Object.assign({}, result?.[storageKey] || {});
+    let pendingFlush = null;
+
+    const flushEngineOpts = () => {
+      if (!pendingFlush) return;
+      const { key, data } = pendingFlush;
+      pendingFlush = null;
+      chrome.storage.local.set({ [key]: data });
+      notifyTabs({ customEngineOptions: data });
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", flushEngineOpts, { once: true });
+    }
+
     renderDynamicUciOptions(optionsList, saved, container, (name, val, isButton) => {
       if (isButton) {
         notifyTabs({ uciButton: name });
         return;
       }
       saved[name] = val;
-      chrome.storage.local.set({ [storageKey]: saved });
+      pendingFlush = { key: storageKey, data: saved };
       if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
       engineOptsSyncTimer = setTimeout(() => {
         engineOptsSyncTimer = null;
-        notifyTabsOfEngineOptions(saved);
+        flushEngineOpts();
       }, 150);
     });
   });
@@ -316,10 +339,6 @@ function notifyTabs(data) {
       chrome.tabs.sendMessage(tab.id, { type: "UpdateOptions", data })?.catch?.(() => {});
     });
   });
-}
-
-function notifyTabsOfEngineOptions(customOptions) {
-  notifyTabs({ customEngineOptions: customOptions });
 }
 
 function RestoreOptions() {

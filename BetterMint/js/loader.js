@@ -25,6 +25,10 @@ const DefaultExtensionOptions = {
   "option-clock-min-multiplier": 0.30
 };
 
+function getEngineOptionsStorageKey(url) {
+  return url ? "engine_opts_" + encodeURIComponent(url).replace(/[^a-zA-Z0-9_-]/g, "_") : null;
+}
+
 function injectScript(file) {
   const script = document.createElement("script");
   script.src = chrome.runtime.getURL(file);
@@ -50,9 +54,7 @@ if (!isExtensionPage) {
   window.addEventListener("BetterMintGetOptions", (evt) => {
     chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
       const url = opts?.["option-url-api-stockfish"];
-      const storageKey = url
-        ? "engine_opts_" + encodeURIComponent(url).replace(/[^a-zA-Z0-9_-]/g, "_")
-        : null;
+      const storageKey = getEngineOptionsStorageKey(url);
       if (storageKey && chrome.storage?.local) {
         chrome.storage.local.get([storageKey], (res) => {
           window.dispatchEvent(

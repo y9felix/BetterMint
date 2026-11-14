@@ -18,7 +18,6 @@
 
 html, body {
     scrollbar-width: none;
-    -ms-overflow-style: none;
 }
 
 ::-webkit-scrollbar {
@@ -389,7 +388,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
 
 .text-input {
     width: 100%;
-    box-sizing: border-box;
     background-color: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 6px;

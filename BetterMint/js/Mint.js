@@ -138,14 +138,23 @@ function resolveLegalMove(legalMoves, bestMove) {
 
 class TopMove {
   constructor(line, depth, cp, mate) {
-    this.line = line.split(" ");
-    this.move = this.line[0];
+    this._pvLine = line;
+    this._lineParts = null;
+    const firstSpace = line.indexOf(" ");
+    this.move = firstSpace === -1 ? line : line.slice(0, firstSpace);
     this.promotion = this.move.length > 4 ? this.move[4] : null;
     this.from = this.move.slice(0, 2);
     this.to = this.move.slice(2, 4);
     this.cp = cp;
     this.mate = mate;
     this.depth = depth;
+  }
+
+  get line() {
+    if (this._lineParts === null) {
+      this._lineParts = this._pvLine.split(" ");
+    }
+    return this._lineParts;
   }
 }
 
@@ -205,6 +214,7 @@ class GameController {
 
     this.controller.on("ModeChanged", (event) => {
       if (event.data === "playing") {
+        this.disconnectAutoQueueObserver();
         setTimeout(() => {
           this.ResetGame();
         }, 100);
@@ -257,43 +267,45 @@ class GameController {
     const now = Date.now();
     if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < 4000) return false;
 
-    const isVisible = (el) => el && el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled;
-    const elements = document.querySelectorAll(GameController.AUTO_QUEUE_SELECTORS);
-    for (const el of elements) {
-      if (isVisible(el)) {
-        const text = el.textContent.trim().toLowerCase();
-        if (GameController.AUTO_QUEUE_KEYWORDS.some((kw) => text.includes(kw))) {
+    const findAndClick = (selector) => {
+      const elements = document.querySelectorAll(selector);
+      for (const el of elements) {
+        if (el.disabled) continue;
+        const text = el.textContent?.trim().toLowerCase();
+        if (!text || !GameController.AUTO_QUEUE_KEYWORDS.some((kw) => text.includes(kw))) {
+          continue;
+        }
+        if (el.offsetWidth > 0 && el.offsetHeight > 0) {
           this.lastAutoQueueClick = now;
           this.dispatchButtonClick(el);
+          this.disconnectAutoQueueObserver();
           return true;
         }
       }
-    }
+      return false;
+    };
 
-    const fallbackButtons = document.querySelectorAll("button:not([disabled]), [role='button']:not([disabled])");
-    for (const btn of fallbackButtons) {
-      if (isVisible(btn)) {
-        const text = btn.textContent.trim().toLowerCase();
-        if (text && GameController.AUTO_QUEUE_KEYWORDS.some((kw) => text.includes(kw))) {
-          this.lastAutoQueueClick = now;
-          this.dispatchButtonClick(btn);
-          return true;
-        }
-      }
+    if (findAndClick(GameController.AUTO_QUEUE_SELECTORS)) return true;
+    return findAndClick("button:not([disabled]), [role='button']:not([disabled])");
+  }
+
+  disconnectAutoQueueObserver() {
+    if (this.autoQueueObserver) {
+      this.autoQueueObserver.disconnect();
+      this.autoQueueObserver = null;
     }
-    return false;
   }
 
   setupAutoQueueObserver() {
-    if (this.autoQueueObserver) {
-      if (!getValueConfig(enumOptions.AutoQueue)) {
-        this.autoQueueObserver.disconnect();
-        this.autoQueueObserver = null;
-      }
+    const shouldObserve =
+      Boolean(getValueConfig(enumOptions.AutoQueue)) &&
+      this.controller.getMode?.() === "gameOver";
+
+    if (!shouldObserve) {
+      this.disconnectAutoQueueObserver();
       return;
     }
-
-    if (!getValueConfig(enumOptions.AutoQueue)) return;
+    if (this.autoQueueObserver) return;
 
     let lastCheckTime = 0;
     this.autoQueueObserver = new MutationObserver(() => {
@@ -308,6 +320,7 @@ class GameController {
 
   handleGameOver() {
     if (!getValueConfig(enumOptions.AutoQueue)) return;
+    this.setupAutoQueueObserver();
     if (this.gameOverInterval !== null) {
       clearInterval(this.gameOverInterval);
     }
@@ -335,17 +348,22 @@ class GameController {
     }
   }
 
+  removeEvaluationBar() {
+    if (this.evalBar == null) return;
+    const wrapper =
+      this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
+        ? this.evalBar.parentElement
+        : this.evalBar;
+    wrapper.remove();
+    this.evalBar = null;
+  }
+
   UpdateExtensionOptions() {
     if (getValueConfig(enumOptions.EvaluationBar) && (!this.evalBar || !this.evalBar.isConnected)) {
       this.evalBar = null;
       this.CreateAnalysisTools();
     } else if (!getValueConfig(enumOptions.EvaluationBar) && this.evalBar != null) {
-      const wrapper =
-        this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
-          ? this.evalBar.parentElement
-          : this.evalBar;
-      wrapper.remove();
-      this.evalBar = null;
+      this.removeEvaluationBar();
     }
 
     this.setupAutoQueueObserver();
@@ -391,6 +409,7 @@ class GameController {
           this.evalBar.classList.add("evaluation-bar-flipped");
         }
         if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
+          this.BetterMintmaster.engine.ensureTopMovesSorted?.();
           const bestMove = this.BetterMintmaster.engine.topMoves[0];
           let score = bestMove.mate !== null ? bestMove.mate : bestMove.cp;
           if (this.controller.getTurn() === 2) score *= -1;
@@ -416,14 +435,7 @@ class GameController {
 
   RefreshEvalutionBar() {
     if (getValueConfig(enumOptions.EvaluationBar)) {
-      if (this.evalBar != null) {
-        const wrapper =
-          this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
-            ? this.evalBar.parentElement
-            : this.evalBar;
-        wrapper.remove();
-        this.evalBar = null;
-      }
+      this.removeEvaluationBar();
       this.CreateAnalysisTools();
     }
   }
@@ -443,6 +455,7 @@ class GameController {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
     }
+    this.disconnectAutoQueueObserver();
     if (this.analysisToolsObserver) {
       this.analysisToolsObserver.disconnect();
       this.analysisToolsObserver = null;
@@ -463,7 +476,7 @@ class GameController {
     this.currentMarkings = [];
   }
 
-  HintMoves(topMoves, lastTopMoves, isBestMove) {
+  HintMoves(topMoves, isBestMove) {
     const bestMove = topMoves[0];
     if (!bestMove) return;
 
@@ -566,6 +579,11 @@ class StockfishEngine {
     [-250, "Mistake"]
   ]);
 
+  static INFO_DEPTH_RE = /\bdepth (\d+)/;
+  static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
+  static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
+  static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
+
   constructor(BetterMintmaster) {
     this.BetterMintmaster = BetterMintmaster;
     this.loaded = false;
@@ -577,8 +595,9 @@ class StockfishEngine {
     this.goDoneCallbacks = [];
     this.stopTimeout = null;
     this.topMoves = [];
+    this.topMovesIndex = new Map();
+    this.topMovesDirty = false;
     this.lastTopMoves = [];
-    this.lastMoveScore = null;
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
     this.depth = getValueConfig(enumOptions.Depth) ?? 15;
@@ -943,33 +962,24 @@ class StockfishEngine {
       if (!this.ready && this.readyCallbacks.length > 0) {
         this.send("isready");
       }
-    } else if (this.isEvaluating && line === "Load eval file success: 1") {
-      this.isEvaluating = false;
-      this.isRequestedStop = false;
-      const callbacks = this.goDoneCallbacks;
-      this.goDoneCallbacks = [];
-      callbacks.forEach((cb) => cb());
     } else if (typeof line === "string" && line.startsWith("info ")) {
-      const depthMatch = line.match(/depth (\d+)/);
-      const scoreMatch = line.match(/score (\w+) (-?\d+)/);
-      const pvMatch = line.match(/pv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/);
+      if (this.isRequestedStop || !line.includes(" pv ")) return;
 
-      if (depthMatch && scoreMatch && pvMatch) {
-        const depth = parseInt(depthMatch[1], 10);
-        const scoreType = scoreMatch[1];
-        const score = parseInt(scoreMatch[2], 10);
-        const pv = pvMatch[1];
+      const pvMatch = line.match(StockfishEngine.INFO_PV_RE);
+      if (!pvMatch) return;
+      const depthMatch = line.match(StockfishEngine.INFO_DEPTH_RE);
+      const scoreMatch = line.match(StockfishEngine.INFO_SCORE_RE);
+      if (!depthMatch || !scoreMatch) return;
 
-        const cpScore = scoreType === "cp" ? score : null;
-        const mateScore = scoreType === "mate" ? score : null;
+      const depth = parseInt(depthMatch[1], 10);
+      const scoreType = scoreMatch[1];
+      const score = parseInt(scoreMatch[2], 10);
+      const cpScore = scoreType === "cp" ? score : null;
+      const mateScore = scoreType === "mate" ? score : null;
 
-        if (!this.isRequestedStop) {
-          const move = new TopMove(pv, depth, cpScore, mateScore);
-          this.onTopMoves(move, false);
-        }
-      }
+      this.onTopMoves(new TopMove(pvMatch[1], depth, cpScore, mateScore), false);
     } else if (typeof line === "string" && line.startsWith("bestmove ")) {
-      const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/);
+      const bestMoveMatch = line.match(StockfishEngine.BESTMOVE_RE);
       if (bestMoveMatch) {
         if (this.staleBestMovesToIgnore > 0) {
           this.staleBestMovesToIgnore--;
@@ -1016,12 +1026,14 @@ class StockfishEngine {
         this.lastTopMoves = [];
         this.lastAutoMovedFen = null;
       } else if (!isSamePosition) {
+        this.ensureTopMovesSorted();
         this.lastTopMoves = this.topMoves;
         this.lastAutoMovedFen = null;
       }
       this.currentPositionFen = FENs;
-      this.lastMoveScore = null;
       this.topMoves = [];
+      this.topMovesIndex?.clear();
+      this.topMovesDirty = false;
       if (FENs !== null) this.send(`position fen ${FENs}`);
       this.go();
     };
@@ -1037,7 +1049,7 @@ class StockfishEngine {
   }
 
   AnalyzeLastMove() {
-    this.lastMoveScore = null;
+    let moveScore = null;
     const game = this.BetterMintmaster.game;
     const controller = game.controller;
     const lastMove = controller.getLastMove();
@@ -1048,30 +1060,30 @@ class StockfishEngine {
     if (this.lastTopMoves.length > 0 && this.topMoves.length > 0) {
       const lastBestMove = this.lastTopMoves[0];
       if (lastBestMove.from === lastMove.from && lastBestMove.to === lastMove.to) {
-        this.lastMoveScore = "BestMove";
+        moveScore = "BestMove";
       } else {
         const bestMove = this.topMoves[0];
         if (lastBestMove.mate !== null) {
           if (bestMove.mate === null) {
-            this.lastMoveScore = lastBestMove.mate > 0 ? "MissedWin" : "Brilliant";
+            moveScore = lastBestMove.mate > 0 ? "MissedWin" : "Brilliant";
           } else if (bestMove.mate < 0) {
-            this.lastMoveScore = lastBestMove.mate > 0 ? "BestMove" : "Brilliant";
+            moveScore = lastBestMove.mate > 0 ? "BestMove" : "Brilliant";
           } else {
-            this.lastMoveScore = lastBestMove.mate > 0 ? "MissedWin" : "Blunder";
+            moveScore = lastBestMove.mate > 0 ? "MissedWin" : "Blunder";
           }
         } else if (bestMove.mate !== null) {
-          this.lastMoveScore = bestMove.mate < 0 ? "Brilliant" : "Blunder";
+          moveScore = bestMove.mate < 0 ? "Brilliant" : "Blunder";
         } else if (bestMove.cp !== null && lastBestMove.cp !== null) {
           const evalDiff = -(bestMove.cp + lastBestMove.cp);
           const match = StockfishEngine.EVAL_THRESHOLDS.find(([th]) => evalDiff > th);
-          this.lastMoveScore = match ? match[1] : "Blunder";
+          moveScore = match ? match[1] : "Blunder";
         } else {
           console.assert(false, "Error while analyzing last move");
         }
       }
     }
-    if (this.lastMoveScore !== null) {
-      const hlColor = StockfishEngine.HIGHLIGHT_COLORS[this.lastMoveScore];
+    if (moveScore !== null) {
+      const hlColor = StockfishEngine.HIGHLIGHT_COLORS[moveScore];
       if (hlColor) {
         controller.markings.addOne({
           data: {
@@ -1088,7 +1100,7 @@ class StockfishEngine {
       controller.markings.addOne({
         data: {
           square: lastMove.to,
-          type: this.lastMoveScore
+          type: moveScore
         },
         node: true,
         persistent: true,
@@ -1098,27 +1110,45 @@ class StockfishEngine {
     }
   }
 
+  ensureTopMovesSorted() {
+    if (!this.topMovesIndex) this.topMovesIndex = new Map();
+    if (this.topMovesDirty) {
+      this.SortTopMoves();
+      this.topMovesDirty = false;
+      this.topMovesIndex.clear();
+      for (let i = 0; i < this.topMoves.length; i++) {
+        this.topMovesIndex.set(this.topMoves[i].move, i);
+      }
+    }
+    return this.topMoves;
+  }
+
   onTopMoves(move = null, isBestMove = false) {
+    if (!this.topMovesIndex) this.topMovesIndex = new Map();
     let bestMoveSelected = false;
     if (move !== null) {
-      const index = this.topMoves.findIndex((object) => object.move === move.move);
-      if (index === -1) {
+      const existingIdx = this.topMovesIndex.get(move.move);
+      if (existingIdx === undefined) {
+        this.topMovesIndex.set(move.move, this.topMoves.length);
         this.topMoves.push(move);
-        this.SortTopMoves();
-      } else if (!isBestMove && move.depth >= this.topMoves[index].depth) {
-        this.topMoves[index] = move;
-        this.SortTopMoves();
+        this.topMovesDirty = true;
+      } else if (!isBestMove && move.depth >= this.topMoves[existingIdx].depth) {
+        this.topMoves[existingIdx] = move;
+        this.topMovesDirty = true;
       }
       if (isBestMove) bestMoveSelected = true;
     } else if (isBestMove && this.topMoves.length > 0) {
       bestMoveSelected = true;
     }
 
+    if (!bestMoveSelected && move !== null) return;
+
+    this.ensureTopMovesSorted();
     const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"] || 1, 10));
     const topPvMoves = this.topMoves.slice(0, multipvCount);
 
-    if (bestMoveSelected || (move === null && topPvMoves.length > 0)) {
-      this.BetterMintmaster.game.HintMoves(topPvMoves, this.lastTopMoves, bestMoveSelected);
+    if (topPvMoves.length > 0) {
+      this.BetterMintmaster.game.HintMoves(topPvMoves, bestMoveSelected);
 
       if (bestMoveSelected && getValueConfig(enumOptions.MoveAnalysis)) {
         this.AnalyzeLastMove();
@@ -1282,12 +1312,6 @@ if (typeof document !== "undefined") {
   let initialized = false;
   let attachTimer = null;
 
-  const findBoardElement = (root) => {
-    if (!root || root.nodeType !== 1) return null;
-    if (root.tagName === "WC-CHESS-BOARD" || root.tagName === "CHESS-BOARD") return root;
-    return root.querySelector?.("wc-chess-board, chess-board") || null;
-  };
-
   const tryAttachBoard = (board, observer) => {
     if (initialized || !board) return false;
     if (board.game) {
@@ -1303,30 +1327,31 @@ if (typeof document !== "undefined") {
     return false;
   };
 
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        const board = findBoardElement(node);
-        if (board) {
-          if (tryAttachBoard(board, observer)) return;
-          if (attachTimer === null) {
-            let checks = 0;
-            attachTimer = setInterval(() => {
-              checks++;
-              const target = document.querySelector("wc-chess-board, chess-board");
-              if (tryAttachBoard(target, observer) || checks >= 200) {
-                clearInterval(attachTimer);
-                attachTimer = null;
-              }
-            }, 50);
-          }
-        }
+  const watchForGameReady = (board, observer) => {
+    if (tryAttachBoard(board, observer) || attachTimer !== null) return;
+    observer?.disconnect();
+    let checks = 0;
+    attachTimer = setInterval(() => {
+      checks++;
+      const target = board.isConnected ? board : document.querySelector("wc-chess-board, chess-board");
+      if (tryAttachBoard(target, observer) || checks >= 200) {
+        clearInterval(attachTimer);
+        attachTimer = null;
       }
+    }, 50);
+  };
+
+  const observer = new MutationObserver(() => {
+    const board = document.querySelector("wc-chess-board, chess-board");
+    if (board) {
+      watchForGameReady(board, observer);
     }
   });
 
   const existingBoard = document.querySelector("wc-chess-board, chess-board");
-  if (!tryAttachBoard(existingBoard, observer)) {
+  if (existingBoard) {
+    watchForGameReady(existingBoard, observer);
+  } else {
     observer.observe(document, {
       childList: true,
       subtree: true
