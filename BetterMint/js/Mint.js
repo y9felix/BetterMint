@@ -1,3 +1,4 @@
+(() => {
 "use strict";
 
 let requestId = 0;
@@ -127,7 +128,7 @@ class GameController {
     this.turnStartTime = performance.now();
     this.autoMoveTimer = null;
     this.gameOverInterval = null;
-    this.analysisToolsInterval = null;
+    this.analysisToolsObserver = null;
     this.lastAutoQueueClick = 0;
 
     this.controller.on("Move", () => {
@@ -283,15 +284,14 @@ class GameController {
   }
 
   CreateAnalysisTools() {
-    if (this.analysisToolsInterval !== null) {
-      clearInterval(this.analysisToolsInterval);
+    if (this.analysisToolsObserver) {
+      this.analysisToolsObserver.disconnect();
+      this.analysisToolsObserver = null;
     }
-    this.analysisToolsInterval = setInterval(() => {
-      const layoutChessboard = this.chessboard.parentElement;
-      if (!layoutChessboard?.parentElement) return;
 
-      clearInterval(this.analysisToolsInterval);
-      this.analysisToolsInterval = null;
+    const mount = () => {
+      const layoutChessboard = this.chessboard.parentElement;
+      if (!layoutChessboard?.parentElement) return false;
 
       if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
         const evalBar = document.createElement("div");
@@ -313,7 +313,21 @@ class GameController {
           this.evalBar.classList.add("evaluation-bar-flipped");
         }
       }
-    }, 10);
+      return true;
+    };
+
+    if (mount()) return;
+
+    this.analysisToolsObserver = new MutationObserver(() => {
+      if (mount()) {
+        if (this.analysisToolsObserver) {
+          this.analysisToolsObserver.disconnect();
+          this.analysisToolsObserver = null;
+        }
+      }
+    });
+    const target = this.chessboard.parentElement || document.body;
+    this.analysisToolsObserver.observe(target, { childList: true, subtree: true });
   }
 
   RefreshEvalutionBar() {
@@ -340,6 +354,10 @@ class GameController {
     if (this.gameOverInterval !== null) {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
+    }
+    if (this.analysisToolsObserver) {
+      this.analysisToolsObserver.disconnect();
+      this.analysisToolsObserver = null;
     }
     this.options = this.controller.getOptions();
     if (this.controller.getPlayingAs() === this.controller.getTurn()) {
@@ -1090,3 +1108,4 @@ if (existingBoard && Object.hasOwn(existingBoard, "game")) {
     subtree: true
   });
 }
+})();
