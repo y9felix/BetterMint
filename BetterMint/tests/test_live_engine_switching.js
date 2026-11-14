@@ -1,8 +1,9 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 const vm = require("vm");
 
-const src = fs.readFileSync("BetterMint/js/Mint.js", "utf8");
+const src = fs.readFileSync(path.join(__dirname, "../js/Mint.js"), "utf8");
 assert.ok(src.includes("switchEngine"), "StockfishEngine must implement switchEngine");
 assert.ok(src.includes("this.currentUrl"), "StockfishEngine must track currentUrl");
 assert.ok(src.includes("this.targetUrl"), "StockfishEngine must track targetUrl");
@@ -178,5 +179,23 @@ assert.strictEqual(restartedEngine, false, "Must not restart engine before stop 
 evaluatingEngine.ProcessMessage("bestmove (none)");
 assert.strictEqual(evaluatingEngine.isEvaluating, false, "bestmove (none) must reset isEvaluating to false");
 assert.strictEqual(restartedEngine, true, "Must restart engine evaluation after options applied");
+
+MockWebSocket.instances = [];
+const lateEngine = createEngine(masterMock);
+for (let i = 0; i < 6; i++) {
+  MockWebSocket.instances[MockWebSocket.instances.length - 1].close();
+  assert.ok(lateEngine.reconnectTimer !== null, `Must keep scheduling reconnect after attempt ${i + 1}`);
+  clearTimeout(lateEngine.reconnectTimer);
+  lateEngine.reconnectTimer = null;
+  lateEngine.initializeWebSocket("ws://localhost:8000/engineA");
+}
+assert.strictEqual(lateEngine.reconnectAttempts, 6);
+
+MockWebSocket.instances[MockWebSocket.instances.length - 1].close();
+assert.ok(lateEngine.reconnectTimer !== null);
+const preWakeCount = MockWebSocket.instances.length;
+lateEngine.UpdatePosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", false);
+assert.strictEqual(MockWebSocket.instances.length, preWakeCount + 1, "UpdatePosition while disconnected must trigger reconnectNow");
+assert.strictEqual(lateEngine.reconnectTimer, null);
 
 console.log("All live engine switching behavioral tests passed.");

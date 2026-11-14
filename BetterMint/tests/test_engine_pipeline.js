@@ -1,7 +1,8 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 
-const src = fs.readFileSync("BetterMint/js/Mint.js", "utf8");
+const src = fs.readFileSync(path.join(__dirname, "../js/Mint.js"), "utf8");
 
 assert.ok(!src.includes("speechSynthesis"), "speechSynthesis should be completely removed");
 assert.ok(!src.includes("initializeWorker"), "initializeWorker should be completely removed");

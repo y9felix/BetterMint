@@ -1,13 +1,15 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 
-const loaderPath = "BetterMint/js/loader.js";
+const extRoot = path.join(__dirname, "..");
+const loaderPath = path.join(extRoot, "js/loader.js");
 assert.ok(fs.existsSync(loaderPath), "js/loader.js must exist");
 
 const loaderSrc = fs.readFileSync(loaderPath, "utf8");
-const optionsSrc = fs.readFileSync("BetterMint/js/options.js", "utf8");
-const manifest = JSON.parse(fs.readFileSync("BetterMint/manifest.json", "utf8"));
-const html = fs.readFileSync("BetterMint/html/options.html", "utf8");
+const optionsSrc = fs.readFileSync(path.join(extRoot, "js/options.js"), "utf8");
+const manifest = JSON.parse(fs.readFileSync(path.join(extRoot, "manifest.json"), "utf8"));
+const html = fs.readFileSync(path.join(extRoot, "html/options.html"), "utf8");
 
 const match = loaderSrc.match(/const DefaultExtensionOptions = \{([\s\S]*?)\};/);
 assert.ok(match, "DefaultExtensionOptions declared in js/loader.js");

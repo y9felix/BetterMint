@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { StockfishEngine } = require(path.join(__dirname, "../js/Mint.js"));
 
-const src = fs.readFileSync("BetterMint/js/Mint.js", "utf8");
+const src = fs.readFileSync(path.join(__dirname, "../js/Mint.js"), "utf8");
 
 assert.ok(!src.includes('this.send("ucinewgame");\n        this.stopInFlight = false;'), "stopEvaluation must not send ucinewgame");
 assert.ok(!src.includes('this.goDoneCallbacks.forEach(cb => cb());\n        this.goDoneCallbacks = [];\n      } else {'), "stopEvaluation must not run callbacks synchronously");

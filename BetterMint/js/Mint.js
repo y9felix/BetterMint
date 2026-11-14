@@ -603,6 +603,17 @@ class StockfishEngine {
     this.staleBestMovesToIgnore = 0;
     this.pendingPosition = null;
 
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", () => this.reconnectNow());
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          this.reconnectNow();
+        }
+      });
+    }
+
     this.initializeWebSocket(this.currentUrl);
   }
 
@@ -629,8 +640,11 @@ class StockfishEngine {
           const cb = this.onEngineSwitchedCallback;
           this.onEngineSwitchedCallback = null;
           cb();
-        } else if (this.BetterMintmaster?.game?.controller?.getMode?.() === "playing") {
-          this.BetterMintmaster.game.UpdateEngine(false);
+        } else {
+          const controller = this.BetterMintmaster?.game?.controller;
+          if (controller && controller.getMode?.() !== "gameOver" && typeof controller.getFEN === "function") {
+            this.BetterMintmaster.game.UpdateEngine(false);
+          }
         }
       });
     });
@@ -642,13 +656,17 @@ class StockfishEngine {
 
     ws.addEventListener("close", () => {
       if (this.stockfish !== ws || this.isSwitching) return;
-      console.error("WebSocket connection closed.");
+      if (this.reconnectAttempts === 0) {
+        console.error("WebSocket connection closed.");
+      }
       this.handleDisconnect();
     });
 
     ws.addEventListener("error", (error) => {
       if (this.stockfish !== ws) return;
-      console.error("WebSocket error:", error);
+      if (this.reconnectAttempts === 0) {
+        console.error("WebSocket error:", error);
+      }
     });
   }
 
@@ -717,6 +735,8 @@ class StockfishEngine {
     this.isRequestedStop = false;
     this.staleBestMovesToIgnore = 0;
     this.pendingPosition = null;
+    this.readyCallbacks = [];
+    this.goDoneCallbacks = [];
     if (this.stopTimeout !== null) {
       clearTimeout(this.stopTimeout);
       this.stopTimeout = null;
@@ -724,21 +744,31 @@ class StockfishEngine {
     this.attemptReconnect();
   }
 
+  reconnectNow() {
+    if (this.isSwitching || this.isWebSocketOpen()) return;
+    if (this.stockfish && this.stockfish.readyState === WebSocket.CONNECTING) return;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
+    this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
+  }
+
   attemptReconnect() {
     if (this.isSwitching || this.reconnectTimer !== null) return;
-    if (this.reconnectAttempts < 5) {
-      this.reconnectAttempts++;
-      const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, this.maxReconnectDelay);
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    this.reconnectAttempts++;
+    const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, this.maxReconnectDelay);
+    if (this.reconnectAttempts === 1) {
       console.log(`Attempting to reconnect in ${delay / 1000} seconds...`);
-      this.reconnectTimer = setTimeout(() => {
-        this.reconnectTimer = null;
-        if (!this.isSwitching) {
-          this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
-        }
-      }, delay);
-    } else {
-      console.error("Max reconnect attempts reached. Please check the connection.");
     }
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.isSwitching) {
+        this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
+      }
+    }, delay);
   }
 
   onReady(callback) {
@@ -829,6 +859,10 @@ class StockfishEngine {
   }
 
   UpdatePosition(FENs = null, isNewGame = true) {
+    if (!this.isWebSocketOpen() || !this.loaded) {
+      this.reconnectNow();
+      return;
+    }
     const wasPending = this.pendingPosition !== null;
     this.pendingPosition = {
       FENs,

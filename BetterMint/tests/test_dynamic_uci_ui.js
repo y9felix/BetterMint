@@ -1,8 +1,10 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 const vm = require("vm");
 
-const html = fs.readFileSync("BetterMint/html/options.html", "utf8");
+const extRoot = path.join(__dirname, "..");
+const html = fs.readFileSync(path.join(extRoot, "html/options.html"), "utf8");
 assert.ok(html.includes('id="engine-options-details"'), "Missing engine-options-details details element");
 assert.ok(html.includes('id="advanced-timing-details"'), "Missing advanced-timing-details details element");
 assert.ok(!html.includes('id="option-advanced-timing"'), "Former toggle switch must be replaced by details summary");
@@ -102,7 +104,7 @@ class MockWebSocket {
 }
 MockWebSocket.instances = [];
 
-const jsSource = fs.readFileSync("BetterMint/js/options.js", "utf8");
+const jsSource = fs.readFileSync(path.join(extRoot, "js/options.js"), "utf8");
 const uciStart = jsSource.indexOf("function parseUciOptionLine");
 const uciEnd = jsSource.indexOf("function loadAndRenderEngineOptions");
 assert.ok(uciStart !== -1 && uciEnd > uciStart, "UCI option section must be locatable");

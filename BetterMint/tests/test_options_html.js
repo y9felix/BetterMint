@@ -1,7 +1,9 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 
-const html = fs.readFileSync("BetterMint/html/options.html", "utf8");
+const extRoot = path.join(__dirname, "..");
+const html = fs.readFileSync(path.join(extRoot, "html/options.html"), "utf8");
 
 const expectedInputs = [
   "option-url-api-stockfish",
@@ -58,16 +60,16 @@ for (const id of prunedInputs) {
 const cardCount = (html.match(/<section class="card">/g) || []).length;
 assert.strictEqual(cardCount, 3, `Expected exactly 3 cards, found ${cardCount}`);
 
-const manifest = JSON.parse(fs.readFileSync("BetterMint/manifest.json", "utf8"));
+const manifest = JSON.parse(fs.readFileSync(path.join(extRoot, "manifest.json"), "utf8"));
 const script = manifest.content_scripts[0];
 assert.deepStrictEqual(script.css, ["css/evalbar.css"], "Only evalbar.css may be injected");
 const refs = []
   .concat(script.js, script.css)
   .concat([manifest.action.default_popup])
   .concat(Object.values(manifest.icons));
-for (const rel of refs) assert.ok(fs.existsSync("BetterMint/" + rel), "Missing manifest asset: " + rel);
+for (const rel of refs) assert.ok(fs.existsSync(path.join(extRoot, rel)), "Missing manifest asset: " + rel);
 for (const m of html.matchAll(/(?:href|src)="\.\.\/([^"]+)"/g)) {
-  assert.ok(fs.existsSync("BetterMint/" + m[1]), "Missing page asset: " + m[1]);
+  assert.ok(fs.existsSync(path.join(extRoot, m[1])), "Missing page asset: " + m[1]);
 }
 
 console.log("HTML structure tests passed.");

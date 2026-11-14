@@ -1,7 +1,8 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 
-const css = fs.readFileSync("BetterMint/css/options.css", "utf8");
+const css = fs.readFileSync(path.join(__dirname, "../css/options.css"), "utf8");
 
 assert.ok(css.includes("details.collapse-group"), "Missing details.collapse-group styling");
 assert.ok(css.includes("details.collapse-group > summary.collapse-summary"), "Missing custom summary styling");
