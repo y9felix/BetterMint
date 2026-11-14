@@ -20,27 +20,6 @@ High-performance chess companion and real-time analysis extension for Chess.com,
 
 ---
 
-## Project Structure
-
-```
-.
-├── BetterMint/       # Chrome / Brave Manifest V3 browser extension
-│   ├── css/          # Extension stylesheets and modern dark UI theme
-│   ├── html/         # Extension settings popup
-│   ├── js/           # Content scripts, injection loader, and defaults
-│   ├── img/          # Extension icons and brand assets
-│   ├── manifest.json # Extension manifest definition
-│   └── rules.json    # Declarative net request rules
-├── EngineWS/         # Local Python UCI engine WebSocket server
-│   ├── main.py       # FastAPI / Uvicorn WebSocket server
-│   ├── run.sh        # Server launch script
-│   └── requirements.txt # Python dependencies
-├── LICENSE           # Reciprocal Public License 1.5 (RPL-1.5)
-└── README.md
-```
-
----
-
 ## Getting Started
 
 ### 1. EngineWS Server
