@@ -399,7 +399,7 @@ window.addEventListener("DOMContentLoaded", function () {
   if (githubLink) {
     githubLink.addEventListener("click", function (event) {
       event.preventDefault();
-      chrome.tabs.create({ url: "https://github.com/BotSolvers/BetterMint" });
+      chrome.tabs.create({ url: "https://github.com/y9felix/BetterMint" });
     });
   }
 

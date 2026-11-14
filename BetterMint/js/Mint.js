@@ -1156,7 +1156,7 @@ class BetterMint {
         id: "chess.com",
         duration: 3000,
         icon: "circle-info",
-        content: `Mint V2.0 is enabled!`,
+        content: `BetterMint is enabled!`,
       });
     }
   }

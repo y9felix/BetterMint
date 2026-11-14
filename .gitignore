@@ -1,4 +1,15 @@
 _metadata/
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+env/
 .superpowers/
+*.zip
+dist/
+build/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
