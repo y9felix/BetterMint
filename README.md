@@ -2,7 +2,7 @@
 
 High-performance chess companion and real-time analysis extension for Chess.com, backed by a local UCI engine WebSocket server.
 
-[![Version](https://img.shields.io/badge/version-2.1.4-blue.svg)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.4)
+[![Version](https://img.shields.io/badge/version-2.1.5-blue.svg)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.5)
 [![License: RPL 1.5](https://img.shields.io/badge/License-RPL%201.5-green.svg)](LICENSE)
 [![Manifest](https://img.shields.io/badge/manifest-v3-orange.svg)](BetterMint/manifest.json)
 
