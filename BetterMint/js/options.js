@@ -19,11 +19,11 @@ function UpdateVisibility() {
 
 function parseUciOptionLine(line) {
   if (!line || typeof line !== "string" || !line.startsWith("option name ")) return null;
-  const rest = line.substring("option name ".length);
+  const rest = line.slice(12);
   const typeIndex = rest.indexOf(" type ");
   if (typeIndex === -1) return null;
-  const name = rest.substring(0, typeIndex).trim();
-  const afterType = rest.substring(typeIndex + " type ".length);
+  const name = rest.slice(0, typeIndex).trim();
+  const afterType = rest.slice(typeIndex + 6);
   const tokens = afterType.split(" ");
   const type = tokens[0];
 
@@ -51,6 +51,115 @@ function parseUciOptionLine(line) {
   return { name, type, default: defVal, min: minVal, max: maxVal, vars };
 }
 
+const uciRenderers = {
+  spin(opt, currentVal, onOptionChange) {
+    const col = document.createElement("div");
+    col.className = "control-col options-slider";
+    const header = document.createElement("div");
+    header.className = "slider-header";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = opt.name;
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = currentVal;
+    header.appendChild(title);
+    header.appendChild(badge);
+    col.appendChild(header);
+
+    const input = document.createElement("input");
+    input.type = "range";
+    input.className = "range-slider";
+    input.min = opt.min ?? 0;
+    input.max = opt.max ?? 100;
+    input.value = currentVal;
+    input.addEventListener("input", () => {
+      badge.textContent = input.value;
+      onOptionChange?.(opt.name, parseInt(input.value, 10));
+    });
+    col.appendChild(input);
+    return col;
+  },
+  check(opt, currentVal, onOptionChange) {
+    const label = document.createElement("label");
+    label.className = "control-row options-checkbox";
+    const labelText = document.createElement("span");
+    labelText.className = "control-label-text";
+    labelText.textContent = opt.name;
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.className = "toggle-input";
+    input.checked = currentVal === true || currentVal === "true";
+    const slider = document.createElement("span");
+    slider.className = "toggle-slider";
+    input.addEventListener("change", () => {
+      onOptionChange?.(opt.name, input.checked);
+    });
+    label.appendChild(labelText);
+    label.appendChild(input);
+    label.appendChild(slider);
+    return label;
+  },
+  combo(opt, currentVal, onOptionChange) {
+    const col = document.createElement("div");
+    col.className = "control-col";
+    const label = document.createElement("label");
+    label.className = "control-label-text";
+    label.textContent = opt.name;
+    const select = document.createElement("select");
+    select.className = "select-input";
+    (opt.vars || []).forEach((v) => {
+      const option = document.createElement("option");
+      option.value = v;
+      option.textContent = v;
+      if (v === String(currentVal)) option.selected = true;
+      select.appendChild(option);
+    });
+    select.addEventListener("change", () => {
+      onOptionChange?.(opt.name, select.value);
+    });
+    col.appendChild(label);
+    col.appendChild(select);
+    return col;
+  },
+  string(opt, currentVal, onOptionChange) {
+    const col = document.createElement("div");
+    col.className = "control-col options-text";
+    const label = document.createElement("label");
+    label.className = "control-label-text";
+    label.textContent = opt.name;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "text-input";
+    input.value = String(currentVal ?? "");
+    input.spellcheck = false;
+    input.autocomplete = "off";
+    input.addEventListener("change", () => {
+      onOptionChange?.(opt.name, input.value.trim());
+    });
+    col.appendChild(label);
+    col.appendChild(input);
+    return col;
+  },
+  button(opt, _currentVal, onOptionChange) {
+    const row = document.createElement("div");
+    row.className = "control-row";
+    const label = document.createElement("span");
+    label.className = "control-label-text";
+    label.textContent = opt.name;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "action-btn";
+    btn.textContent = "Execute";
+    btn.addEventListener("click", () => {
+      onOptionChange?.(opt.name, "");
+    });
+    row.appendChild(label);
+    row.appendChild(btn);
+    return row;
+  }
+};
+
 function renderDynamicUciOptions(optionsList, savedValues, container, onOptionChange) {
   if (!container) return;
   container.innerHTML = "";
@@ -60,110 +169,11 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
   }
 
   optionsList.forEach((opt) => {
+    const renderer = uciRenderers[opt.type];
+    if (!renderer) return;
     const currentVal = savedValues?.[opt.name] ?? opt.default;
-
-    if (opt.type === "spin") {
-      const col = document.createElement("div");
-      col.className = "control-col options-slider";
-      const header = document.createElement("div");
-      header.className = "slider-header";
-      const title = document.createElement("span");
-      title.className = "title";
-      title.textContent = opt.name;
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = currentVal;
-      header.appendChild(title);
-      header.appendChild(badge);
-      col.appendChild(header);
-
-      const input = document.createElement("input");
-      input.type = "range";
-      input.className = "range-slider";
-      input.min = opt.min ?? 0;
-      input.max = opt.max ?? 100;
-      input.value = currentVal;
-      input.addEventListener("input", () => {
-        badge.textContent = input.value;
-        onOptionChange?.(opt.name, parseInt(input.value, 10));
-      });
-      col.appendChild(input);
-      container.appendChild(col);
-    } else if (opt.type === "check") {
-      const label = document.createElement("label");
-      label.className = "control-row options-checkbox";
-      const labelText = document.createElement("span");
-      labelText.className = "control-label-text";
-      labelText.textContent = opt.name;
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.className = "toggle-input";
-      input.checked = currentVal === true || currentVal === "true";
-      const slider = document.createElement("span");
-      slider.className = "toggle-slider";
-      input.addEventListener("change", () => {
-        onOptionChange?.(opt.name, input.checked);
-      });
-      label.appendChild(labelText);
-      label.appendChild(input);
-      label.appendChild(slider);
-      container.appendChild(label);
-    } else if (opt.type === "combo") {
-      const col = document.createElement("div");
-      col.className = "control-col";
-      const label = document.createElement("label");
-      label.className = "control-label-text";
-      label.textContent = opt.name;
-      const select = document.createElement("select");
-      select.className = "select-input";
-      opt.vars.forEach((v) => {
-        const option = document.createElement("option");
-        option.value = v;
-        option.textContent = v;
-        if (v === String(currentVal)) option.selected = true;
-        select.appendChild(option);
-      });
-      select.addEventListener("change", () => {
-        onOptionChange?.(opt.name, select.value);
-      });
-      col.appendChild(label);
-      col.appendChild(select);
-      container.appendChild(col);
-    } else if (opt.type === "string") {
-      const col = document.createElement("div");
-      col.className = "control-col options-text";
-      const label = document.createElement("label");
-      label.className = "control-label-text";
-      label.textContent = opt.name;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "text-input";
-      input.value = String(currentVal ?? "");
-      input.spellcheck = false;
-      input.autocomplete = "off";
-      input.addEventListener("change", () => {
-        onOptionChange?.(opt.name, input.value.trim());
-      });
-      col.appendChild(label);
-      col.appendChild(input);
-      container.appendChild(col);
-    } else if (opt.type === "button") {
-      const row = document.createElement("div");
-      row.className = "control-row";
-      const label = document.createElement("span");
-      label.className = "control-label-text";
-      label.textContent = opt.name;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn";
-      btn.textContent = "Execute";
-      btn.addEventListener("click", () => {
-        onOptionChange?.(opt.name, "");
-      });
-      row.appendChild(label);
-      row.appendChild(btn);
-      container.appendChild(row);
-    }
+    const el = renderer(opt, currentVal, onOptionChange);
+    if (el) container.appendChild(el);
   });
 }
 
@@ -186,12 +196,16 @@ function probeEngine(url) {
   const container = document.getElementById("engine-options-container");
   if (!container) return;
   resetProbe();
+  const setStatus = (msg) => {
+    container.innerHTML = `<span class="status-text">${msg}</span>`;
+  };
+
   if (!url || typeof WebSocket === "undefined") {
-    container.innerHTML = '<span class="status-text">Invalid WebSocket URL.</span>';
+    setStatus("Invalid WebSocket URL.");
     return;
   }
 
-  container.innerHTML = '<span class="status-text">Connecting to engine...</span>';
+  setStatus("Connecting to engine...");
   const discovered = [];
   try {
     const ws = new WebSocket(url);
@@ -199,7 +213,7 @@ function probeEngine(url) {
     probeTimeout = setTimeout(() => {
       if (activeProbeWs !== ws) return;
       resetProbe();
-      container.innerHTML = '<span class="status-text">Connection timed out.</span>';
+      setStatus("Connection timed out.");
     }, 4000);
 
     ws.addEventListener("open", () => {
@@ -208,32 +222,36 @@ function probeEngine(url) {
       probeTimeout = setTimeout(() => {
         if (activeProbeWs !== ws) return;
         resetProbe();
-        container.innerHTML = '<span class="status-text">Engine handshake timed out.</span>';
+        setStatus("Engine handshake timed out.");
       }, 4000);
       ws.send("uci\n");
     });
 
     ws.addEventListener("message", (event) => {
       if (activeProbeWs !== ws) return;
-      const line = event.data;
-      if (!line) return;
-      const opt = parseUciOptionLine(line);
-      if (opt) {
-        discovered.push(opt);
-      } else if (line.trim() === "uciok") {
-        resetProbe();
-        loadAndRenderEngineOptions(url, discovered, container);
+      if (!event.data) return;
+      const lines = String(event.data).split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const opt = parseUciOptionLine(trimmed);
+        if (opt) {
+          discovered.push(opt);
+        } else if (trimmed === "uciok") {
+          resetProbe();
+          loadAndRenderEngineOptions(url, discovered, container);
+          return;
+        }
       }
     });
 
     ws.addEventListener("error", () => {
       if (activeProbeWs !== ws) return;
       resetProbe();
-      container.innerHTML = '<span class="status-text">Unable to connect to engine.</span>';
+      setStatus("Unable to connect to engine.");
     });
   } catch {
     resetProbe();
-    container.innerHTML = '<span class="status-text">Failed to initialize engine socket.</span>';
+    setStatus("Failed to initialize engine socket.");
   }
 }
 
@@ -257,7 +275,7 @@ function notifyTabs(data) {
   if (typeof chrome === "undefined" || !chrome.tabs?.query) return;
   chrome.tabs.query({ url: "*://*.chess.com/*" }, (tabs) => {
     tabs.forEach((tab) => {
-      chrome.tabs.sendMessage(tab.id, { type: "UpdateOptions", data }).catch(() => {});
+      chrome.tabs.sendMessage(tab.id, { type: "UpdateOptions", data })?.catch?.(() => {});
     });
   });
 }
@@ -267,6 +285,10 @@ function notifyTabsOfEngineOptions(customOptions) {
 }
 
 function RestoreOptions() {
+  if (typeof chrome === "undefined" || !chrome.storage?.sync) {
+    UpdateVisibility();
+    return;
+  }
   chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
     const options = opts || {};
     optionKeys.forEach((key) => {
@@ -311,35 +333,27 @@ function OnOptionsChange(changedKey) {
     probeEngine(options["option-url-api-stockfish"]);
   }
 
-  chrome.storage.sync.set(options);
+  chrome.storage?.sync?.set(options);
   notifyTabs(options);
 }
 
 function InitOptions() {
   optionKeys.forEach((key) => {
-    fields[key] = document.getElementById(key);
-  });
+    const field = document.getElementById(key);
+    if (!field) return;
+    fields[key] = field;
 
-  document.querySelectorAll(".options-slider").forEach((slider) => {
-    const input = slider.querySelector("input[type='range']");
-    const badge = slider.querySelector(".badge");
-    if (!input) return;
-
-    if (slider.dataset.min) input.min = slider.dataset.min;
-    if (slider.dataset.max) input.max = slider.dataset.max;
-
-    input.addEventListener("input", () => {
-      if (badge) badge.textContent = input.value;
-      OnOptionsChange();
-    });
-  });
-
-  document.querySelectorAll(".options-checkbox input[type='checkbox']").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => OnOptionsChange());
-  });
-
-  document.querySelectorAll(".options-text input[type='text']").forEach((text) => {
-    text.addEventListener("change", () => OnOptionsChange(text.id));
+    if (field.type === "range") {
+      const badge = document.getElementById("badge-" + key);
+      field.addEventListener("input", () => {
+        if (badge) badge.textContent = field.value;
+        OnOptionsChange();
+      });
+    } else if (field.type === "checkbox") {
+      field.addEventListener("change", () => OnOptionsChange());
+    } else if (field.type === "text") {
+      field.addEventListener("change", () => OnOptionsChange(key));
+    }
   });
 
   RestoreOptions();
@@ -349,7 +363,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const githubLink = document.getElementById("github-link");
   githubLink?.addEventListener("click", (event) => {
     event.preventDefault();
-    chrome.tabs.create({ url: "https://github.com/y9felix/BetterMint" });
+    chrome.tabs?.create({ url: "https://github.com/y9felix/BetterMint" });
   });
 
   InitOptions();

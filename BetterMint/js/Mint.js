@@ -19,24 +19,15 @@ function requestOptions() {
 }
 
 function getGradientColor(startColor, endColor, percent) {
-  let start = startColor.replace(/^\s*#|\s*$/g, "");
-  let end = endColor.replace(/^\s*#|\s*$/g, "");
-  if (start.length === 3) start = start.replace(/./g, "$&$&");
-  if (end.length === 3) end = end.replace(/./g, "$&$&");
-
-  const startRed = parseInt(start.slice(0, 2), 16);
-  const startGreen = parseInt(start.slice(2, 4), 16);
-  const startBlue = parseInt(start.slice(4, 6), 16);
-
-  const endRed = parseInt(end.slice(0, 2), 16);
-  const endGreen = parseInt(end.slice(2, 4), 16);
-  const endBlue = parseInt(end.slice(4, 6), 16);
-
-  const r = Math.max(0, Math.min(255, Math.round(startRed + (endRed - startRed) * percent))).toString(16).padStart(2, "0");
-  const g = Math.max(0, Math.min(255, Math.round(startGreen + (endGreen - startGreen) * percent))).toString(16).padStart(2, "0");
-  const b = Math.max(0, Math.min(255, Math.round(startBlue + (endBlue - startBlue) * percent))).toString(16).padStart(2, "0");
-
-  return "#" + r + g + b;
+  const parse = (hex) => {
+    let c = hex.replace(/^\s*#|\s*$/g, "");
+    if (c.length === 3) c = c.replace(/./g, "$&$&");
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  };
+  const [r1, g1, b1] = parse(startColor);
+  const [r2, g2, b2] = parse(endColor);
+  const ch = (c1, c2) => Math.max(0, Math.min(255, Math.round(c1 + (c2 - c1) * percent))).toString(16).padStart(2, "0");
+  return `#${ch(r1, r2)}${ch(g1, g2)}${ch(b1, b2)}`;
 }
 
 const enumOptions = {
@@ -64,14 +55,15 @@ const enumOptions = {
   ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
+const CLOCK_SELECTORS = [
+  ".clock-component.clock-bottom",
+  ".clock-button-component.clock-bottom",
+  ".clock.clock-bottom",
+  ".clock-bottom"
+];
+
 function getRemainingPlayerTimeSeconds() {
-  const selectors = [
-    ".clock-component.clock-bottom",
-    ".clock-button-component.clock-bottom",
-    ".clock.clock-bottom",
-    ".clock-bottom"
-  ];
-  for (const sel of selectors) {
+  for (const sel of CLOCK_SELECTORS) {
     const el = document.querySelector(sel);
     if (el && el.textContent) {
       const match = el.textContent.trim().match(/\d{1,2}(:\d{2}){1,2}/);
@@ -109,6 +101,27 @@ class TopMove {
 }
 
 class GameController {
+  static AUTO_QUEUE_SELECTORS = [
+    ".game-over-button-primary",
+    ".game-over-button-button",
+    ".game-over-buttons-playAgain",
+    '[data-action="next-game"]',
+    '[data-testid="next-game"]',
+    "button.game-over-button",
+    ".game-over-modal-container button",
+    ".board-modal-container button",
+    ".game-over-modal button",
+    ".game-over-dialog button",
+    ".game-over-buttons-component button",
+    ".ui_v5-button-component.ui_v5-button-primary",
+    ".cc-button-primary"
+  ].join(", ");
+
+  static AUTO_QUEUE_KEYWORDS = [
+    "play again", "new opponent", "next game", "new game", "rematch",
+    "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"
+  ];
+
   constructor(BetterMintmaster, chessboard) {
     this.BetterMintmaster = BetterMintmaster;
     this.chessboard = chessboard;
@@ -121,6 +134,8 @@ class GameController {
     this.currentMarkings = [];
     this.turnStartTime = performance.now();
     this.autoMoveTimer = null;
+    this.gameOverInterval = null;
+    this.analysisToolsInterval = null;
     this.lastAutoQueueClick = 0;
 
     this.controller.on("Move", () => {
@@ -164,11 +179,7 @@ class GameController {
     this.controller.on("UpdateOptions", (event) => {
       this.options = this.controller.getOptions();
       if (event.data.flipped != undefined && this.evalBar != null) {
-        if (event.data.flipped) {
-          this.evalBar.classList.add("evaluation-bar-flipped");
-        } else {
-          this.evalBar.classList.remove("evaluation-bar-flipped");
-        }
+        this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(event.data.flipped));
       }
       this.setupAutoQueueObserver();
     });
@@ -197,35 +208,15 @@ class GameController {
     const now = Date.now();
     if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < 4000) return false;
 
-    const selectors = [
-      ".game-over-button-primary",
-      ".game-over-button-button",
-      ".game-over-buttons-playAgain",
-      '[data-action="next-game"]',
-      '[data-testid="next-game"]',
-      "button.game-over-button",
-      ".game-over-modal-container button",
-      ".board-modal-container button",
-      ".game-over-modal button",
-      ".game-over-dialog button",
-      ".game-over-buttons-component button",
-      ".ui_v5-button-component.ui_v5-button-primary",
-      ".cc-button-primary"
-    ];
-
-    const keywords = ["play again", "new opponent", "next game", "new game", "rematch", "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"];
     const isVisible = (el) => el && el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled;
-
-    for (const sel of selectors) {
-      const elements = document.querySelectorAll(sel);
-      for (const el of elements) {
-        if (isVisible(el)) {
-          const text = el.textContent.trim().toLowerCase();
-          if (keywords.some((kw) => text.includes(kw))) {
-            this.lastAutoQueueClick = now;
-            this.dispatchButtonClick(el);
-            return true;
-          }
+    const elements = document.querySelectorAll(GameController.AUTO_QUEUE_SELECTORS);
+    for (const el of elements) {
+      if (isVisible(el)) {
+        const text = el.textContent.trim().toLowerCase();
+        if (GameController.AUTO_QUEUE_KEYWORDS.some((kw) => text.includes(kw))) {
+          this.lastAutoQueueClick = now;
+          this.dispatchButtonClick(el);
+          return true;
         }
       }
     }
@@ -268,11 +259,15 @@ class GameController {
 
   handleGameOver() {
     if (!getValueConfig(enumOptions.AutoQueue)) return;
+    if (this.gameOverInterval !== null) {
+      clearInterval(this.gameOverInterval);
+    }
     let attempts = 0;
-    const intervalId = setInterval(() => {
+    this.gameOverInterval = setInterval(() => {
       attempts++;
       if (attempts > 60 || this.triggerAutoQueue()) {
-        clearInterval(intervalId);
+        clearInterval(this.gameOverInterval);
+        this.gameOverInterval = null;
       }
     }, 500);
   }
@@ -298,35 +293,30 @@ class GameController {
   }
 
   CreateAnalysisTools() {
-    const interval1 = setInterval(() => {
+    if (this.analysisToolsInterval !== null) {
+      clearInterval(this.analysisToolsInterval);
+    }
+    this.analysisToolsInterval = setInterval(() => {
       const layoutChessboard = this.chessboard.parentElement;
       if (!layoutChessboard) return;
       const layoutMain = layoutChessboard.parentElement;
       if (!layoutMain) return;
 
-      clearInterval(interval1);
+      clearInterval(this.analysisToolsInterval);
+      this.analysisToolsInterval = null;
 
       if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
         const evalBar = document.createElement("div");
-        evalBar.style.flex = "1 1 auto;";
-        evalBar.innerHTML = `
-                <div class="evaluation-bar-bar">
-                    <span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span>
-                    <span class="evaluation-bar-score evaluation-bar-dark ">+0.00</span>
-                    <div class="evaluation-bar-fill">
-                    <div class="evaluation-bar-color evaluation-bar-black"></div>
-                    <div class="evaluation-bar-color evaluation-bar-draw"></div>
-                    <div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div>
-                    </div>
-                </div>`;
-        let layoutEvaluation = layoutChessboard.querySelector("#board-layout-evaluation");
+        evalBar.style.flex = "1 1 auto";
+        evalBar.innerHTML = `<div class="evaluation-bar-bar"><span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-draw"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div></div>`;
+        let layoutEvaluation = layoutChessboard.querySelector("#board-layout-evaluation, .board-layout-evaluation");
         if (!layoutEvaluation) {
           layoutEvaluation = document.createElement("div");
-          layoutEvaluation.classList.add("board-layout-evaluation");
+          layoutEvaluation.id = "board-layout-evaluation";
+          layoutEvaluation.className = "board-layout-evaluation";
           layoutChessboard.insertBefore(layoutEvaluation, layoutChessboard.firstElementChild);
         }
-        layoutEvaluation.innerHTML = "";
-        layoutEvaluation.appendChild(evalBar);
+        layoutEvaluation.replaceChildren(evalBar);
         this.evalBar = layoutEvaluation.querySelector(".evaluation-bar-bar");
         this.evalBarFill = layoutEvaluation.querySelector(".evaluation-bar-white");
         this.evalScore = layoutEvaluation.querySelector(".evaluation-bar-score");
@@ -359,6 +349,10 @@ class GameController {
       clearTimeout(this.autoMoveTimer);
       this.autoMoveTimer = null;
     }
+    if (this.gameOverInterval !== null) {
+      clearInterval(this.gameOverInterval);
+      this.gameOverInterval = null;
+    }
     this.options = this.controller.getOptions();
     if (this.controller.getPlayingAs() === this.controller.getTurn()) {
       this.turnStartTime = performance.now();
@@ -369,10 +363,8 @@ class GameController {
 
   RemoveCurrentMarkings() {
     this.currentMarkings.forEach((marking) => {
-      let key = marking.type + "|";
-      if (marking.data.square != null) key += marking.data.square;
-      else key += `${marking.data.from}${marking.data.to}`;
-      this.controller.markings.removeOne(key);
+      const target = marking.data.square != null ? marking.data.square : `${marking.data.from}${marking.data.to}`;
+      this.controller.markings.removeOne(`${marking.type}|${target}`);
     });
     this.currentMarkings = [];
   }
@@ -405,9 +397,9 @@ class GameController {
         const color =
           idx === 0
             ? this.options.arrowColors.alt
-            : idx >= 1 && idx <= 2
+            : idx <= 2
             ? this.options.arrowColors.shift
-            : idx >= 3 && idx <= 5
+            : idx <= 5
             ? this.options.arrowColors.default
             : this.options.arrowColors.ctrl;
 
@@ -452,12 +444,8 @@ class GameController {
     let textNumber;
     let textScoreAbb;
     if (!isMate) {
-      const evalMax = 500;
-      const evalMin = -500;
       const smallScore = score / 100;
-      percentage = 90 - ((score - evalMin) / (evalMax - evalMin)) * (95 - 5) + 5;
-      if (percentage < 5) percentage = 5;
-      else if (percentage > 95) percentage = 95;
+      percentage = Math.max(5, Math.min(95, 90 - ((score + 500) / 1000) * 90 + 5));
       textNumber = (score >= 0 ? "+" : "") + smallScore.toFixed(2);
       textScoreAbb = Math.abs(smallScore).toFixed(1);
     } else {
@@ -466,14 +454,13 @@ class GameController {
       textScoreAbb = textNumber;
     }
     this.evalBarFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
-    this.evalScore.innerText = textNumber;
-    this.evalScoreAbbreviated.innerText = textScoreAbb;
-    const classSideAdd = score >= 0 ? "evaluation-bar-dark" : "evaluation-bar-light";
-    const classSideRemove = score >= 0 ? "evaluation-bar-light" : "evaluation-bar-dark";
-    this.evalScore.classList.remove(classSideRemove);
-    this.evalScoreAbbreviated.classList.remove(classSideRemove);
-    this.evalScore.classList.add(classSideAdd);
-    this.evalScoreAbbreviated.classList.add(classSideAdd);
+    this.evalScore.textContent = textNumber;
+    this.evalScoreAbbreviated.textContent = textScoreAbb;
+    const isDark = score >= 0;
+    this.evalScore.classList.toggle("evaluation-bar-dark", isDark);
+    this.evalScore.classList.toggle("evaluation-bar-light", !isDark);
+    this.evalScoreAbbreviated.classList.toggle("evaluation-bar-dark", isDark);
+    this.evalScoreAbbreviated.classList.toggle("evaluation-bar-light", !isDark);
   }
 }
 
@@ -489,6 +476,16 @@ class StockfishEngine {
     Blunder: "#b33430",
     MissedWin: "#dbac16"
   });
+
+  static EVAL_THRESHOLDS = Object.freeze([
+    [100, "Brilliant"],
+    [0, "GreatFind"],
+    [-10, "BestMove"],
+    [-25, "Excellent"],
+    [-50, "Good"],
+    [-100, "Inaccuracy"],
+    [-250, "Mistake"]
+  ]);
 
   constructor(BetterMintmaster) {
     this.BetterMintmaster = BetterMintmaster;
@@ -689,7 +686,7 @@ class StockfishEngine {
     const legalMoves = controller.getLegalMoves();
     const lastMove = controller.getLastMove();
 
-    if (getValueConfig(enumOptions.FastForcedMoves) && legalMoves && legalMoves.length === 1) {
+    if (getValueConfig(enumOptions.FastForcedMoves) && legalMoves?.length === 1) {
       const forcedMult = parseFloat(getValueConfig(enumOptions.ForcedMultiplier)) || 0.35;
       median *= forcedMult;
     } else if (getValueConfig(enumOptions.FastRecaptures) && lastMove && bestMove && bestMove.to === lastMove.to) {
@@ -697,8 +694,7 @@ class StockfishEngine {
       median *= recapMult;
     } else if (getValueConfig(enumOptions.FastOpening)) {
       const openingThreshold = parseInt(getValueConfig(enumOptions.OpeningMovesThreshold), 10) || 8;
-      const fenParts = controller.getFEN().split(" ");
-      const fullMoveNumber = parseInt(fenParts[5], 10) || 1;
+      const fullMoveNumber = parseInt(controller.getFEN().split(" ")[5], 10) || 1;
       if (fullMoveNumber <= openingThreshold) {
         const openingMult = parseFloat(getValueConfig(enumOptions.OpeningMultiplier)) || 0.35;
         median *= openingMult;
@@ -708,7 +704,7 @@ class StockfishEngine {
     if (getValueConfig(enumOptions.ClockScaling)) {
       const remainingSeconds = getRemainingPlayerTimeSeconds();
       const clockThreshold = parseInt(getValueConfig(enumOptions.ClockThreshold), 10) || 60;
-      if (remainingSeconds !== null && remainingSeconds !== undefined && remainingSeconds < clockThreshold) {
+      if (remainingSeconds != null && remainingSeconds < clockThreshold) {
         const minMult = parseFloat(getValueConfig(enumOptions.ClockMinMultiplier)) || 0.30;
         const factor = Math.max(minMult, remainingSeconds / clockThreshold);
         median *= factor;
@@ -782,11 +778,10 @@ class StockfishEngine {
       const callbacks = this.goDoneCallbacks;
       this.goDoneCallbacks = [];
       callbacks.forEach((cb) => cb());
-    } else {
-      const depthMatch = line.match(/^info .*?depth (\d+)/);
-      const scoreMatch = line.match(/^info .*?score (\w+) (-?\d+)/);
-      const pvMatch = line.match(/^info .*?pv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)(?: .*)?/);
-      const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)(?: ponder ([a-h][1-8][a-h][1-8][qrbn]?))?/);
+    } else if (typeof line === "string" && line.startsWith("info ")) {
+      const depthMatch = line.match(/depth (\d+)/);
+      const scoreMatch = line.match(/score (\w+) (-?\d+)/);
+      const pvMatch = line.match(/pv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/);
 
       if (depthMatch && scoreMatch && pvMatch) {
         const depth = parseInt(depthMatch[1], 10);
@@ -801,7 +796,10 @@ class StockfishEngine {
           const move = new TopMove(pv, depth, cpScore, mateScore);
           this.onTopMoves(move, false);
         }
-      } else if (bestMoveMatch) {
+      }
+    } else if (typeof line === "string" && line.startsWith("bestmove ")) {
+      const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+      if (bestMoveMatch) {
         if (this.stopTimeout !== null) {
           clearTimeout(this.stopTimeout);
           this.stopTimeout = null;
@@ -874,14 +872,8 @@ class StockfishEngine {
           this.lastMoveScore = bestMove.mate < 0 ? "Brilliant" : "Blunder";
         } else if (bestMove.cp !== null && lastBestMove.cp !== null) {
           const evalDiff = -(bestMove.cp + lastBestMove.cp);
-          if (evalDiff > 100) this.lastMoveScore = "Brilliant";
-          else if (evalDiff > 0) this.lastMoveScore = "GreatFind";
-          else if (evalDiff > -10) this.lastMoveScore = "BestMove";
-          else if (evalDiff > -25) this.lastMoveScore = "Excellent";
-          else if (evalDiff > -50) this.lastMoveScore = "Good";
-          else if (evalDiff > -100) this.lastMoveScore = "Inaccuracy";
-          else if (evalDiff > -250) this.lastMoveScore = "Mistake";
-          else this.lastMoveScore = "Blunder";
+          const match = StockfishEngine.EVAL_THRESHOLDS.find(([th]) => evalDiff > th);
+          this.lastMoveScore = match ? match[1] : "Blunder";
         } else {
           console.assert(false, "Error while analyzing last move");
         }
@@ -917,21 +909,14 @@ class StockfishEngine {
     let bestMoveSelected = false;
     if (move !== null) {
       const index = this.topMoves.findIndex((object) => object.move === move.move);
-      if (isBestMove) {
-        bestMoveSelected = true;
-        if (index === -1) {
-          this.topMoves.push(move);
-          this.SortTopMoves();
-        }
-      } else {
-        if (index === -1) {
-          this.topMoves.push(move);
-          this.SortTopMoves();
-        } else if (move.depth >= this.topMoves[index].depth) {
-          this.topMoves[index] = move;
-          this.SortTopMoves();
-        }
+      if (index === -1) {
+        this.topMoves.push(move);
+        this.SortTopMoves();
+      } else if (!isBestMove && move.depth >= this.topMoves[index].depth) {
+        this.topMoves[index] = move;
+        this.SortTopMoves();
       }
+      if (isBestMove) bestMoveSelected = true;
     }
 
     const topPvMoves = this.topMoves.slice(0, 1);
@@ -1037,7 +1022,7 @@ class BetterMint {
         if (
           getValueConfig(enumOptions.Notifications) &&
           window.toaster &&
-          !window.toaster.notifications.some((noti) => noti.id === "BetterMint-settings-updated")
+          !window.toaster.notifications?.some((noti) => noti.id === "BetterMint-settings-updated")
         ) {
           window.toaster.add({
             id: "BetterMint-settings-updated",
@@ -1109,7 +1094,12 @@ const observer = new MutationObserver((mutations) => {
   }
 });
 
-observer.observe(document, {
-  childList: true,
-  subtree: true
-});
+const existingBoard = document.querySelector("wc-chess-board, chess-board");
+if (existingBoard && Object.hasOwn(existingBoard, "game")) {
+  InitBetterMint(existingBoard);
+} else {
+  observer.observe(document, {
+    childList: true,
+    subtree: true
+  });
+}

@@ -34,15 +34,12 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     return dict(DEFAULT_CONFIG)
 
 def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
-    engines = cfg.get("engines", {})
+    engines = cfg.get("engines") or {}
     if engine_name and engine_name in engines:
         cmd = engines[engine_name]
     else:
-        default_name = cfg.get("default", "stockfish")
-        cmd = engines.get(default_name, ["stockfish"])
-    if isinstance(cmd, str):
-        return [cmd]
-    return [str(c) for c in cmd]
+        cmd = engines.get(cfg.get("default", "stockfish"), ["stockfish"])
+    return [cmd] if isinstance(cmd, str) else [str(c) for c in cmd]
 
 def enqueue_output(out, queue):
     for line in iter(out.readline, ""):
@@ -78,8 +75,6 @@ class EngineProcess:
             pass
 
     def read_line(self) -> str:
-        if not self._proc.stdout:
-            return ""
         try:
             return self.queue.get_nowait().strip()
         except Empty:
@@ -90,7 +85,7 @@ class EngineProcess:
             if not self._quit_sent:
                 self.put("quit")
             self._proc.terminate()
-        except Exception:
+        except OSError:
             pass
 
 app = FastAPI()
@@ -126,12 +121,8 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
 
     try:
         while websocket.client_state == WebSocketState.CONNECTED:
-            while True:
-                res = engine.read_line()
-                if res:
-                    await websocket.send_text(res)
-                else:
-                    break
+            while res := engine.read_line():
+                await websocket.send_text(res)
             await asyncio.sleep(0.01)
     except Exception:
         pass
