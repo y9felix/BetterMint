@@ -176,9 +176,12 @@ class GameController {
     this.controller = chessboard.game;
     this.options = this.controller.getOptions();
     this.evalBar = null;
+    this.evalBarHost = null;
     this.evalBarFill = null;
     this.evalScore = null;
     this.evalScoreAbbreviated = null;
+    this.evalBarResizeObserver = null;
+    this.evalBarSyncHandler = null;
     this.currentMarkings = [];
     this.lastAnalysisMarkings = [];
     this.turnStartTime = performance.now();
@@ -338,13 +341,30 @@ class GameController {
   }
 
   removeEvaluationBar() {
-    if (this.evalBar == null) return;
-    const wrapper =
-      this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
-        ? this.evalBar.parentElement
-        : this.evalBar;
-    wrapper.remove();
-    this.evalBar = null;
+    if (this.evalBarResizeObserver) {
+      this.evalBarResizeObserver.disconnect();
+      this.evalBarResizeObserver = null;
+    }
+    if (this.evalBarSyncHandler) {
+      window.removeEventListener("scroll", this.evalBarSyncHandler, true);
+      window.removeEventListener("resize", this.evalBarSyncHandler);
+      this.evalBarSyncHandler = null;
+    }
+    if (this.evalBarHost) {
+      this.evalBarHost.remove();
+      this.evalBarHost = null;
+    }
+    if (this.evalBar != null) {
+      const wrapper =
+        this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
+          ? this.evalBar.parentElement
+          : this.evalBar;
+      wrapper.remove();
+      this.evalBar = null;
+    }
+    this.evalBarFill = null;
+    this.evalScore = null;
+    this.evalScoreAbbreviated = null;
   }
 
   UpdateExtensionOptions() {
@@ -388,19 +408,63 @@ class GameController {
       if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
         const evalBar = document.createElement("div");
         evalBar.style.flex = "1 1 auto";
+        evalBar.style.height = "100%";
         evalBar.innerHTML = `<div class="evaluation-bar-bar"><span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-draw"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div></div>`;
-        let layoutEvaluation = layoutChessboard.querySelector("#board-layout-evaluation, .board-layout-evaluation");
-        if (!layoutEvaluation) {
-          layoutEvaluation = document.createElement("div");
-          layoutEvaluation.id = "board-layout-evaluation";
-          layoutEvaluation.className = "board-layout-evaluation";
-          layoutChessboard.insertBefore(layoutEvaluation, layoutChessboard.firstElementChild);
+
+        const boardRect = this.chessboard.getBoundingClientRect();
+        const nativeContainer =
+          layoutChessboard.querySelector("#board-layout-evaluation, .board-layout-evaluation") ||
+          layoutChessboard.parentElement.querySelector("#board-layout-evaluation, .board-layout-evaluation");
+        const nativeRect = nativeContainer?.getBoundingClientRect();
+        const hasValidNativeSlot =
+          Boolean(nativeContainer) &&
+          boardRect.height >= 50 &&
+          nativeRect.width >= 16 &&
+          nativeRect.height >= 100 &&
+          nativeRect.right <= boardRect.left + 4 &&
+          boardRect.left - nativeRect.right <= 24;
+
+        let host;
+        if (hasValidNativeSlot) {
+          host = nativeContainer;
+          host.replaceChildren(evalBar);
+        } else {
+          host = document.createElement("div");
+          host.className = "bettermint-evalbar-floating";
+          host.appendChild(evalBar);
+          (document.body || document.documentElement).appendChild(host);
+          this.evalBarHost = host;
+
+          const syncPosition = () => {
+            if (!this.evalBarHost || !this.chessboard?.isConnected) return;
+            const rect = this.chessboard.getBoundingClientRect();
+            if (rect.width < 50 || rect.height < 50 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
+              this.evalBarHost.style.display = "none";
+              return;
+            }
+            this.evalBarHost.style.display = "flex";
+            this.evalBarHost.style.top = `${Math.round(rect.top)}px`;
+            this.evalBarHost.style.height = `${Math.round(rect.height)}px`;
+            this.evalBarHost.style.left = `${Math.max(4, Math.round(rect.left - 26))}px`;
+          };
+
+          syncPosition();
+          if (typeof ResizeObserver !== "undefined") {
+            this.evalBarResizeObserver = new ResizeObserver(syncPosition);
+            this.evalBarResizeObserver.observe(this.chessboard);
+            if (document.body) {
+              this.evalBarResizeObserver.observe(document.body);
+            }
+          }
+          this.evalBarSyncHandler = syncPosition;
+          window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
+          window.addEventListener("resize", syncPosition, { passive: true });
         }
-        layoutEvaluation.replaceChildren(evalBar);
-        this.evalBar = layoutEvaluation.querySelector(".evaluation-bar-bar");
-        this.evalBarFill = layoutEvaluation.querySelector(".evaluation-bar-white");
-        this.evalScore = layoutEvaluation.querySelector(".evaluation-bar-score");
-        this.evalScoreAbbreviated = layoutEvaluation.querySelector(".evaluation-bar-scoreAbbreviated");
+
+        this.evalBar = host.querySelector(".evaluation-bar-bar");
+        this.evalBarFill = host.querySelector(".evaluation-bar-white");
+        this.evalScore = host.querySelector(".evaluation-bar-score");
+        this.evalScoreAbbreviated = host.querySelector(".evaluation-bar-scoreAbbreviated");
         if (!this.options.isWhiteOnBottom && this.options.flipped) {
           this.evalBar.classList.add("evaluation-bar-flipped");
         }

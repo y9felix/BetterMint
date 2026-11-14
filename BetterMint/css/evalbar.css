@@ -23,10 +23,19 @@
     }
 }
 
+.bettermint-evalbar-floating {
+    display: flex;
+    pointer-events: auto;
+    position: fixed;
+    width: 20px;
+    z-index: 20;
+}
+
 .evaluation-bar-bar {
     border-radius: .2rem;
     flex-shrink: 0;
     height: 100%;
+    isolation: isolate;
     position: relative;
     -webkit-user-select: none;
     user-select: none;
@@ -49,7 +58,7 @@
     overflow: hidden;
     position: relative;
     width: 100%;
-    z-index: -1;
+    z-index: 0;
 }
 
 .evaluation-bar-bar .evaluation-bar-color {
@@ -86,7 +95,7 @@
     position: absolute;
     text-align: center;
     width: 100%;
-    z-index: 2;
+    z-index: 3;
 }
 
 .evaluation-bar-bar .evaluation-bar-score.evaluation-bar-dark {
@@ -114,7 +123,7 @@
     transition: opacity .2s;
     transition-delay: .1s;
     width: 45px;
-    z-index: 2;
+    z-index: 3;
 }
 
 .evaluation-bar-bar:hover .evaluation-bar-score.evaluation-bar-dark {
@@ -135,7 +144,7 @@
     text-align: center;
     white-space: pre;
     width: 100%;
-    z-index: 2;
+    z-index: 3;
 }
 
 .evaluation-bar-bar .evaluation-bar-scoreAbbreviated.evaluation-bar-dark {
