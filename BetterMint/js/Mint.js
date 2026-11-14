@@ -60,11 +60,10 @@ function getRemainingPlayerTimeSeconds() {
 let BetterMintmaster;
 let tempOptions = {};
 
-if (typeof window !== "undefined") {
-  requestOptions().then((options) => {
-    tempOptions = options;
-  });
-}
+const optionsPromise = typeof window !== "undefined" ? requestOptions() : Promise.resolve({});
+optionsPromise.then((options) => {
+  tempOptions = options;
+});
 
 function getValueConfig(key) {
   return (BetterMintmaster ? BetterMintmaster.options : tempOptions)[key];
@@ -1038,7 +1037,7 @@ class BetterMint {
 }
 
 function InitBetterMint(chessboard) {
-  requestOptions().then((options) => {
+  optionsPromise.then((options) => {
     try {
       BetterMintmaster = new BetterMint(chessboard, options);
     } catch (e) {

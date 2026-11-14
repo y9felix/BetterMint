@@ -19,14 +19,29 @@ chrome.runtime.onMessage.addListener((request) => {
 
 window.addEventListener("BetterMintGetOptions", (evt) => {
   chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
-    window.dispatchEvent(
-      new CustomEvent("BetterMintSendOptions", {
-        detail: {
-          requestId: evt.detail?.id,
-          data: opts,
-        },
-      })
-    );
+    const url = opts?.["option-url-api-stockfish"];
+    const storageKey = url ? "engine_opts_" + encodeURIComponent(url).replace(/[^a-zA-Z0-9_-]/g, "_") : null;
+    if (storageKey && chrome.storage?.local) {
+      chrome.storage.local.get([storageKey], (res) => {
+        window.dispatchEvent(
+          new CustomEvent("BetterMintSendOptions", {
+            detail: {
+              requestId: evt.detail?.id,
+              data: Object.assign({}, opts, { customEngineOptions: res?.[storageKey] || {} })
+            }
+          })
+        );
+      });
+    } else {
+      window.dispatchEvent(
+        new CustomEvent("BetterMintSendOptions", {
+          detail: {
+            requestId: evt.detail?.id,
+            data: opts
+          }
+        })
+      );
+    }
   });
 });
 

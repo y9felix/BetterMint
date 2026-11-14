@@ -25,4 +25,8 @@ assert.ok(!src.includes("hotkeys ="), "hotkeys object must be completely removed
 assert.ok(src.trim().startsWith("(() => {") && src.trim().endsWith("})();"), "Mint.js must be encapsulated in an IIFE");
 assert.ok(!src.includes("this.analysisToolsInterval = setInterval("), "CreateAnalysisTools must not use setInterval polling");
 
+assert.ok(src.includes("const optionsPromise ="), "Startup options promise must be cached");
+const requestCalls = src.match(/(?<!function\s)requestOptions\(\)/g) || [];
+assert.strictEqual(requestCalls.length, 1, "requestOptions must only be called once via cached promise");
+
 console.log("Engine pipeline tests passed.");
