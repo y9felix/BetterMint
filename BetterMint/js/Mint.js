@@ -483,7 +483,7 @@ class StockfishEngine {
     this.isSwitching = false;
     this.onEngineSwitchedCallback = null;
     this.engineUciOptions = new Set();
-    this.customEngineOptions = { "MultiPV": "1" };
+    this.customEngineOptions = Object.assign({}, BetterMintmaster?.options?.customEngineOptions);
 
     this.initializeWebSocket(this.currentUrl);
 
@@ -896,7 +896,8 @@ class StockfishEngine {
       if (isBestMove) bestMoveSelected = true;
     }
 
-    const topPvMoves = this.topMoves.slice(0, 1);
+    const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"] || 1, 10));
+    const topPvMoves = this.topMoves.slice(0, multipvCount);
 
     if (bestMoveSelected) {
       this.BetterMintmaster.game.HintMoves(topPvMoves, this.lastTopMoves, isBestMove);

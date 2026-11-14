@@ -10,7 +10,8 @@ assert.ok(!src.includes("RandomBestMove"), "RandomBestMove should be removed");
 assert.ok(!src.includes("BestMoveChance"), "BestMoveChance should be removed");
 assert.ok(!src.includes("MaxLegitAutoMoveDepth"), "MaxLegitAutoMoveDepth should be removed");
 
-assert.ok(src.includes('"MultiPV": "1"'), 'MultiPV must be locked to "1"');
+assert.ok(!src.includes('this.customEngineOptions = { "MultiPV": "1" };'), "MultiPV must not be hardcoded to 1");
+assert.ok(src.includes("this.customEngineOptions?.MultiPV") || src.includes('this.customEngineOptions?.["MultiPV"]'), "MultiPV must be resolved dynamically");
 assert.ok(!src.includes("requestAnimationFrame"), "requestAnimationFrame must remain removed from automove");
 
 for (const gone of ["__awaiter", "ChromeRequest", "pathToEcoJson", "threadedEnginePaths", "isInTheory", "executeReadyCallbacks", "restartGame", "checkEventOne", "window.top_pv_moves", "getPlayingAs() {"]) {
