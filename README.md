@@ -69,6 +69,20 @@ The server listens on `ws://127.0.0.1:8000/ws` (using the `default` engine), or 
 
 ---
 
+## Testing
+
+Run extension unit tests:
+```bash
+for f in BetterMint/tests/test_*.js; do node "$f"; done
+```
+
+Run EngineWS server tests:
+```bash
+python -m unittest discover EngineWS/tests
+```
+
+---
+
 ## Attribution & License
 
 BetterMint is derived from [BotSolvers/BetterMint](https://github.com/BotSolvers/BetterMint).

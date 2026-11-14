@@ -3,7 +3,7 @@ import json
 import os
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.websockets import WebSocketState
+from fastapi.websockets import WebSocketDisconnect, WebSocketState
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 DEFAULT_CONFIG = {
@@ -114,8 +114,24 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
             async for msg in websocket.iter_text():
                 print(f"[UCI IN] {msg}", flush=True)
                 engine.put(msg)
-        except Exception:
+        except WebSocketDisconnect:
             pass
+        except Exception as e:
+            print(f"[WS ERROR] Ingress: {e}", flush=True)
+
+    async def send_socket():
+        try:
+            while websocket.client_state == WebSocketState.CONNECTED:
+                res = engine.read_line()
+                if asyncio.iscoroutine(res):
+                    res = await res
+                if not res:
+                    break
+                await websocket.send_text(res)
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            print(f"[WS ERROR] Egress: {e}", flush=True)
 
     async def stream_stderr():
         try:
@@ -126,29 +142,23 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
                 text = line.decode("utf-8", errors="replace").strip()
                 if text:
                     print(f"[ENGINE STDERR] {text}", flush=True)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[ENGINE ERROR] Stderr: {e}", flush=True)
 
     task_in = asyncio.create_task(read_socket())
+    task_out = asyncio.create_task(send_socket())
     task_err = asyncio.create_task(stream_stderr())
 
     try:
-        while websocket.client_state == WebSocketState.CONNECTED:
-            res = engine.read_line()
-            if asyncio.iscoroutine(res):
-                res = await res
-            if not res:
-                await asyncio.sleep(0)
-                if not getattr(engine, "_proc", None) or (getattr(engine._proc, "returncode", None) is not None):
-                    break
-                continue
-            await websocket.send_text(res)
-    except Exception:
-        pass
+        await asyncio.wait(
+            [task_in, task_out],
+            return_when=asyncio.FIRST_COMPLETED
+        )
     finally:
-        await asyncio.sleep(0)
         task_in.cancel()
-        task_err.cancel()
+        task_out.cancel()
+        if not task_err.done():
+            task_err.cancel()
         engine.terminate()
         print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
 

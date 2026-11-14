@@ -47,7 +47,7 @@ const enumOptions = {
 const CLOCK_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
 
 function getRemainingPlayerTimeSeconds() {
-  const el = document.querySelector(CLOCK_SELECTOR);
+  const el = typeof document !== "undefined" ? document.querySelector(CLOCK_SELECTOR) : null;
   if (el && el.textContent) {
     const match = el.textContent.trim().match(/\d{1,2}(:\d{2}){1,2}/);
     if (match) {
@@ -60,9 +60,11 @@ function getRemainingPlayerTimeSeconds() {
 let BetterMintmaster;
 let tempOptions = {};
 
-requestOptions().then((options) => {
-  tempOptions = options;
-});
+if (typeof window !== "undefined") {
+  requestOptions().then((options) => {
+    tempOptions = options;
+  });
+}
 
 function getValueConfig(key) {
   return (BetterMintmaster ? BetterMintmaster.options : tempOptions)[key];
@@ -1057,25 +1059,38 @@ function InitBetterMint(chessboard) {
   });
 }
 
-const observer = new MutationObserver((mutations) => {
-  for (const mutation of mutations) {
-    for (const node of mutation.addedNodes) {
-      if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === "WC-CHESS-BOARD" || node.tagName === "CHESS-BOARD") && Object.hasOwn(node, "game")) {
-        InitBetterMint(node);
-        observer.disconnect();
-        return;
+if (typeof document !== "undefined") {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === 1 && (node.tagName === "WC-CHESS-BOARD" || node.tagName === "CHESS-BOARD") && Object.hasOwn(node, "game")) {
+          InitBetterMint(node);
+          observer.disconnect();
+          return;
+        }
       }
     }
-  }
-});
-
-const existingBoard = document.querySelector("wc-chess-board, chess-board");
-if (existingBoard && Object.hasOwn(existingBoard, "game")) {
-  InitBetterMint(existingBoard);
-} else {
-  observer.observe(document, {
-    childList: true,
-    subtree: true
   });
+
+  const existingBoard = document.querySelector("wc-chess-board, chess-board");
+  if (existingBoard && Object.hasOwn(existingBoard, "game")) {
+    InitBetterMint(existingBoard);
+  } else {
+    observer.observe(document, {
+      childList: true,
+      subtree: true
+    });
+  }
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    StockfishEngine,
+    GameController,
+    TopMove,
+    enumOptions,
+    getValueConfig,
+    setOptionsForTesting: (opts) => { tempOptions = opts; }
+  };
 }
 })();
