@@ -89,7 +89,7 @@ const uciRenderers = {
     input.value = currentVal;
     input.addEventListener("input", () => {
       badge.textContent = input.value;
-      onOptionChange?.(opt.name, parseInt(input.value, 10));
+      onOptionChange?.(opt.name, parseInt(input.value, 10), false);
     });
     col.appendChild(input);
     return col;
@@ -107,7 +107,7 @@ const uciRenderers = {
     const slider = document.createElement("span");
     slider.className = "toggle-slider";
     input.addEventListener("change", () => {
-      onOptionChange?.(opt.name, input.checked);
+      onOptionChange?.(opt.name, input.checked, false);
     });
     label.appendChild(labelText);
     label.appendChild(input);
@@ -130,7 +130,7 @@ const uciRenderers = {
       select.appendChild(option);
     });
     select.addEventListener("change", () => {
-      onOptionChange?.(opt.name, select.value);
+      onOptionChange?.(opt.name, select.value, false);
     });
     col.appendChild(label);
     col.appendChild(select);
@@ -149,7 +149,7 @@ const uciRenderers = {
     input.spellcheck = false;
     input.autocomplete = "off";
     input.addEventListener("change", () => {
-      onOptionChange?.(opt.name, input.value.trim());
+      onOptionChange?.(opt.name, input.value.trim(), false);
     });
     col.appendChild(label);
     col.appendChild(input);
@@ -166,7 +166,7 @@ const uciRenderers = {
     btn.className = "action-btn";
     btn.textContent = "Execute";
     btn.addEventListener("click", () => {
-      onOptionChange?.(opt.name, "");
+      onOptionChange?.(opt.name, "", true);
     });
     row.appendChild(label);
     row.appendChild(btn);
@@ -276,8 +276,12 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
   }
   const storageKey = "engine_opts_" + encodeURIComponent(url).replace(/[^a-zA-Z0-9_-]/g, "_");
   chrome.storage.local.get([storageKey], (result) => {
-    const saved = result?.[storageKey] || {};
-    renderDynamicUciOptions(optionsList, saved, container, (name, val) => {
+    const saved = Object.assign({}, result?.[storageKey] || {});
+    renderDynamicUciOptions(optionsList, saved, container, (name, val, isButton) => {
+      if (isButton) {
+        notifyTabs({ uciButton: name });
+        return;
+      }
       saved[name] = val;
       chrome.storage.local.set({ [storageKey]: saved });
       notifyTabsOfEngineOptions(saved);
