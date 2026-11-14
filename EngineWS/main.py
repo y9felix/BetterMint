@@ -1,9 +1,6 @@
 import asyncio
 import json
 import os
-from queue import Empty, Queue
-import subprocess
-from threading import Thread
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocketState
@@ -41,46 +38,46 @@ def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
         cmd = engines.get(cfg.get("default", "stockfish"), ["stockfish"])
     return [cmd] if isinstance(cmd, str) else [str(c) for c in cmd]
 
-def enqueue_output(out, queue):
-    for line in iter(out.readline, ""):
-        queue.put(line)
-    out.close()
-
 class EngineProcess:
-    def __init__(self, cmd, init_commands=None):
-        self._proc = subprocess.Popen(
-            cmd,
-            text=True,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        self.queue = Queue()
-        self.thread = Thread(target=enqueue_output, args=(self._proc.stdout, self.queue), daemon=True)
-        self.thread.start()
+    def __init__(self, cmd: list[str], init_commands: list[str] | None = None):
+        self.cmd = cmd
+        self.init_commands = init_commands
+        self._proc = None
         self._quit_sent = False
-        if init_commands:
-            for c in init_commands:
+
+    async def start(self):
+        self._proc = await asyncio.create_subprocess_exec(
+            *self.cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        if self.init_commands:
+            for c in self.init_commands:
                 self.put(c)
+        return self
 
     def put(self, cmd: str):
-        if not self._proc.stdin or self._proc.poll() is not None or self._quit_sent:
+        if not self._proc or not self._proc.stdin or self._proc.returncode is not None or self._quit_sent:
             return
         try:
-            self._proc.stdin.write(f"{cmd}\n")
-            self._proc.stdin.flush()
+            self._proc.stdin.write(f"{cmd}\n".encode("utf-8"))
             if cmd == "quit":
                 self._quit_sent = True
         except OSError:
             pass
 
-    def read_line(self) -> str:
-        try:
-            return self.queue.get_nowait().strip()
-        except Empty:
+    async def read_line(self) -> str:
+        if not self._proc or not self._proc.stdout:
             return ""
+        raw = await self._proc.stdout.readline()
+        if not raw:
+            return ""
+        return raw.decode("utf-8", errors="replace").strip()
 
     def terminate(self):
+        if not self._proc:
+            return
         try:
             if not self._quit_sent:
                 self.put("quit")
@@ -103,6 +100,9 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
     print(f"[ENGINE SPAWN] {' '.join(cmd)}", flush=True)
     try:
         engine = EngineProcess(cmd, init_commands)
+        start_op = engine.start()
+        if asyncio.iscoroutine(start_op):
+            await start_op
     except FileNotFoundError:
         print(f"[ENGINE ERROR] Binary not found: {' '.join(cmd)}", flush=True)
         await websocket.send_text(f"info string Error: Engine binary '{cmd[0]}' not found")
@@ -117,17 +117,38 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
         except Exception:
             pass
 
-    task = asyncio.create_task(read_socket())
+    async def stream_stderr():
+        try:
+            proc = getattr(engine, "_proc", None)
+            if not proc or not proc.stderr:
+                return
+            while line := await proc.stderr.readline():
+                text = line.decode("utf-8", errors="replace").strip()
+                if text:
+                    print(f"[ENGINE STDERR] {text}", flush=True)
+        except Exception:
+            pass
+
+    task_in = asyncio.create_task(read_socket())
+    task_err = asyncio.create_task(stream_stderr())
 
     try:
         while websocket.client_state == WebSocketState.CONNECTED:
-            while res := engine.read_line():
-                await websocket.send_text(res)
-            await asyncio.sleep(0.01)
+            res = engine.read_line()
+            if asyncio.iscoroutine(res):
+                res = await res
+            if not res:
+                await asyncio.sleep(0)
+                if not getattr(engine, "_proc", None) or (getattr(engine._proc, "returncode", None) is not None):
+                    break
+                continue
+            await websocket.send_text(res)
     except Exception:
         pass
     finally:
-        task.cancel()
+        await asyncio.sleep(0)
+        task_in.cancel()
+        task_err.cancel()
         engine.terminate()
         print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
 
