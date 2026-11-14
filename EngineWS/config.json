@@ -1,6 +1,0 @@
-{
-  "default": "stockfish",
-  "engines": {
-    "stockfish": ["stockfish"]
-  }
-}
