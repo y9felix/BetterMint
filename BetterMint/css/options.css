@@ -198,6 +198,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
 .svg-icon {
     width: 14px;
     height: 14px;
+    pointer-events: none;
 }
 
 .settings-container {
