@@ -35,6 +35,8 @@ for (const id of expectedInputs) {
 assert.ok(html.includes('id="engine-options-details"'), "Missing engine-options-details element");
 assert.ok(html.includes('id="advanced-timing-details"'), "Missing advanced-timing-details element");
 assert.ok(!html.includes('id="option-advanced-timing"'), "Former toggle switch must be replaced by details");
+assert.ok(!html.includes("data-min="), "options.html must not contain dead data-min attributes");
+assert.ok(!html.includes("data-max="), "options.html must not contain dead data-max attributes");
 
 const prunedInputs = [
   "option-api-stockfish",

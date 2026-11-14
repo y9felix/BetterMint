@@ -24,7 +24,7 @@
                 <input id="option-url-api-stockfish" type="text" class="text-input" spellcheck="false" autocomplete="off" />
             </div>
 
-            <div class="control-col options-slider" data-min="1" data-max="50">
+            <div class="control-col options-slider">
                 <div class="slider-header">
                     <span class="title">Search Depth</span>
                     <span class="badge" id="badge-option-depth">3</span>
@@ -91,7 +91,7 @@
                 </label>
 
                 <div id="human-pace-group" class="sub-panel">
-                    <div class="control-col options-slider" data-min="0.5" data-max="30.0">
+                    <div class="control-col options-slider">
                         <div class="slider-header">
                             <span class="title">Move Pace (Seconds)</span>
                             <span class="badge" id="badge-option-move-pace">1.5</span>
@@ -102,96 +102,96 @@
                     <details id="advanced-timing-details" class="collapse-group">
                         <summary class="collapse-summary">Advanced Timing Settings</summary>
                         <div id="advanced-timing-panel" class="collapse-content">
-                            <div class="control-col options-slider" data-min="50" data-max="500">
-                            <div class="slider-header">
-                                <span class="title">Physical Floor (ms)</span>
-                                <span class="badge" id="badge-option-physical-floor">200</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Physical Floor (ms)</span>
+                                    <span class="badge" id="badge-option-physical-floor">200</span>
+                                </div>
+                                <input id="option-physical-floor" type="range" min="50" max="500" step="10" value="200" class="range-slider" />
                             </div>
-                            <input id="option-physical-floor" type="range" min="50" max="500" step="10" value="200" class="range-slider" />
-                        </div>
 
-                        <div class="control-col options-slider" data-min="0.10" data-max="1.20">
-                            <div class="slider-header">
-                                <span class="title">Timing Spread (σ)</span>
-                                <span class="badge" id="badge-option-timing-spread">0.80</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Timing Spread (σ)</span>
+                                    <span class="badge" id="badge-option-timing-spread">0.80</span>
+                                </div>
+                                <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
                             </div>
-                            <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
-                        </div>
 
-                        <label class="control-row options-checkbox" for="option-fast-recaptures">
-                            <span class="control-label-text">Fast Recaptures</span>
-                            <input id="option-fast-recaptures" type="checkbox" class="toggle-input" checked />
-                            <span class="toggle-slider"></span>
-                        </label>
+                            <label class="control-row options-checkbox" for="option-fast-recaptures">
+                                <span class="control-label-text">Fast Recaptures</span>
+                                <input id="option-fast-recaptures" type="checkbox" class="toggle-input" checked />
+                                <span class="toggle-slider"></span>
+                            </label>
 
-                        <div class="control-col options-slider" data-min="0.10" data-max="1.00">
-                            <div class="slider-header">
-                                <span class="title">Recapture Multiplier</span>
-                                <span class="badge" id="badge-option-recapture-multiplier">0.50</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Recapture Multiplier</span>
+                                    <span class="badge" id="badge-option-recapture-multiplier">0.50</span>
+                                </div>
+                                <input id="option-recapture-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.50" class="range-slider" />
                             </div>
-                            <input id="option-recapture-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.50" class="range-slider" />
-                        </div>
 
-                        <label class="control-row options-checkbox" for="option-fast-forced-moves">
-                            <span class="control-label-text">Fast Forced Moves</span>
-                            <input id="option-fast-forced-moves" type="checkbox" class="toggle-input" checked />
-                            <span class="toggle-slider"></span>
-                        </label>
+                            <label class="control-row options-checkbox" for="option-fast-forced-moves">
+                                <span class="control-label-text">Fast Forced Moves</span>
+                                <input id="option-fast-forced-moves" type="checkbox" class="toggle-input" checked />
+                                <span class="toggle-slider"></span>
+                            </label>
 
-                        <div class="control-col options-slider" data-min="0.10" data-max="1.00">
-                            <div class="slider-header">
-                                <span class="title">Forced Move Multiplier</span>
-                                <span class="badge" id="badge-option-forced-multiplier">0.35</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Forced Move Multiplier</span>
+                                    <span class="badge" id="badge-option-forced-multiplier">0.35</span>
+                                </div>
+                                <input id="option-forced-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.35" class="range-slider" />
                             </div>
-                            <input id="option-forced-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.35" class="range-slider" />
-                        </div>
 
-                        <label class="control-row options-checkbox" for="option-fast-opening">
-                            <span class="control-label-text">Fast Opening</span>
-                            <input id="option-fast-opening" type="checkbox" class="toggle-input" checked />
-                            <span class="toggle-slider"></span>
-                        </label>
+                            <label class="control-row options-checkbox" for="option-fast-opening">
+                                <span class="control-label-text">Fast Opening</span>
+                                <input id="option-fast-opening" type="checkbox" class="toggle-input" checked />
+                                <span class="toggle-slider"></span>
+                            </label>
 
-                        <div class="control-col options-slider" data-min="1" data-max="15">
-                            <div class="slider-header">
-                                <span class="title">Opening Moves Threshold</span>
-                                <span class="badge" id="badge-option-opening-moves-threshold">8</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Opening Moves Threshold</span>
+                                    <span class="badge" id="badge-option-opening-moves-threshold">8</span>
+                                </div>
+                                <input id="option-opening-moves-threshold" type="range" min="1" max="15" step="1" value="8" class="range-slider" />
                             </div>
-                            <input id="option-opening-moves-threshold" type="range" min="1" max="15" step="1" value="8" class="range-slider" />
-                        </div>
 
-                        <div class="control-col options-slider" data-min="0.10" data-max="1.00">
-                            <div class="slider-header">
-                                <span class="title">Opening Multiplier</span>
-                                <span class="badge" id="badge-option-opening-multiplier">0.35</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Opening Multiplier</span>
+                                    <span class="badge" id="badge-option-opening-multiplier">0.35</span>
+                                </div>
+                                <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.35" class="range-slider" />
                             </div>
-                            <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.35" class="range-slider" />
-                        </div>
 
-                        <label class="control-row options-checkbox" for="option-clock-scaling">
-                            <span class="control-label-text">Clock Scaling</span>
-                            <input id="option-clock-scaling" type="checkbox" class="toggle-input" checked />
-                            <span class="toggle-slider"></span>
-                        </label>
+                            <label class="control-row options-checkbox" for="option-clock-scaling">
+                                <span class="control-label-text">Clock Scaling</span>
+                                <input id="option-clock-scaling" type="checkbox" class="toggle-input" checked />
+                                <span class="toggle-slider"></span>
+                            </label>
 
-                        <div class="control-col options-slider" data-min="10" data-max="120">
-                            <div class="slider-header">
-                                <span class="title">Clock Threshold (Seconds)</span>
-                                <span class="badge" id="badge-option-clock-threshold">60</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Clock Threshold (Seconds)</span>
+                                    <span class="badge" id="badge-option-clock-threshold">60</span>
+                                </div>
+                                <input id="option-clock-threshold" type="range" min="10" max="120" step="5" value="60" class="range-slider" />
                             </div>
-                            <input id="option-clock-threshold" type="range" min="10" max="120" step="5" value="60" class="range-slider" />
-                        </div>
 
-                        <div class="control-col options-slider" data-min="0.10" data-max="0.80">
-                            <div class="slider-header">
-                                <span class="title">Clock Min Multiplier</span>
-                                <span class="badge" id="badge-option-clock-min-multiplier">0.30</span>
+                            <div class="control-col options-slider">
+                                <div class="slider-header">
+                                    <span class="title">Clock Min Multiplier</span>
+                                    <span class="badge" id="badge-option-clock-min-multiplier">0.30</span>
+                                </div>
+                                <input id="option-clock-min-multiplier" type="range" min="0.10" max="0.80" step="0.05" value="0.30" class="range-slider" />
                             </div>
-                            <input id="option-clock-min-multiplier" type="range" min="0.10" max="0.80" step="0.05" value="0.30" class="range-slider" />
                         </div>
-                    </div>
-                </details>
-            </div>
+                    </details>
+                </div>
             </div>
         </section>
     </main>
