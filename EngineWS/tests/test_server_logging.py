@@ -25,7 +25,7 @@ class TestServerLogging(unittest.TestCase):
                 mock_instance = MagicMock()
                 def fake_read():
                     ws.client_state = WebSocketState.DISCONNECTED
-                    return ""
+                    return None
                 mock_instance.read_line = fake_read
                 mock_proc.return_value = mock_instance
                 asyncio.run(handle_engine(ws, ["/usr/bin/stockfish"]))
@@ -50,7 +50,7 @@ class TestServerLogging(unittest.TestCase):
             with patch("main.EngineProcess") as mock_proc:
                 mock_instance = MagicMock()
                 mock_proc.return_value = mock_instance
-                mock_instance.read_line = MagicMock(return_value="")
+                mock_instance.read_line = MagicMock(return_value=None)
                 mock_stderr = AsyncMock()
                 mock_stderr.readline = AsyncMock(side_effect=[b"engine warning\n", b""])
                 mock_proc_obj = MagicMock()
@@ -88,6 +88,33 @@ class TestServerLogging(unittest.TestCase):
         self.assertIn("[ENGINE SPAWN] /usr/bin/stockfish", out)
         self.assertIn("[UCI IN] uci", out)
         self.assertIn("[ENGINE STOP] /usr/bin/stockfish", out)
+
+    def test_handle_engine_skips_empty_lines_without_stopping(self):
+        ws = MagicMock()
+        ws.accept = AsyncMock()
+        ws.send_text = AsyncMock()
+        async def fake_iter_text():
+            from fastapi.websockets import WebSocketDisconnect
+            yield "uci"
+            await asyncio.sleep(0.05)
+            raise WebSocketDisconnect()
+        ws.iter_text = fake_iter_text
+        ws.client_state = WebSocketState.CONNECTED
+
+        stdout_trap = io.StringIO()
+        with patch("sys.stdout", stdout_trap):
+            with patch("main.EngineProcess") as mock_proc:
+                mock_instance = MagicMock()
+                mock_proc.return_value = mock_instance
+                mock_instance.read_line = AsyncMock(side_effect=["id author", "", "option name Hash", "uciok", None])
+                mock_instance._proc = None
+                asyncio.run(handle_engine(ws, ["/usr/bin/stockfish"]))
+
+        sent = [call.args[0] for call in ws.send_text.await_args_list]
+        self.assertIn("id author", sent)
+        self.assertIn("option name Hash", sent)
+        self.assertIn("uciok", sent)
+        self.assertNotIn("", sent)
 
 if __name__ == "__main__":
     unittest.main()

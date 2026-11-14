@@ -67,12 +67,12 @@ class EngineProcess:
         except OSError:
             pass
 
-    async def read_line(self) -> str:
+    async def read_line(self) -> str | None:
         if not self._proc or not self._proc.stdout:
-            return ""
+            return None
         raw = await self._proc.stdout.readline()
         if not raw:
-            return ""
+            return None
         return raw.decode("utf-8", errors="replace").strip()
 
     def terminate(self):
@@ -125,9 +125,10 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
                 res = engine.read_line()
                 if asyncio.iscoroutine(res):
                     res = await res
-                if not res:
+                if res is None:
                     break
-                await websocket.send_text(res)
+                if res:
+                    await websocket.send_text(res)
         except WebSocketDisconnect:
             pass
         except Exception as e:
