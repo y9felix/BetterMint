@@ -146,7 +146,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 16px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--border-color);
     background-color: var(--bg-card);
 }
@@ -205,6 +205,22 @@ details.collapse-group > summary.collapse-summary:hover::after {
     width: 14px;
     height: 14px;
     pointer-events: none;
+}
+
+.app-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 12px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+}
+
+.version-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
 }
 
 .settings-container {
