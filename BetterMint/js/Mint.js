@@ -19,18 +19,6 @@ function requestOptions() {
   });
 }
 
-function getGradientColor(startColor, endColor, percent) {
-  const parse = (hex) => {
-    let c = hex.replace(/^\s*#|\s*$/g, "");
-    if (c.length === 3) c = c.replace(/./g, "$&$&");
-    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
-  };
-  const [r1, g1, b1] = parse(startColor);
-  const [r2, g2, b2] = parse(endColor);
-  const ch = (c1, c2) => Math.max(0, Math.min(255, Math.round(c1 + (c2 - c1) * percent))).toString(16).padStart(2, "0");
-  return `#${ch(r1, r2)}${ch(g1, g2)}${ch(b1, b2)}`;
-}
-
 const enumOptions = {
   UrlApiStockfish: "option-url-api-stockfish",
   Depth: "option-depth",
@@ -216,7 +204,7 @@ class GameController {
     for (const btn of fallbackButtons) {
       if (isVisible(btn)) {
         const text = btn.textContent.trim().toLowerCase();
-        if (text && (text === "new" || text === "play again" || text === "next game" || text === "rematch" || text.startsWith("new "))) {
+        if (text && GameController.AUTO_QUEUE_KEYWORDS.some((kw) => text.includes(kw))) {
           this.lastAutoQueueClick = now;
           this.dispatchButtonClick(btn);
           return true;
@@ -382,24 +370,6 @@ class GameController {
       topMoves.forEach((move, idx) => {
         if (isBestMove && move.depth !== bestMove.depth) return;
 
-        if (idx !== 0 && move.cp !== null && move.mate === null) {
-          const hlColor = getGradientColor(
-            "#ff0000",
-            "#0000ff",
-            Math.min(((move.cp + 250) / 500) ** 4)
-          );
-          this.currentMarkings.push({
-            data: {
-              opacity: 0.4,
-              color: hlColor,
-              square: move.to
-            },
-            node: true,
-            persistent: true,
-            type: "highlight"
-          });
-        }
-
         const color =
           idx === 0
             ? this.options.arrowColors.alt
@@ -506,7 +476,7 @@ class StockfishEngine {
     this.topMoves = [];
     this.lastTopMoves = [];
     this.lastMoveScore = null;
-    this.depth = getValueConfig(enumOptions.Depth);
+    this.depth = getValueConfig(enumOptions.Depth) ?? 15;
     this.currentUrl = getValueConfig(enumOptions.UrlApiStockfish);
     this.targetUrl = this.currentUrl;
     this.isSwitching = false;
@@ -743,7 +713,7 @@ class StockfishEngine {
       Object.assign(this.customEngineOptions, custom);
       this.UpdateOptions(this.customEngineOptions);
     }
-    this.depth = getValueConfig(enumOptions.Depth);
+    this.depth = getValueConfig(enumOptions.Depth) ?? 15;
     if (this.topMoves.length > 0) this.onTopMoves(null, !this.isEvaluating);
   }
 

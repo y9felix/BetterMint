@@ -32,21 +32,35 @@ function parseUciOptionLine(line) {
   let maxVal = null;
   const vars = [];
 
+  const keywords = new Set(["default", "min", "max", "var"]);
+  let currentKey = null;
+  let currentWords = [];
+
+  const flush = () => {
+    if (!currentKey) return;
+    const value = currentWords.join(" ").trim();
+    if (currentKey === "default") {
+      defVal = value;
+    } else if (currentKey === "min") {
+      minVal = value ? parseInt(value, 10) : null;
+    } else if (currentKey === "max") {
+      maxVal = value ? parseInt(value, 10) : null;
+    } else if (currentKey === "var") {
+      if (value) vars.push(value);
+    }
+    currentWords = [];
+  };
+
   for (let i = 1; i < tokens.length; i++) {
     const token = tokens[i];
-    if (token === "default") {
-      defVal = tokens[++i] ?? "";
-    } else if (token === "min") {
-      const v = tokens[++i];
-      minVal = v !== undefined ? parseInt(v, 10) : null;
-    } else if (token === "max") {
-      const v = tokens[++i];
-      maxVal = v !== undefined ? parseInt(v, 10) : null;
-    } else if (token === "var") {
-      const v = tokens[++i];
-      if (v !== undefined) vars.push(v);
+    if (keywords.has(token)) {
+      flush();
+      currentKey = token;
+    } else if (currentKey) {
+      currentWords.push(token);
     }
   }
+  flush();
 
   return { name, type, default: defVal, min: minVal, max: maxVal, vars };
 }
@@ -260,7 +274,7 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
     renderDynamicUciOptions(optionsList, {}, container, null);
     return;
   }
-  const storageKey = "engine_opts_" + btoa(url).replace(/=/g, "");
+  const storageKey = "engine_opts_" + encodeURIComponent(url).replace(/[^a-zA-Z0-9_-]/g, "_");
   chrome.storage.local.get([storageKey], (result) => {
     const saved = result?.[storageKey] || {};
     renderDynamicUciOptions(optionsList, saved, container, (name, val) => {
