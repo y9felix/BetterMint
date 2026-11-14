@@ -730,7 +730,6 @@ class StockfishEngine {
   }
 
   ProcessMessage(event) {
-    this.ready = false;
     const line = event && typeof event === "object" ? event.data : event;
 
     if (line && typeof line === "string" && line.startsWith("option name ")) {
@@ -1042,17 +1041,6 @@ function InitBetterMint(chessboard) {
   requestOptions().then((options) => {
     try {
       BetterMintmaster = new BetterMint(chessboard, options);
-
-      const hotkeys = {
-        q: () => BetterMintmaster.game.controller.moveBackward(),
-        e: () => BetterMintmaster.game.controller.moveForward(),
-        r: () => BetterMintmaster.game.controller.resetGame(),
-        w: () => BetterMintmaster.game.ResetGame()
-      };
-
-      document.addEventListener("keypress", (e) => {
-        hotkeys[e.key]?.();
-      });
     } catch (e) {
       console.error("Oh noes! BetterMintmaster didn't load", e);
     }

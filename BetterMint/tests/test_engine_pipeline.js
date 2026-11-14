@@ -19,6 +19,8 @@ for (const gone of ["__awaiter", "ChromeRequest", "pathToEcoJson", "threadedEngi
 
 assert.ok(!src.includes("RTCPeerConnection"), "WebRTC block must be removed");
 assert.ok(!src.includes("iceServers"), "WebRTC config must be removed");
+assert.ok(!src.includes("keypress"), "Global keypress listeners must be completely removed");
+assert.ok(!src.includes("hotkeys ="), "hotkeys object must be completely removed");
 
 assert.ok(src.trim().startsWith("(() => {") && src.trim().endsWith("})();"), "Mint.js must be encapsulated in an IIFE");
 assert.ok(!src.includes("this.analysisToolsInterval = setInterval("), "CreateAnalysisTools must not use setInterval polling");
