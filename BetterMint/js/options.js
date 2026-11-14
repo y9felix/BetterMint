@@ -211,7 +211,11 @@ function probeEngine(url) {
   if (!container) return;
   resetProbe();
   const setStatus = (msg) => {
-    container.innerHTML = `<span class="status-text">${msg}</span>`;
+    container.innerHTML = "";
+    const span = document.createElement("span");
+    span.className = "status-text";
+    span.textContent = msg;
+    container.appendChild(span);
   };
 
   if (!url || typeof WebSocket === "undefined") {
@@ -221,6 +225,7 @@ function probeEngine(url) {
 
   setStatus("Connecting to engine...");
   const discovered = [];
+  let lastErrorLine = "";
   try {
     const ws = new WebSocket(url);
     activeProbeWs = ws;
@@ -247,6 +252,9 @@ function probeEngine(url) {
       const lines = String(event.data).split("\n");
       for (const line of lines) {
         const trimmed = line.trim();
+        if (trimmed.startsWith("info string Error:")) {
+          lastErrorLine = trimmed.slice("info string ".length);
+        }
         const opt = parseUciOptionLine(trimmed);
         if (opt) {
           discovered.push(opt);
@@ -256,6 +264,12 @@ function probeEngine(url) {
           return;
         }
       }
+    });
+
+    ws.addEventListener("close", () => {
+      if (activeProbeWs !== ws) return;
+      resetProbe();
+      setStatus(lastErrorLine || "Engine connection closed before handshake.");
     });
 
     ws.addEventListener("error", () => {
@@ -268,6 +282,8 @@ function probeEngine(url) {
     setStatus("Failed to initialize engine socket.");
   }
 }
+
+let engineOptsSyncTimer = null;
 
 function loadAndRenderEngineOptions(url, optionsList, container) {
   if (typeof chrome === "undefined" || !chrome.storage?.local) {
@@ -284,7 +300,11 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
       }
       saved[name] = val;
       chrome.storage.local.set({ [storageKey]: saved });
-      notifyTabsOfEngineOptions(saved);
+      if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
+      engineOptsSyncTimer = setTimeout(() => {
+        engineOptsSyncTimer = null;
+        notifyTabsOfEngineOptions(saved);
+      }, 150);
     });
   });
 }
@@ -365,8 +385,8 @@ function InitOptions() {
       const badge = document.getElementById("badge-" + key);
       field.addEventListener("input", () => {
         if (badge) badge.textContent = field.value;
-        OnOptionsChange();
       });
+      field.addEventListener("change", () => OnOptionsChange());
     } else if (field.type === "checkbox") {
       field.addEventListener("change", () => OnOptionsChange());
     } else if (field.type === "text") {

@@ -59,13 +59,19 @@ const CLOCK_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.c
 
 function getRemainingPlayerTimeSeconds() {
   const el = typeof document !== "undefined" ? document.querySelector(CLOCK_SELECTOR) : null;
-  if (el && el.textContent) {
-    const match = el.textContent.trim().match(/\d{1,2}(:\d{2}){1,2}/);
-    if (match) {
-      return match[0].split(":").map(Number).reduce((acc, val) => acc * 60 + val, 0);
-    }
+  const text = el?.textContent?.trim();
+  if (!text) return null;
+  const colonMatch = text.match(/(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
+  if (colonMatch) {
+    const [, a, b, c, frac] = colonMatch;
+    const base =
+      c !== undefined
+        ? Number(a) * 3600 + Number(b) * 60 + Number(c)
+        : Number(a) * 60 + Number(b);
+    return base + (frac ? Number(`0.${frac}`) : 0);
   }
-  return null;
+  const secMatch = text.match(/^(\d+(?:\.\d+)?)$/);
+  return secMatch ? Number(secMatch[1]) : null;
 }
 
 let BetterMintmaster;
@@ -162,7 +168,7 @@ class GameController {
 
   static AUTO_QUEUE_KEYWORDS = [
     "play again", "new opponent", "next game", "new game", "rematch",
-    "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"
+    "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min"
   ];
 
   constructor(BetterMintmaster, chessboard) {
@@ -247,6 +253,7 @@ class GameController {
 
   triggerAutoQueue() {
     if (!getValueConfig(enumOptions.AutoQueue)) return false;
+    if (this.controller.getMode?.() !== "gameOver") return false;
     const now = Date.now();
     if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < 4000) return false;
 
@@ -329,10 +336,15 @@ class GameController {
   }
 
   UpdateExtensionOptions() {
-    if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
+    if (getValueConfig(enumOptions.EvaluationBar) && (!this.evalBar || !this.evalBar.isConnected)) {
+      this.evalBar = null;
       this.CreateAnalysisTools();
     } else if (!getValueConfig(enumOptions.EvaluationBar) && this.evalBar != null) {
-      this.evalBar.remove();
+      const wrapper =
+        this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
+          ? this.evalBar.parentElement
+          : this.evalBar;
+      wrapper.remove();
       this.evalBar = null;
     }
 
@@ -405,7 +417,11 @@ class GameController {
   RefreshEvalutionBar() {
     if (getValueConfig(enumOptions.EvaluationBar)) {
       if (this.evalBar != null) {
-        this.evalBar.remove();
+        const wrapper =
+          this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
+            ? this.evalBar.parentElement
+            : this.evalBar;
+        wrapper.remove();
         this.evalBar = null;
       }
       this.CreateAnalysisTools();
@@ -456,14 +472,15 @@ class GameController {
       topMoves.forEach((move, idx) => {
         if (isBestMove && move.depth !== bestMove.depth) return;
 
+        const arrowColors = this.options?.arrowColors || {};
         const color =
           idx === 0
-            ? this.options.arrowColors.alt
+            ? (arrowColors.alt || "#15781b")
             : idx <= 2
-            ? this.options.arrowColors.shift
+            ? (arrowColors.shift || "#e68f00")
             : idx <= 5
-            ? this.options.arrowColors.default
-            : this.options.arrowColors.ctrl;
+            ? (arrowColors.default || "#003088")
+            : (arrowColors.ctrl || "#882020");
 
         this.currentMarkings.push({
           data: {
@@ -571,12 +588,14 @@ class StockfishEngine {
     this.onEngineSwitchedCallback = null;
     this.engineUciOptions = new Set();
     this.customEngineOptions = Object.assign({}, BetterMintmaster?.options?.customEngineOptions);
-
-    this.initializeWebSocket(this.currentUrl);
-
     this.reconnectDelay = 500;
     this.maxReconnectDelay = 3000;
-    this.reconnectAttempts = 5;
+    this.reconnectAttempts = 0;
+    this.reconnectTimer = null;
+    this.staleBestMovesToIgnore = 0;
+    this.pendingPosition = null;
+
+    this.initializeWebSocket(this.currentUrl);
   }
 
   initializeWebSocket(url) {
@@ -593,6 +612,7 @@ class StockfishEngine {
       if (this.stockfish !== ws) return;
       console.log("WebSocket connection opened.");
       this.reconnectAttempts = 0;
+      this.staleBestMovesToIgnore = 0;
       this.send("uci");
       this.onReady(() => {
         this.UpdateOptions();
@@ -601,6 +621,8 @@ class StockfishEngine {
           const cb = this.onEngineSwitchedCallback;
           this.onEngineSwitchedCallback = null;
           cb();
+        } else if (this.BetterMintmaster?.game?.controller?.getMode?.() === "playing") {
+          this.BetterMintmaster.game.UpdateEngine(false);
         }
       });
     });
@@ -626,6 +648,11 @@ class StockfishEngine {
     if (!newUrl || newUrl === this.targetUrl) return;
     this.targetUrl = newUrl;
     this.isSwitching = true;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
     this.stopEvaluation(() => {
       if (this.stockfish) {
         const oldWs = this.stockfish;
@@ -637,6 +664,8 @@ class StockfishEngine {
       this.currentUrl = newUrl;
       this.ready = false;
       this.loaded = false;
+      this.staleBestMovesToIgnore = 0;
+      this.pendingPosition = null;
       this.isSwitching = false;
       this.engineUciOptions = new Set();
       this.onEngineSwitchedCallback = () => {
@@ -649,8 +678,10 @@ class StockfishEngine {
   }
 
   send(cmd) {
+    const clean = typeof cmd === "string" ? cmd.replace(/[\r\n]+/g, " ").trim() : "";
+    if (!clean) return;
     if (this.isWebSocketOpen()) {
-      this.stockfish.send(cmd);
+      this.stockfish.send(clean);
     } else {
       console.warn("Attempted to send command while WebSocket is not open.");
     }
@@ -676,6 +707,8 @@ class StockfishEngine {
     this.isEvaluating = false;
     this.stopInFlight = false;
     this.isRequestedStop = false;
+    this.staleBestMovesToIgnore = 0;
+    this.pendingPosition = null;
     if (this.stopTimeout !== null) {
       clearTimeout(this.stopTimeout);
       this.stopTimeout = null;
@@ -684,12 +717,16 @@ class StockfishEngine {
   }
 
   attemptReconnect() {
+    if (this.isSwitching || this.reconnectTimer !== null) return;
     if (this.reconnectAttempts < 5) {
       this.reconnectAttempts++;
       const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, this.maxReconnectDelay);
       console.log(`Attempting to reconnect in ${delay / 1000} seconds...`);
-      setTimeout(() => {
-        this.initializeWebSocket(getValueConfig(enumOptions.UrlApiStockfish));
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (!this.isSwitching) {
+          this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
+        }
       }, delay);
     } else {
       console.error("Max reconnect attempts reached. Please check the connection.");
@@ -720,6 +757,7 @@ class StockfishEngine {
         this.stopTimeout = setTimeout(() => {
           this.stopTimeout = null;
           if (this.stopInFlight) {
+            this.staleBestMovesToIgnore = (this.staleBestMovesToIgnore || 0) + 1;
             this.stopInFlight = false;
             this.isRequestedStop = false;
             this.isEvaluating = false;
@@ -758,7 +796,7 @@ class StockfishEngine {
       median *= recapMult;
     } else if (getValueConfig(enumOptions.FastOpening)) {
       const openingThreshold = parseInt(getValueConfig(enumOptions.OpeningMovesThreshold), 10) || 8;
-      const fullMoveNumber = parseInt(controller.getFEN().split(" ")[5], 10) || 1;
+      const fullMoveNumber = parseInt((controller.getFEN() || "").split(" ")[5], 10) || 1;
       if (fullMoveNumber <= openingThreshold) {
         const openingMult = parseFloat(getValueConfig(enumOptions.OpeningMultiplier)) || 0.35;
         median *= openingMult;
@@ -783,9 +821,19 @@ class StockfishEngine {
   }
 
   UpdatePosition(FENs = null, isNewGame = true) {
+    const wasPending = this.pendingPosition !== null;
+    this.pendingPosition = {
+      FENs,
+      isNewGame: wasPending ? (this.pendingPosition.isNewGame || isNewGame) : isNewGame
+    };
+    if (wasPending) return;
+
     this.onReady(() => {
       this.stopEvaluation(() => {
-        this.MoveAndGo(FENs, isNewGame);
+        const next = this.pendingPosition;
+        this.pendingPosition = null;
+        if (!next) return;
+        this.MoveAndGo(next.FENs, next.isNewGame);
       });
     });
   }
@@ -888,9 +936,13 @@ class StockfishEngine {
       this.BetterMintmaster.onEngineLoaded();
     } else if (line === "readyok") {
       this.ready = true;
-      const callbacks = this.readyCallbacks;
-      this.readyCallbacks = [];
-      callbacks.forEach((cb) => cb());
+      while (this.ready && this.readyCallbacks.length > 0) {
+        const cb = this.readyCallbacks.shift();
+        cb();
+      }
+      if (!this.ready && this.readyCallbacks.length > 0) {
+        this.send("isready");
+      }
     } else if (this.isEvaluating && line === "Load eval file success: 1") {
       this.isEvaluating = false;
       this.isRequestedStop = false;
@@ -919,6 +971,10 @@ class StockfishEngine {
     } else if (typeof line === "string" && line.startsWith("bestmove ")) {
       const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/);
       if (bestMoveMatch) {
+        if (this.staleBestMovesToIgnore > 0) {
+          this.staleBestMovesToIgnore--;
+          return;
+        }
         if (this.stopTimeout !== null) {
           clearTimeout(this.stopTimeout);
           this.stopTimeout = null;
@@ -971,6 +1027,7 @@ class StockfishEngine {
     };
     this.onReady(() => {
       if (isNewGame) {
+        this.ready = false;
         this.send("ucinewgame");
         this.onReady(go);
       } else {
@@ -997,8 +1054,10 @@ class StockfishEngine {
         if (lastBestMove.mate !== null) {
           if (bestMove.mate === null) {
             this.lastMoveScore = lastBestMove.mate > 0 ? "MissedWin" : "Brilliant";
+          } else if (bestMove.mate < 0) {
+            this.lastMoveScore = lastBestMove.mate > 0 ? "BestMove" : "Brilliant";
           } else {
-            this.lastMoveScore = lastBestMove.mate > 0 ? "Excellent" : "ResignWhite";
+            this.lastMoveScore = lastBestMove.mate > 0 ? "MissedWin" : "Blunder";
           }
         } else if (bestMove.mate !== null) {
           this.lastMoveScore = bestMove.mate < 0 ? "Brilliant" : "Blunder";
@@ -1149,7 +1208,8 @@ class StockfishEngine {
         return b.depth - a.depth;
       }
       if ((a.mate < 0 && b.mate < 0) || (a.mate > 0 && b.mate > 0)) {
-        return a.line.length - b.line.length;
+        if (a.mate !== b.mate) return a.mate - b.mate;
+        return a.mate > 0 ? a.line.length - b.line.length : b.line.length - a.line.length;
       }
       return a.mate < b.mate ? 1 : -1;
     });
@@ -1219,22 +1279,54 @@ function InitBetterMint(chessboard) {
 }
 
 if (typeof document !== "undefined") {
+  let initialized = false;
+  let attachTimer = null;
+
+  const findBoardElement = (root) => {
+    if (!root || root.nodeType !== 1) return null;
+    if (root.tagName === "WC-CHESS-BOARD" || root.tagName === "CHESS-BOARD") return root;
+    return root.querySelector?.("wc-chess-board, chess-board") || null;
+  };
+
+  const tryAttachBoard = (board, observer) => {
+    if (initialized || !board) return false;
+    if (board.game) {
+      initialized = true;
+      if (attachTimer !== null) {
+        clearInterval(attachTimer);
+        attachTimer = null;
+      }
+      observer?.disconnect();
+      InitBetterMint(board);
+      return true;
+    }
+    return false;
+  };
+
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
-        if (node.nodeType === 1 && (node.tagName === "WC-CHESS-BOARD" || node.tagName === "CHESS-BOARD") && Object.hasOwn(node, "game")) {
-          InitBetterMint(node);
-          observer.disconnect();
-          return;
+        const board = findBoardElement(node);
+        if (board) {
+          if (tryAttachBoard(board, observer)) return;
+          if (attachTimer === null) {
+            let checks = 0;
+            attachTimer = setInterval(() => {
+              checks++;
+              const target = document.querySelector("wc-chess-board, chess-board");
+              if (tryAttachBoard(target, observer) || checks >= 200) {
+                clearInterval(attachTimer);
+                attachTimer = null;
+              }
+            }, 50);
+          }
         }
       }
     }
   });
 
   const existingBoard = document.querySelector("wc-chess-board, chess-board");
-  if (existingBoard && Object.hasOwn(existingBoard, "game")) {
-    InitBetterMint(existingBoard);
-  } else {
+  if (!tryAttachBoard(existingBoard, observer)) {
     observer.observe(document, {
       childList: true,
       subtree: true

@@ -116,5 +116,31 @@ class TestServerLogging(unittest.TestCase):
         self.assertIn("uciok", sent)
         self.assertNotIn("", sent)
 
+    def test_origin_validation(self):
+        from main import is_allowed_ws_origin
+        ws_ok1 = MagicMock()
+        ws_ok1.headers = {"origin": "https://www.chess.com"}
+        self.assertTrue(is_allowed_ws_origin(ws_ok1))
+
+        ws_ok2 = MagicMock()
+        ws_ok2.headers = {"origin": "chrome-extension://abcdef"}
+        self.assertTrue(is_allowed_ws_origin(ws_ok2))
+
+        ws_bad = MagicMock()
+        ws_bad.headers = {"origin": "https://evil.com"}
+        self.assertFalse(is_allowed_ws_origin(ws_bad))
+
+    def test_engine_process_put_multiline(self):
+        from main import EngineProcess
+        proc = MagicMock()
+        proc.stdin = MagicMock()
+        proc.returncode = None
+        ep = EngineProcess(["stockfish"])
+        ep._proc = proc
+        ep.put("isready\ngo depth 10\nquit\n")
+        calls = [c.args[0] for c in proc.stdin.write.call_args_list]
+        self.assertEqual(calls, [b"isready\n", b"go depth 10\n", b"quit\n"])
+        self.assertTrue(ep._quit_sent)
+
 if __name__ == "__main__":
     unittest.main()

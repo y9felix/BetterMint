@@ -27,6 +27,9 @@
         },
         "condition": {
             "urlFilter": "|http*",
+            "requestDomains": [
+                "chess.com"
+            ],
             "resourceTypes": [
                 "script",
                 "main_frame",
