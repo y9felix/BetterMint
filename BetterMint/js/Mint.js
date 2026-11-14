@@ -55,21 +55,14 @@ const enumOptions = {
   ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
-const CLOCK_SELECTORS = [
-  ".clock-component.clock-bottom",
-  ".clock-button-component.clock-bottom",
-  ".clock.clock-bottom",
-  ".clock-bottom"
-];
+const CLOCK_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
 
 function getRemainingPlayerTimeSeconds() {
-  for (const sel of CLOCK_SELECTORS) {
-    const el = document.querySelector(sel);
-    if (el && el.textContent) {
-      const match = el.textContent.trim().match(/\d{1,2}(:\d{2}){1,2}/);
-      if (!match) continue;
-      const parts = match[0].split(":").map(Number);
-      return parts.reduce((acc, val) => acc * 60 + val, 0);
+  const el = document.querySelector(CLOCK_SELECTOR);
+  if (el && el.textContent) {
+    const match = el.textContent.trim().match(/\d{1,2}(:\d{2}){1,2}/);
+    if (match) {
+      return match[0].split(":").map(Number).reduce((acc, val) => acc * 60 + val, 0);
     }
   }
   return null;
@@ -83,8 +76,7 @@ requestOptions().then((options) => {
 });
 
 function getValueConfig(key) {
-  if (BetterMintmaster == undefined) return tempOptions[key];
-  return BetterMintmaster.options[key];
+  return (BetterMintmaster ? BetterMintmaster.options : tempOptions)[key];
 }
 
 class TopMove {
@@ -157,7 +149,6 @@ class GameController {
       if (event.data === "playing") {
         setTimeout(() => {
           this.ResetGame();
-          this.RefreshEvalutionBar();
         }, 100);
       } else if (event.data === "gameOver") {
         this.handleGameOver();
@@ -166,7 +157,6 @@ class GameController {
 
     this.controller.on("RendererSet", () => {
       this.ResetGame();
-      this.RefreshEvalutionBar();
     });
 
     this.controller.on("ResetGame", () => {
@@ -298,9 +288,7 @@ class GameController {
     }
     this.analysisToolsInterval = setInterval(() => {
       const layoutChessboard = this.chessboard.parentElement;
-      if (!layoutChessboard) return;
-      const layoutMain = layoutChessboard.parentElement;
-      if (!layoutMain) return;
+      if (!layoutChessboard?.parentElement) return;
 
       clearInterval(this.analysisToolsInterval);
       this.analysisToolsInterval = null;
@@ -854,7 +842,8 @@ class StockfishEngine {
 
   AnalyzeLastMove() {
     this.lastMoveScore = null;
-    const lastMove = this.BetterMintmaster.game.controller.getLastMove();
+    const controller = this.BetterMintmaster.game.controller;
+    const lastMove = controller.getLastMove();
     if (!lastMove) return;
     if (this.lastTopMoves.length > 0) {
       const lastBestMove = this.lastTopMoves[0];
@@ -882,7 +871,7 @@ class StockfishEngine {
     if (this.lastMoveScore !== null) {
       const hlColor = StockfishEngine.HIGHLIGHT_COLORS[this.lastMoveScore];
       if (hlColor) {
-        this.BetterMintmaster.game.controller.markings.addOne({
+        controller.markings.addOne({
           data: {
             opacity: 0.5,
             color: hlColor,
@@ -893,7 +882,7 @@ class StockfishEngine {
           type: "highlight"
         });
       }
-      this.BetterMintmaster.game.controller.markings.addOne({
+      controller.markings.addOne({
         data: {
           square: lastMove.to,
           type: this.lastMoveScore
@@ -953,7 +942,7 @@ class StockfishEngine {
       if (getValueConfig(enumOptions.Notifications) && window.toaster && remainingDelay > 0) {
         window.toaster.add({
           id: "chess.com",
-          duration: (parseFloat(secondsTillAutoMove) + 1) * 1000,
+          duration: remainingDelay + 1000,
           icon: "circle-info",
           message: `BetterMint: Auto move in ${secondsTillAutoMove}s`,
           style: {
@@ -966,21 +955,22 @@ class StockfishEngine {
             padding: "12px 16px",
             zIndex: "10000",
             border: "1px solid #ffffff"
-          },
+          }
         });
       }
 
-      const controller = this.BetterMintmaster.game.controller;
-      if (this.BetterMintmaster.game.autoMoveTimer !== null) {
-        clearTimeout(this.BetterMintmaster.game.autoMoveTimer);
-        this.BetterMintmaster.game.autoMoveTimer = null;
+      const game = this.BetterMintmaster.game;
+      const controller = game.controller;
+      if (game.autoMoveTimer !== null) {
+        clearTimeout(game.autoMoveTimer);
+        game.autoMoveTimer = null;
       }
 
       if (remainingDelay <= 0) {
         controller.move(moveData);
       } else {
-        this.BetterMintmaster.game.autoMoveTimer = setTimeout(() => {
-          this.BetterMintmaster.game.autoMoveTimer = null;
+        game.autoMoveTimer = setTimeout(() => {
+          game.autoMoveTimer = null;
           controller.move(moveData);
         }, remainingDelay);
       }
@@ -1067,10 +1057,7 @@ function InitBetterMint(chessboard) {
         q: () => BetterMintmaster.game.controller.moveBackward(),
         e: () => BetterMintmaster.game.controller.moveForward(),
         r: () => BetterMintmaster.game.controller.resetGame(),
-        w: () => {
-          BetterMintmaster.game.ResetGame();
-          BetterMintmaster.game.RefreshEvalutionBar();
-        }
+        w: () => BetterMintmaster.game.ResetGame()
       };
 
       document.addEventListener("keypress", (e) => {
