@@ -177,7 +177,7 @@ class GameController {
 
   static AUTO_QUEUE_KEYWORDS = [
     "play again", "new opponent", "next game", "new game", "rematch",
-    "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min"
+    "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"
   ];
 
   constructor(BetterMintmaster, chessboard) {
@@ -214,7 +214,6 @@ class GameController {
 
     this.controller.on("ModeChanged", (event) => {
       if (event.data === "playing") {
-        this.disconnectAutoQueueObserver();
         setTimeout(() => {
           this.ResetGame();
         }, 100);
@@ -263,49 +262,48 @@ class GameController {
 
   triggerAutoQueue() {
     if (!getValueConfig(enumOptions.AutoQueue)) return false;
-    if (this.controller.getMode?.() !== "gameOver") return false;
     const now = Date.now();
     if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < 4000) return false;
 
-    const findAndClick = (selector) => {
+    const matchesKeyword = (text, strictNew) =>
+      GameController.AUTO_QUEUE_KEYWORDS.some((kw) => {
+        if (kw === "new" && strictNew) {
+          return /^new\b/.test(text);
+        }
+        return text.includes(kw);
+      });
+
+    const findAndClick = (selector, strictNew) => {
       const elements = document.querySelectorAll(selector);
       for (const el of elements) {
         if (el.disabled) continue;
         const text = el.textContent?.trim().toLowerCase();
-        if (!text || !GameController.AUTO_QUEUE_KEYWORDS.some((kw) => text.includes(kw))) {
+        if (!text || !matchesKeyword(text, strictNew)) {
           continue;
         }
         if (el.offsetWidth > 0 && el.offsetHeight > 0) {
           this.lastAutoQueueClick = now;
           this.dispatchButtonClick(el);
-          this.disconnectAutoQueueObserver();
           return true;
         }
       }
       return false;
     };
 
-    if (findAndClick(GameController.AUTO_QUEUE_SELECTORS)) return true;
-    return findAndClick("button:not([disabled]), [role='button']:not([disabled])");
-  }
-
-  disconnectAutoQueueObserver() {
-    if (this.autoQueueObserver) {
-      this.autoQueueObserver.disconnect();
-      this.autoQueueObserver = null;
-    }
+    if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, false)) return true;
+    return findAndClick("button:not([disabled]), [role='button']:not([disabled])", true);
   }
 
   setupAutoQueueObserver() {
-    const shouldObserve =
-      Boolean(getValueConfig(enumOptions.AutoQueue)) &&
-      this.controller.getMode?.() === "gameOver";
-
-    if (!shouldObserve) {
-      this.disconnectAutoQueueObserver();
+    if (this.autoQueueObserver) {
+      if (!getValueConfig(enumOptions.AutoQueue)) {
+        this.autoQueueObserver.disconnect();
+        this.autoQueueObserver = null;
+      }
       return;
     }
-    if (this.autoQueueObserver) return;
+
+    if (!getValueConfig(enumOptions.AutoQueue)) return;
 
     let lastCheckTime = 0;
     this.autoQueueObserver = new MutationObserver(() => {
@@ -316,6 +314,7 @@ class GameController {
     });
 
     this.autoQueueObserver.observe(document.body, { childList: true, subtree: true });
+    this.triggerAutoQueue();
   }
 
   handleGameOver() {
@@ -455,7 +454,6 @@ class GameController {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
     }
-    this.disconnectAutoQueueObserver();
     if (this.analysisToolsObserver) {
       this.analysisToolsObserver.disconnect();
       this.analysisToolsObserver = null;
