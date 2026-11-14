@@ -28,14 +28,13 @@ High-performance chess companion and real-time analysis extension for Chess.com,
 │   ├── css/          # Extension stylesheets and modern dark UI theme
 │   ├── html/         # Extension settings popup
 │   ├── js/           # Content scripts, injection loader, and defaults
-│   ├── tests/        # Headless JavaScript unit tests
-│   └── manifest.json # Extension manifest definition
+│   ├── img/          # Extension icons and brand assets
+│   ├── manifest.json # Extension manifest definition
+│   └── rules.json    # Declarative net request rules
 ├── EngineWS/         # Local Python UCI engine WebSocket server
 │   ├── main.py       # FastAPI / Uvicorn WebSocket server
 │   ├── run.sh        # Server launch script
-│   ├── requirements.txt # Python dependencies
-│   └── tests/        # Python unit tests
-├── docs/             # Technical specifications and implementation plans
+│   └── requirements.txt # Python dependencies
 ├── LICENSE           # Reciprocal Public License 1.5 (RPL-1.5)
 └── README.md
 ```
@@ -70,20 +69,6 @@ The WebSocket server starts listening on `ws://127.0.0.1:8000/ws`.
    - Set **WebSocket URL** to `ws://127.0.0.1:8000/ws`.
    - Set **Engine Path** to your engine binary (e.g. `/usr/bin/stockfish`).
 3. Expand **Engine Options** to customize detected UCI parameters.
-
----
-
-## Testing
-
-Run extension test suite:
-```bash
-for t in BetterMint/tests/*.js; do node "$t"; done
-```
-
-Run EngineWS test suite:
-```bash
-python3 -m unittest discover -s EngineWS/tests
-```
 
 ---
 
