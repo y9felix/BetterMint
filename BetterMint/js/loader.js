@@ -53,28 +53,19 @@ if (!isExtensionPage) {
 
   window.addEventListener("BetterMintGetOptions", (evt) => {
     chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
-      const url = opts?.["option-url-api-stockfish"];
-      const storageKey = getEngineOptionsStorageKey(url);
-      if (storageKey && chrome.storage?.local) {
-        chrome.storage.local.get([storageKey], (res) => {
-          window.dispatchEvent(
-            new CustomEvent("BetterMintSendOptions", {
-              detail: {
-                requestId: evt.detail?.id,
-                data: Object.assign({}, opts, { customEngineOptions: res?.[storageKey] || {} })
-              }
-            })
-          );
-        });
-      } else {
+      const reply = (data) =>
         window.dispatchEvent(
           new CustomEvent("BetterMintSendOptions", {
-            detail: {
-              requestId: evt.detail?.id,
-              data: opts
-            }
+            detail: { requestId: evt.detail?.id, data }
           })
         );
+      const storageKey = getEngineOptionsStorageKey(opts?.["option-url-api-stockfish"]);
+      if (storageKey && chrome.storage?.local) {
+        chrome.storage.local.get([storageKey], (res) => {
+          reply(Object.assign({}, opts, { customEngineOptions: res?.[storageKey] || {} }));
+        });
+      } else {
+        reply(opts);
       }
     });
   });

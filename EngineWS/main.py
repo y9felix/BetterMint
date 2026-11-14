@@ -23,26 +23,19 @@ class HealthCheckLogFilter(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(HealthCheckLogFilter())
 
-_config_cache: dict[str, tuple[tuple[int, int], dict]] = {}
-
 def load_config(path: str = CONFIG_PATH) -> dict:
-    try:
-        st = os.stat(path)
-        sig = (st.st_mtime_ns, st.st_size)
-        cached = _config_cache.get(path)
-        if cached and cached[0] == sig:
-            return cached[1]
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                _config_cache[path] = (sig, data)
-                return data
-    except FileNotFoundError:
+    if not os.path.exists(path):
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_CONFIG, f, indent=2)
         except OSError:
             pass
+        return dict(DEFAULT_CONFIG)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
     except (OSError, json.JSONDecodeError):
         pass
     return dict(DEFAULT_CONFIG)
@@ -70,22 +63,25 @@ class EngineProcess:
         )
         return self
 
-    def put(self, cmd: str):
+    def _write(self, cmd: str) -> bool:
         if not self._proc or not self._proc.stdin or self._proc.returncode is not None or self._quit_sent:
-            return
+            return False
+        wrote = False
         for raw_line in cmd.replace("\r", "\n").split("\n"):
             clean = raw_line.strip()
             if not clean or self._quit_sent:
                 continue
             try:
                 self._proc.stdin.write(f"{clean}\n".encode("utf-8"))
+                wrote = True
                 if clean.lower() == "quit":
                     self._quit_sent = True
             except OSError:
                 break
+        return wrote
 
-    async def drain(self):
-        if self._proc and self._proc.stdin and self._proc.returncode is None and not self._quit_sent:
+    async def put(self, cmd: str):
+        if self._write(cmd):
             try:
                 await self._proc.stdin.drain()
             except OSError:
@@ -104,36 +100,30 @@ class EngineProcess:
             return
         try:
             if not self._quit_sent:
-                self.put("quit")
+                self._write("quit")
             if self._proc.returncode is None:
                 self._proc.terminate()
         except OSError:
             pass
 
     async def wait_closed(self):
-        if not self._proc:
+        if not self._proc or self._proc.returncode is not None:
             return
-        if self._proc.returncode is None:
+        try:
+            await asyncio.wait_for(self._proc.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
             try:
-                await asyncio.wait_for(self._proc.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                try:
-                    self._proc.kill()
-                except OSError:
-                    pass
-                try:
-                    await asyncio.wait_for(self._proc.wait(), timeout=1.0)
-                except (asyncio.TimeoutError, OSError):
-                    pass
+                self._proc.kill()
+                await asyncio.wait_for(self._proc.wait(), timeout=1.0)
+            except (asyncio.TimeoutError, OSError):
+                pass
 
 MAX_CONCURRENT_ENGINES = 8
 engine_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENGINES)
 
 def is_allowed_ws_origin(websocket: WebSocket) -> bool:
     headers = getattr(websocket, "headers", None)
-    if not headers:
-        return True
-    origin = headers.get("origin")
+    origin = headers.get("origin") if headers else None
     if not isinstance(origin, str):
         return True
     if origin.startswith("chrome-extension://"):
@@ -186,12 +176,9 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                 async for msg in websocket.iter_text():
                     safe_msg = msg.replace("\r", "\\r").replace("\n", "\\n")
                     print(f"[UCI IN] {safe_msg}", flush=True)
-                    engine.put(msg)
-                    drain_op = getattr(engine, "drain", None)
-                    if callable(drain_op):
-                        res = drain_op()
-                        if asyncio.iscoroutine(res):
-                            await res
+                    put_op = engine.put(msg)
+                    if asyncio.iscoroutine(put_op):
+                        await put_op
             except WebSocketDisconnect:
                 pass
             except Exception as e:
@@ -201,7 +188,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
             try:
                 while websocket.client_state == WebSocketState.CONNECTED:
                     app_state = getattr(websocket, "application_state", WebSocketState.CONNECTED)
-                    if isinstance(WebSocketState, type) and isinstance(app_state, WebSocketState) and app_state != WebSocketState.CONNECTED:
+                    if isinstance(app_state, WebSocketState) and app_state != WebSocketState.CONNECTED:
                         break
                     res = engine.read_line()
                     if asyncio.iscoroutine(res):

@@ -293,6 +293,19 @@ function probeEngine(url) {
 }
 
 let engineOptsSyncTimer = null;
+let pendingEngineOpts = null;
+
+function flushPendingEngineOpts() {
+  if (!pendingEngineOpts) return;
+  if (engineOptsSyncTimer) {
+    clearTimeout(engineOptsSyncTimer);
+    engineOptsSyncTimer = null;
+  }
+  const { key, data } = pendingEngineOpts;
+  pendingEngineOpts = null;
+  chrome.storage?.local?.set({ [key]: data });
+  notifyTabs({ customEngineOptions: data });
+}
 
 function loadAndRenderEngineOptions(url, optionsList, container) {
   if (typeof chrome === "undefined" || !chrome.storage?.local) {
@@ -302,32 +315,15 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
   const storageKey = getEngineOptionsStorageKey(url);
   chrome.storage.local.get([storageKey], (result) => {
     const saved = Object.assign({}, result?.[storageKey] || {});
-    let pendingFlush = null;
-
-    const flushEngineOpts = () => {
-      if (!pendingFlush) return;
-      const { key, data } = pendingFlush;
-      pendingFlush = null;
-      chrome.storage.local.set({ [key]: data });
-      notifyTabs({ customEngineOptions: data });
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("pagehide", flushEngineOpts, { once: true });
-    }
-
     renderDynamicUciOptions(optionsList, saved, container, (name, val, isButton) => {
       if (isButton) {
         notifyTabs({ uciButton: name });
         return;
       }
       saved[name] = val;
-      pendingFlush = { key: storageKey, data: saved };
+      pendingEngineOpts = { key: storageKey, data: saved };
       if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
-      engineOptsSyncTimer = setTimeout(() => {
-        engineOptsSyncTimer = null;
-        flushEngineOpts();
-      }, 150);
+      engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, 150);
     });
   });
 }
@@ -415,6 +411,8 @@ function InitOptions() {
 
   RestoreOptions();
 }
+
+window.addEventListener("pagehide", flushPendingEngineOpts);
 
 window.addEventListener("DOMContentLoaded", () => {
   const githubLink = document.getElementById("github-link");

@@ -376,16 +376,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
     background-color: #f4f4f5;
 }
 
-.range-slider::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border: none;
-    border-radius: 50%;
-    background-color: #ffffff;
-    cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-
 .text-input {
     width: 100%;
     background-color: var(--bg-primary);

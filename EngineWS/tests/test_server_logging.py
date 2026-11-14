@@ -134,10 +134,11 @@ class TestServerLogging(unittest.TestCase):
         from main import EngineProcess
         proc = MagicMock()
         proc.stdin = MagicMock()
+        proc.stdin.drain = AsyncMock()
         proc.returncode = None
         ep = EngineProcess(["stockfish"])
         ep._proc = proc
-        ep.put("isready\ngo depth 10\nquit\n")
+        asyncio.run(ep.put("isready\ngo depth 10\nquit\n"))
         calls = [c.args[0] for c in proc.stdin.write.call_args_list]
         self.assertEqual(calls, [b"isready\n", b"go depth 10\n", b"quit\n"])
         self.assertTrue(ep._quit_sent)

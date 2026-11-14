@@ -138,23 +138,14 @@ function resolveLegalMove(legalMoves, bestMove) {
 
 class TopMove {
   constructor(line, depth, cp, mate) {
-    this._pvLine = line;
-    this._lineParts = null;
-    const firstSpace = line.indexOf(" ");
-    this.move = firstSpace === -1 ? line : line.slice(0, firstSpace);
+    this.line = line.split(" ");
+    this.move = this.line[0];
     this.promotion = this.move.length > 4 ? this.move[4] : null;
     this.from = this.move.slice(0, 2);
     this.to = this.move.slice(2, 4);
     this.cp = cp;
     this.mate = mate;
     this.depth = depth;
-  }
-
-  get line() {
-    if (this._lineParts === null) {
-      this._lineParts = this._pvLine.split(" ");
-    }
-    return this._lineParts;
   }
 }
 
@@ -176,8 +167,7 @@ class GameController {
   ].join(", ");
 
   static AUTO_QUEUE_KEYWORDS = [
-    "play again", "new opponent", "next game", "new game", "rematch",
-    "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"
+    "play again", "new opponent", "next game", "new game", "rematch", "new"
   ];
 
   constructor(BetterMintmaster, chessboard) {
@@ -267,8 +257,8 @@ class GameController {
 
     const matchesKeyword = (text, strictNew) =>
       GameController.AUTO_QUEUE_KEYWORDS.some((kw) => {
-        if (kw === "new" && strictNew) {
-          return /^new\b/.test(text);
+        if (kw === "new") {
+          return strictNew ? /^new\b/.test(text) : /\bnew\b/.test(text);
         }
         return text.includes(kw);
       });
@@ -378,6 +368,13 @@ class GameController {
     }
   }
 
+  updateEvaluationFromMove(move) {
+    if (!move) return;
+    let score = move.mate !== null ? move.mate : move.cp;
+    if (this.controller.getTurn() === 2) score *= -1;
+    this.SetEvaluation(score, move.mate !== null);
+  }
+
   CreateAnalysisTools() {
     if (this.analysisToolsObserver) {
       this.analysisToolsObserver.disconnect();
@@ -409,10 +406,7 @@ class GameController {
         }
         if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
           this.BetterMintmaster.engine.ensureTopMovesSorted?.();
-          const bestMove = this.BetterMintmaster.engine.topMoves[0];
-          let score = bestMove.mate !== null ? bestMove.mate : bestMove.cp;
-          if (this.controller.getTurn() === 2) score *= -1;
-          this.SetEvaluation(score, bestMove.mate !== null);
+          this.updateEvaluationFromMove(this.BetterMintmaster.engine.topMoves[0]);
         }
       }
       return true;
@@ -522,9 +516,7 @@ class GameController {
     }
 
     if (getValueConfig(enumOptions.EvaluationBar)) {
-      let score = bestMove.mate !== null ? bestMove.mate : bestMove.cp;
-      if (this.controller.getTurn() === 2) score *= -1;
-      this.SetEvaluation(score, bestMove.mate !== null);
+      this.updateEvaluationFromMove(bestMove);
     }
   }
 
@@ -593,7 +585,6 @@ class StockfishEngine {
     this.goDoneCallbacks = [];
     this.stopTimeout = null;
     this.topMoves = [];
-    this.topMovesIndex = new Map();
     this.topMovesDirty = false;
     this.lastTopMoves = [];
     this.currentPositionFen = null;
@@ -1030,7 +1021,6 @@ class StockfishEngine {
       }
       this.currentPositionFen = FENs;
       this.topMoves = [];
-      this.topMovesIndex?.clear();
       this.topMovesDirty = false;
       if (FENs !== null) this.send(`position fen ${FENs}`);
       this.go();
@@ -1109,29 +1099,22 @@ class StockfishEngine {
   }
 
   ensureTopMovesSorted() {
-    if (!this.topMovesIndex) this.topMovesIndex = new Map();
     if (this.topMovesDirty) {
       this.SortTopMoves();
       this.topMovesDirty = false;
-      this.topMovesIndex.clear();
-      for (let i = 0; i < this.topMoves.length; i++) {
-        this.topMovesIndex.set(this.topMoves[i].move, i);
-      }
     }
     return this.topMoves;
   }
 
   onTopMoves(move = null, isBestMove = false) {
-    if (!this.topMovesIndex) this.topMovesIndex = new Map();
     let bestMoveSelected = false;
     if (move !== null) {
-      const existingIdx = this.topMovesIndex.get(move.move);
-      if (existingIdx === undefined) {
-        this.topMovesIndex.set(move.move, this.topMoves.length);
+      const index = this.topMoves.findIndex((object) => object.move === move.move);
+      if (index === -1) {
         this.topMoves.push(move);
         this.topMovesDirty = true;
-      } else if (!isBestMove && move.depth >= this.topMoves[existingIdx].depth) {
-        this.topMoves[existingIdx] = move;
+      } else if (!isBestMove && move.depth >= this.topMoves[index].depth) {
+        this.topMoves[index] = move;
         this.topMovesDirty = true;
       }
       if (isBestMove) bestMoveSelected = true;
