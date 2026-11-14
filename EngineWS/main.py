@@ -4,7 +4,7 @@ import os
 from queue import Empty, Queue
 import subprocess
 from threading import Thread
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.websockets import WebSocketState
 
@@ -22,7 +22,7 @@ def load_config(path: str = CONFIG_PATH) -> dict:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_CONFIG, f, indent=2)
         except OSError:
-            return dict(DEFAULT_CONFIG)
+            pass
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -53,7 +53,7 @@ class EngineProcess:
     def __init__(self, cmd, init_commands=None):
         self._proc = subprocess.Popen(
             cmd,
-            universal_newlines=True,
+            text=True,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -74,7 +74,7 @@ class EngineProcess:
             self._proc.stdin.flush()
             if cmd == "quit":
                 self._quit_sent = True
-        except (BrokenPipeError, OSError):
+        except OSError:
             pass
 
     def read_line(self) -> str:
@@ -133,7 +133,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
                 else:
                     break
             await asyncio.sleep(0.01)
-    except (WebSocketDisconnect, Exception):
+    except Exception:
         pass
     finally:
         task.cancel()
@@ -142,12 +142,10 @@ async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: lis
 
 @app.websocket("/ws")
 async def ws_default(websocket: WebSocket):
-    cfg = load_config()
-    cmd = resolve_engine_cmd(cfg, None)
-    await handle_engine(websocket, cmd)
+    await ws_named(websocket, None)
 
 @app.websocket("/ws/{engine_name}")
-async def ws_named(websocket: WebSocket, engine_name: str):
+async def ws_named(websocket: WebSocket, engine_name: str | None = None):
     cfg = load_config()
     cmd = resolve_engine_cmd(cfg, engine_name)
     await handle_engine(websocket, cmd)

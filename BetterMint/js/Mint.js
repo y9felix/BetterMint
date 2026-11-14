@@ -1,62 +1,45 @@
 "use strict";
-var requestId = 0;
+
+let requestId = 0;
+
 function requestOptions() {
-  var id = requestId++;
-  return new Promise(function (resolve) {
-    var listener = function (evt) {
-      if (evt.detail.requestId == id) {
+  const id = requestId++;
+  return new Promise((resolve) => {
+    const listener = (evt) => {
+      if (evt.detail.requestId === id) {
         window.removeEventListener("BetterMintSendOptions", listener);
         resolve(evt.detail.data);
       }
     };
     window.addEventListener("BetterMintSendOptions", listener);
     window.dispatchEvent(
-      new CustomEvent("BetterMintGetOptions", { detail: { id: id } })
+      new CustomEvent("BetterMintGetOptions", { detail: { id } })
     );
   });
 }
 
-function getGradientColor(start_color, end_color, percent) {
-  // strip the leading # if it's there
-  start_color = start_color.replace(/^\s*#|\s*$/g, "");
-  end_color = end_color.replace(/^\s*#|\s*$/g, "");
+function getGradientColor(startColor, endColor, percent) {
+  let start = startColor.replace(/^\s*#|\s*$/g, "");
+  let end = endColor.replace(/^\s*#|\s*$/g, "");
+  if (start.length === 3) start = start.replace(/./g, "$&$&");
+  if (end.length === 3) end = end.replace(/./g, "$&$&");
 
-  // convert 3 char codes --> 6, e.g. `E0F` --> `EE00FF`
-  if (start_color.length == 3) {
-    start_color = start_color.replace(/(.)/g, "$1$1");
-  }
+  const startRed = parseInt(start.slice(0, 2), 16);
+  const startGreen = parseInt(start.slice(2, 4), 16);
+  const startBlue = parseInt(start.slice(4, 6), 16);
 
-  if (end_color.length == 3) {
-    end_color = end_color.replace(/(.)/g, "$1$1");
-  }
+  const endRed = parseInt(end.slice(0, 2), 16);
+  const endGreen = parseInt(end.slice(2, 4), 16);
+  const endBlue = parseInt(end.slice(4, 6), 16);
 
-  // get colors
-  var start_red = parseInt(start_color.substr(0, 2), 16),
-    start_green = parseInt(start_color.substr(2, 2), 16),
-    start_blue = parseInt(start_color.substr(4, 2), 16);
+  const r = Math.max(0, Math.min(255, Math.round(startRed + (endRed - startRed) * percent))).toString(16).padStart(2, "0");
+  const g = Math.max(0, Math.min(255, Math.round(startGreen + (endGreen - startGreen) * percent))).toString(16).padStart(2, "0");
+  const b = Math.max(0, Math.min(255, Math.round(startBlue + (endBlue - startBlue) * percent))).toString(16).padStart(2, "0");
 
-  var end_red = parseInt(end_color.substr(0, 2), 16),
-    end_green = parseInt(end_color.substr(2, 2), 16),
-    end_blue = parseInt(end_color.substr(4, 2), 16);
-
-  // calculate new color
-  var diff_red = end_red - start_red;
-  var diff_green = end_green - start_green;
-  var diff_blue = end_blue - start_blue;
-
-  diff_red = (diff_red * percent + start_red).toString(16).split(".")[0];
-  diff_green = (diff_green * percent + start_green).toString(16).split(".")[0];
-  diff_blue = (diff_blue * percent + start_blue).toString(16).split(".")[0];
-
-  // ensure 2 digits by color
-  if (diff_red.length == 1) diff_red = "0" + diff_red;
-  if (diff_green.length == 1) diff_green = "0" + diff_green;
-  if (diff_blue.length == 1) diff_blue = "0" + diff_blue;
-
-  return "#" + diff_red + diff_green + diff_blue;
+  return "#" + r + g + b;
 }
 
-var enumOptions = {
+const enumOptions = {
   UrlApiStockfish: "option-url-api-stockfish",
   Depth: "option-depth",
   EvaluationBar: "option-evaluation-bar",
@@ -81,42 +64,32 @@ var enumOptions = {
   ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
-// helper to parse remaining time for current player
 function getRemainingPlayerTimeSeconds() {
   const selectors = [
-    '.clock-component.clock-bottom',
-    '.clock-button-component.clock-bottom',
-    '.clock.clock-bottom',
-    '.clock-bottom',
+    ".clock-component.clock-bottom",
+    ".clock-button-component.clock-bottom",
+    ".clock.clock-bottom",
+    ".clock-bottom"
   ];
   for (const sel of selectors) {
     const el = document.querySelector(sel);
     if (el && el.textContent) {
-      const text = el.textContent.trim();
-      // Extract time like 1:23, 10:15, 0:05, 1:02:15
-      const match = text.match(/\d{1,2}(:\d{2}){1,2}/);
+      const match = el.textContent.trim().match(/\d{1,2}(:\d{2}){1,2}/);
       if (!match) continue;
-      const parts = match[0].split(':').map(Number);
-      let seconds = 0;
-      if (parts.length === 3) {
-        seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-      } else if (parts.length === 2) {
-        seconds = parts[0] * 60 + parts[1];
-      } else if (parts.length === 1) {
-        seconds = parts[0];
-      }
-      return seconds;
+      const parts = match[0].split(":").map(Number);
+      return parts.reduce((acc, val) => acc * 60 + val, 0);
     }
   }
   return null;
 }
 
-var BetterMintmaster;
+let BetterMintmaster;
+let tempOptions = {};
 
-var tempOptions = {};
-requestOptions().then(function (options) {
+requestOptions().then((options) => {
   tempOptions = options;
 });
+
 function getValueConfig(key) {
   if (BetterMintmaster == undefined) return tempOptions[key];
   return BetterMintmaster.options[key];
@@ -126,9 +99,9 @@ class TopMove {
   constructor(line, depth, cp, mate) {
     this.line = line.split(" ");
     this.move = this.line[0];
-    this.promotion = this.move.length > 4 ? this.move.substring(4, 5) : null;
-    this.from = this.move.substring(0, 2);
-    this.to = this.move.substring(2, 4);
+    this.promotion = this.move.length > 4 ? this.move[4] : null;
+    this.from = this.move.slice(0, 2);
+    this.to = this.move.slice(2, 4);
     this.cp = cp;
     this.mate = mate;
     this.depth = depth;
@@ -148,7 +121,9 @@ class GameController {
     this.currentMarkings = [];
     this.turnStartTime = performance.now();
     this.autoMoveTimer = null;
-    this.controller.on("Move", (event) => {
+    this.lastAutoQueueClick = 0;
+
+    this.controller.on("Move", () => {
       if (this.autoMoveTimer !== null) {
         clearTimeout(this.autoMoveTimer);
         this.autoMoveTimer = null;
@@ -158,27 +133,28 @@ class GameController {
       }
       this.UpdateEngine(false);
     });
-    // check if a new game has started
+
     if (this.evalBar == null && getValueConfig(enumOptions.EvaluationBar)) {
       this.CreateAnalysisTools();
     }
-    this.controller.on('ModeChanged', (event) => {
+
+    this.controller.on("ModeChanged", (event) => {
       if (event.data === "playing") {
-        // Delay slightly to let chess.com update the board state before we read it
         setTimeout(() => {
           this.ResetGame();
-          BetterMintmaster.game.RefreshEvalutionBar();
+          this.RefreshEvalutionBar();
         }, 100);
       } else if (event.data === "gameOver") {
         this.handleGameOver();
       }
     });
-    this.controller.on("RendererSet", (event) => {
+
+    this.controller.on("RendererSet", () => {
       this.ResetGame();
       this.RefreshEvalutionBar();
     });
-    this.controller.on("ResetGame", (event) => {
-      // Defer slightly to let chess.com update the board visually first
+
+    this.controller.on("ResetGame", () => {
       setTimeout(() => {
         this.UpdateEngine(true);
         this.RefreshEvalutionBar();
@@ -188,15 +164,15 @@ class GameController {
     this.controller.on("UpdateOptions", (event) => {
       this.options = this.controller.getOptions();
       if (event.data.flipped != undefined && this.evalBar != null) {
-        if (event.data.flipped)
+        if (event.data.flipped) {
           this.evalBar.classList.add("evaluation-bar-flipped");
-        else this.evalBar.classList.remove("evaluation-bar-flipped");
+        } else {
+          this.evalBar.classList.remove("evaluation-bar-flipped");
+        }
       }
-      // handle auto queue toggle dynamically
       this.setupAutoQueueObserver();
     });
 
-    this.lastAutoQueueClick = 0;
     this.setupAutoQueueObserver();
   }
 
@@ -238,13 +214,14 @@ class GameController {
     ];
 
     const keywords = ["play again", "new opponent", "next game", "new game", "rematch", "new 1 min", "new 3 min", "new 5 min", "new 10 min", "new 15 min", "new 30 min", "new"];
+    const isVisible = (el) => el && el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled;
 
     for (const sel of selectors) {
       const elements = document.querySelectorAll(sel);
       for (const el of elements) {
-        if (el && el.offsetWidth > 0 && el.offsetHeight > 0 && !el.disabled) {
+        if (isVisible(el)) {
           const text = el.textContent.trim().toLowerCase();
-          if (keywords.some(kw => text.includes(kw))) {
+          if (keywords.some((kw) => text.includes(kw))) {
             this.lastAutoQueueClick = now;
             this.dispatchButtonClick(el);
             return true;
@@ -255,7 +232,7 @@ class GameController {
 
     const fallbackButtons = document.querySelectorAll("button:not([disabled]), [role='button']:not([disabled])");
     for (const btn of fallbackButtons) {
-      if (btn && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+      if (isVisible(btn)) {
         const text = btn.textContent.trim().toLowerCase();
         if (text && (text === "new" || text === "play again" || text === "next game" || text === "rematch" || text.startsWith("new "))) {
           this.lastAutoQueueClick = now;
@@ -299,42 +276,38 @@ class GameController {
       }
     }, 500);
   }
+
   UpdateExtensionOptions() {
-    if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null)
+    if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
       this.CreateAnalysisTools();
-    else if (
-      !getValueConfig(enumOptions.EvaluationBar) &&
-      this.evalBar != null
-    ) {
+    } else if (!getValueConfig(enumOptions.EvaluationBar) && this.evalBar != null) {
       this.evalBar.remove();
       this.evalBar = null;
     }
-    // Start or stop auto queue observer based on updated option
+
     this.setupAutoQueueObserver();
     if (!getValueConfig(enumOptions.ShowHints)) {
       this.RemoveCurrentMarkings();
     }
     if (!getValueConfig(enumOptions.MoveAnalysis)) {
-      let lastMove = this.controller.getLastMove();
+      const lastMove = this.controller.getLastMove();
       if (lastMove) {
         this.controller.markings.removeOne(`effect|${lastMove.to}`);
       }
     }
   }
+
   CreateAnalysisTools() {
-    // we must wait for a little bit because at this point the chessboard has not
-    // been added to chessboard layout (#board-layout-main)
-    let interval1 = setInterval(() => {
-      let layoutChessboard = this.chessboard.parentElement;
-      if (layoutChessboard == null) return;
-      let layoutMain = layoutChessboard.parentElement;
-      if (layoutMain == null) return;
+    const interval1 = setInterval(() => {
+      const layoutChessboard = this.chessboard.parentElement;
+      if (!layoutChessboard) return;
+      const layoutMain = layoutChessboard.parentElement;
+      if (!layoutMain) return;
 
       clearInterval(interval1);
 
       if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
-        // create eval bar
-        let evalBar = document.createElement("div");
+        const evalBar = document.createElement("div");
         evalBar.style.flex = "1 1 auto;";
         evalBar.innerHTML = `
                 <div class="evaluation-bar-bar">
@@ -346,50 +319,40 @@ class GameController {
                     <div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div>
                     </div>
                 </div>`;
-        let layoutEvaluation = layoutChessboard.querySelector(
-          "#board-layout-evaluation"
-        );
-        if (layoutEvaluation == null) {
+        let layoutEvaluation = layoutChessboard.querySelector("#board-layout-evaluation");
+        if (!layoutEvaluation) {
           layoutEvaluation = document.createElement("div");
           layoutEvaluation.classList.add("board-layout-evaluation");
-          layoutChessboard.insertBefore(
-            layoutEvaluation,
-            layoutChessboard.firstElementChild
-          );
+          layoutChessboard.insertBefore(layoutEvaluation, layoutChessboard.firstElementChild);
         }
         layoutEvaluation.innerHTML = "";
         layoutEvaluation.appendChild(evalBar);
         this.evalBar = layoutEvaluation.querySelector(".evaluation-bar-bar");
-        this.evalBarFill = layoutEvaluation.querySelector(
-          ".evaluation-bar-white"
-        );
-        this.evalScore = layoutEvaluation.querySelector(
-          ".evaluation-bar-score"
-        );
-        this.evalScoreAbbreviated = layoutEvaluation.querySelector(
-          ".evaluation-bar-scoreAbbreviated"
-        );
-        if (!this.options.isWhiteOnBottom && this.options.flipped)
+        this.evalBarFill = layoutEvaluation.querySelector(".evaluation-bar-white");
+        this.evalScore = layoutEvaluation.querySelector(".evaluation-bar-score");
+        this.evalScoreAbbreviated = layoutEvaluation.querySelector(".evaluation-bar-scoreAbbreviated");
+        if (!this.options.isWhiteOnBottom && this.options.flipped) {
           this.evalBar.classList.add("evaluation-bar-flipped");
+        }
       }
     }, 10);
   }
-  RefreshEvalutionBar(){
-    // Rest evaluation bar
-    if(getValueConfig(enumOptions.EvaluationBar)){
-      if (this.evalBar == null){
-        this.CreateAnalysisTools();
-      } else if (this.evalBar != null) {
+
+  RefreshEvalutionBar() {
+    if (getValueConfig(enumOptions.EvaluationBar)) {
+      if (this.evalBar != null) {
         this.evalBar.remove();
         this.evalBar = null;
-        this.CreateAnalysisTools();
       }
+      this.CreateAnalysisTools();
     }
   }
+
   UpdateEngine(isNewGame) {
-    let FENs = this.controller.getFEN();
+    const FENs = this.controller.getFEN();
     this.BetterMintmaster.engine.UpdatePosition(FENs, isNewGame);
   }
+
   ResetGame() {
     this.lastAutoQueueClick = 0;
     if (this.autoMoveTimer !== null) {
@@ -401,8 +364,9 @@ class GameController {
       this.turnStartTime = performance.now();
     }
     this.UpdateEngine(true);
-    BetterMintmaster.game.RefreshEvalutionBar();
+    this.RefreshEvalutionBar();
   }
+
   RemoveCurrentMarkings() {
     this.currentMarkings.forEach((marking) => {
       let key = marking.type + "|";
@@ -412,18 +376,16 @@ class GameController {
     });
     this.currentMarkings = [];
   }
+
   HintMoves(topMoves, lastTopMoves, isBestMove) {
-    let bestMove = topMoves[0];
+    const bestMove = topMoves[0];
     if (getValueConfig(enumOptions.ShowHints)) {
       this.RemoveCurrentMarkings();
       topMoves.forEach((move, idx) => {
-        // isBestMove means final evaluation, don't include the moves that has less
-        // depth than the best move
-        if (isBestMove && move.depth != bestMove.depth) return;
+        if (isBestMove && move.depth !== bestMove.depth) return;
 
-        // Add fast check evalution
-        if (idx != 0 && move.cp != null && move.mate == null) {
-          let hlColor = getGradientColor(
+        if (idx !== 0 && move.cp !== null && move.mate === null) {
+          const hlColor = getGradientColor(
             "#ff0000",
             "#0000ff",
             Math.min(((move.cp + 250) / 500) ** 4)
@@ -432,65 +394,68 @@ class GameController {
             data: {
               opacity: 0.4,
               color: hlColor,
-              square: move.to,
+              square: move.to
             },
             node: true,
             persistent: true,
-            type: "highlight",
+            type: "highlight"
           });
         }
 
-        // Draw arror
-        let color =
-          idx == 0
+        const color =
+          idx === 0
             ? this.options.arrowColors.alt
             : idx >= 1 && idx <= 2
             ? this.options.arrowColors.shift
             : idx >= 3 && idx <= 5
             ? this.options.arrowColors.default
             : this.options.arrowColors.ctrl;
+
         this.currentMarkings.push({
           data: {
             from: move.from,
             color: color,
             opacity: 0.8,
-            to: move.to,
+            to: move.to
           },
           node: true,
           persistent: true,
-          type: "arrow",
+          type: "arrow"
         });
-        if (move.mate != null) {
+
+        if (move.mate !== null) {
           this.currentMarkings.push({
             data: {
               square: move.to,
-              type: move.mate < 0 ? "ResignWhite" : "WinnerWhite",
+              type: move.mate < 0 ? "ResignWhite" : "WinnerWhite"
             },
             node: true,
             persistent: true,
-            type: "effect",
+            type: "effect"
           });
         }
       });
-      // reverse the markings to make the best move arrow appear on top
       this.currentMarkings.reverse();
       this.controller.markings.addMany(this.currentMarkings);
     }
+
     if (getValueConfig(enumOptions.EvaluationBar)) {
-      let score = bestMove.mate != null ? bestMove.mate : bestMove.cp;
-      if (this.controller.getTurn() == 2) score *= -1;
-      this.SetEvaluation(score, bestMove.mate != null);
+      let score = bestMove.mate !== null ? bestMove.mate : bestMove.cp;
+      if (this.controller.getTurn() === 2) score *= -1;
+      this.SetEvaluation(score, bestMove.mate !== null);
     }
   }
+
   SetEvaluation(score, isMate) {
     if (this.evalBar == null) return;
-    var percentage, textNumber, textScoreAbb;
+    let percentage;
+    let textNumber;
+    let textScoreAbb;
     if (!isMate) {
-      let eval_max = 500;
-      let eval_min = -500;
-      let smallScore = score / 100;
-      percentage =
-        90 - ((score - eval_min) / (eval_max - eval_min)) * (95 - 5) + 5;
+      const evalMax = 500;
+      const evalMin = -500;
+      const smallScore = score / 100;
+      percentage = 90 - ((score - evalMin) / (evalMax - evalMin)) * (95 - 5) + 5;
       if (percentage < 5) percentage = 5;
       else if (percentage > 95) percentage = 95;
       textNumber = (score >= 0 ? "+" : "") + smallScore.toFixed(2);
@@ -503,10 +468,8 @@ class GameController {
     this.evalBarFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
     this.evalScore.innerText = textNumber;
     this.evalScoreAbbreviated.innerText = textScoreAbb;
-    let classSideAdd =
-      score >= 0 ? "evaluation-bar-dark" : "evaluation-bar-light";
-    let classSideRemove =
-      score >= 0 ? "evaluation-bar-light" : "evaluation-bar-dark";
+    const classSideAdd = score >= 0 ? "evaluation-bar-dark" : "evaluation-bar-light";
+    const classSideRemove = score >= 0 ? "evaluation-bar-light" : "evaluation-bar-dark";
     this.evalScore.classList.remove(classSideRemove);
     this.evalScoreAbbreviated.classList.remove(classSideRemove);
     this.evalScore.classList.add(classSideAdd);
@@ -515,6 +478,18 @@ class GameController {
 }
 
 class StockfishEngine {
+  static HIGHLIGHT_COLORS = Object.freeze({
+    Brilliant: "#1baca6",
+    GreatFind: "#5c8bb0",
+    BestMove: "#9eba5a",
+    Excellent: "#96bc4b",
+    Good: "#96af8b",
+    Inaccuracy: "#f0c15c",
+    Mistake: "#e6912c",
+    Blunder: "#b33430",
+    MissedWin: "#dbac16"
+  });
+
   constructor(BetterMintmaster) {
     this.BetterMintmaster = BetterMintmaster;
     this.loaded = false;
@@ -595,10 +570,6 @@ class StockfishEngine {
         const oldWs = this.stockfish;
         this.stockfish = null;
         try {
-          oldWs.onopen = null;
-          oldWs.onmessage = null;
-          oldWs.onclose = null;
-          oldWs.onerror = null;
           oldWs.close();
         } catch (e) {}
       }
@@ -625,7 +596,7 @@ class StockfishEngine {
   }
 
   isWebSocketOpen() {
-    return this.stockfish && this.stockfish.readyState === WebSocket.OPEN;
+    return Boolean(this.stockfish && this.stockfish.readyState === WebSocket.OPEN);
   }
 
   go() {
@@ -759,16 +730,15 @@ class StockfishEngine {
     });
   }
 
-  UpdateExtensionOptions(options) {
-    if (options == null) options = {};
-    let newUrl = options[enumOptions.UrlApiStockfish];
+  UpdateExtensionOptions(options = {}) {
+    const newUrl = options[enumOptions.UrlApiStockfish];
     if (newUrl && newUrl !== this.currentUrl) {
       this.switchEngine(newUrl);
       return;
     }
-    let custom = options.customEngineOptions;
+    const custom = options.customEngineOptions;
     if (custom && typeof custom === "object") {
-      this.customEngineOptions = Object.assign(this.customEngineOptions, custom);
+      Object.assign(this.customEngineOptions, custom);
       this.UpdateOptions(this.customEngineOptions);
     }
     this.depth = getValueConfig(enumOptions.Depth);
@@ -776,17 +746,18 @@ class StockfishEngine {
   }
 
   UpdateOptions(options = null) {
-    let opts = options || this.customEngineOptions;
+    const opts = options || this.customEngineOptions;
     if (!opts || typeof opts !== "object") return;
-    Object.keys(opts).forEach((key) => {
+    for (const [key, value] of Object.entries(opts)) {
       if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(key)) {
-        this.send(`setoption name ${key} value ${opts[key]}`);
+        this.send(`setoption name ${key} value ${value}`);
       }
-    });
+    }
   }
+
   ProcessMessage(event) {
     this.ready = false;
-    let line = event && typeof event === "object" ? event.data : event;
+    const line = event && typeof event === "object" ? event.data : event;
 
     if (line && typeof line === "string" && line.startsWith("option name ")) {
       const typeIndex = line.indexOf(" type ");
@@ -802,40 +773,32 @@ class StockfishEngine {
       this.BetterMintmaster.onEngineLoaded();
     } else if (line === "readyok") {
       this.ready = true;
-      if (this.readyCallbacks.length > 0) {
-        let copy = this.readyCallbacks;
-        this.readyCallbacks = [];
-        copy.forEach(function (callback) {
-          callback();
-        });
-      }
+      const callbacks = this.readyCallbacks;
+      this.readyCallbacks = [];
+      callbacks.forEach((cb) => cb());
     } else if (this.isEvaluating && line === "Load eval file success: 1") {
       this.isEvaluating = false;
       this.isRequestedStop = false;
-      if (this.goDoneCallbacks.length > 0) {
-        let copy = this.goDoneCallbacks;
-        this.goDoneCallbacks = [];
-        copy.forEach(function (callback) {
-          callback();
-        });
-      }
+      const callbacks = this.goDoneCallbacks;
+      this.goDoneCallbacks = [];
+      callbacks.forEach((cb) => cb());
     } else {
-      let depthMatch = line.match(/^info .*?depth (\d+)/);
-      let scoreMatch = line.match(/^info .*?score (\w+) (-?\d+)/);
-      let pvMatch = line.match(/^info .*?pv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)(?: .*)?/);
-      let bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)(?: ponder ([a-h][1-8][a-h][1-8][qrbn]?))?/);
+      const depthMatch = line.match(/^info .*?depth (\d+)/);
+      const scoreMatch = line.match(/^info .*?score (\w+) (-?\d+)/);
+      const pvMatch = line.match(/^info .*?pv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)(?: .*)?/);
+      const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)(?: ponder ([a-h][1-8][a-h][1-8][qrbn]?))?/);
 
       if (depthMatch && scoreMatch && pvMatch) {
-        let depth = parseInt(depthMatch[1]);
-        let scoreType = scoreMatch[1];
-        let score = parseInt(scoreMatch[2]);
-        let pv = pvMatch[1];
+        const depth = parseInt(depthMatch[1], 10);
+        const scoreType = scoreMatch[1];
+        const score = parseInt(scoreMatch[2], 10);
+        const pv = pvMatch[1];
 
-        let cpScore = scoreType === "cp" ? score : null;
-        let mateScore = scoreType === "mate" ? score : null;
+        const cpScore = scoreType === "cp" ? score : null;
+        const mateScore = scoreType === "mate" ? score : null;
 
         if (!this.isRequestedStop) {
-          let move = new TopMove(pv, depth, cpScore, mateScore);
+          const move = new TopMove(pv, depth, cpScore, mateScore);
           this.onTopMoves(move, false);
         }
       } else if (bestMoveMatch) {
@@ -854,12 +817,11 @@ class StockfishEngine {
 
         if (!wasRequestedStop && bestMoveMatch[1] !== undefined) {
           const bestMove = bestMoveMatch[1];
-          const ponderMove = bestMoveMatch[2];
           const index = this.topMoves.findIndex((object) => object.move === bestMove);
 
           if (index < 0) {
             console.warn(`The engine returned the best move "${bestMove}" but it's not in the top move list.`);
-            let bestMoveOnTop = new TopMove(
+            const bestMoveOnTop = new TopMove(
               bestMove,
               getValueConfig(enumOptions.Depth),
               100,
@@ -875,12 +837,11 @@ class StockfishEngine {
   }
 
   MoveAndGo(FENs = null, isNewGame = true) {
-    // let it go, let it gooo
-    let go = () => {
+    const go = () => {
       this.lastTopMoves = isNewGame ? [] : this.topMoves;
       this.lastMoveScore = null;
       this.topMoves = [];
-      if (FENs != null) this.send(`position fen ${FENs}`);
+      if (FENs !== null) this.send(`position fen ${FENs}`);
       this.go();
     };
     this.onReady(() => {
@@ -892,36 +853,27 @@ class StockfishEngine {
       }
     });
   }
+
   AnalyzeLastMove() {
     this.lastMoveScore = null;
-    let lastMove = this.BetterMintmaster.game.controller.getLastMove();
-    if (lastMove === undefined) return;
+    const lastMove = this.BetterMintmaster.game.controller.getLastMove();
+    if (!lastMove) return;
     if (this.lastTopMoves.length > 0) {
-      let lastBestMove = this.lastTopMoves[0];
-      // check if last move is the best move
-      if (
-        lastBestMove.from === lastMove.from &&
-        lastBestMove.to === lastMove.to
-      ) {
+      const lastBestMove = this.lastTopMoves[0];
+      if (lastBestMove.from === lastMove.from && lastBestMove.to === lastMove.to) {
         this.lastMoveScore = "BestMove";
       } else {
-        let bestMove = this.topMoves[0];
-        if (lastBestMove.mate != null) {
-          // if last move is losing mate, this move just escapes a mate
-          // if last move is winning mate, this move is a missed win
-          if (bestMove.mate == null) {
-            this.lastMoveScore =
-              lastBestMove.mate > 0 ? "MissedWin" : "Brilliant";
+        const bestMove = this.topMoves[0];
+        if (lastBestMove.mate !== null) {
+          if (bestMove.mate === null) {
+            this.lastMoveScore = lastBestMove.mate > 0 ? "MissedWin" : "Brilliant";
           } else {
-            // both move are mate
-            this.lastMoveScore =
-              lastBestMove.mate > 0 ? "Excellent" : "ResignWhite";
+            this.lastMoveScore = lastBestMove.mate > 0 ? "Excellent" : "ResignWhite";
           }
-        } else if (bestMove.mate != null) {
-          // brilliant if it found a mate, blunder if it moved into a mate
+        } else if (bestMove.mate !== null) {
           this.lastMoveScore = bestMove.mate < 0 ? "Brilliant" : "Blunder";
-        } else if (bestMove.cp != null && lastBestMove.cp != null) {
-          let evalDiff = -(bestMove.cp + lastBestMove.cp);
+        } else if (bestMove.cp !== null && lastBestMove.cp !== null) {
+          const evalDiff = -(bestMove.cp + lastBestMove.cp);
           if (evalDiff > 100) this.lastMoveScore = "Brilliant";
           else if (evalDiff > 0) this.lastMoveScore = "GreatFind";
           else if (evalDiff > -10) this.lastMoveScore = "BestMove";
@@ -935,51 +887,36 @@ class StockfishEngine {
         }
       }
     }
-    // add highlight and effect
-    if (this.lastMoveScore != null) {
-      const highlightColors = {
-        Brilliant: "#1baca6",
-        GreatFind: "#5c8bb0",
-        BestMove: "#9eba5a",
-        Excellent: "#96bc4b",
-        Good: "#96af8b",
-        Inaccuracy: "#f0c15c",
-        Mistake: "#e6912c",
-        Blunder: "#b33430",
-        MissedWin: "#dbac16",
-      };
-      let hlColor = highlightColors[this.lastMoveScore];
-      if (hlColor != null) {
+    if (this.lastMoveScore !== null) {
+      const hlColor = StockfishEngine.HIGHLIGHT_COLORS[this.lastMoveScore];
+      if (hlColor) {
         this.BetterMintmaster.game.controller.markings.addOne({
           data: {
             opacity: 0.5,
             color: hlColor,
-            square: lastMove.to,
+            square: lastMove.to
           },
           node: true,
           persistent: true,
-          type: "highlight",
+          type: "highlight"
         });
       }
-      // this.BetterMintmaster.game.controller.markings.removeOne(`effect|${lastMove.to}`);
       this.BetterMintmaster.game.controller.markings.addOne({
         data: {
           square: lastMove.to,
-          type: this.lastMoveScore,
+          type: this.lastMoveScore
         },
         node: true,
         persistent: true,
-        type: "effect",
+        type: "effect"
       });
     }
   }
 
   onTopMoves(move = null, isBestMove = false) {
     let bestMoveSelected = false;
-    if (move != null) {
-      const index = this.topMoves.findIndex(
-        (object) => object.move === move.move
-      );
+    if (move !== null) {
+      const index = this.topMoves.findIndex((object) => object.move === move.move);
       if (isBestMove) {
         bestMoveSelected = true;
         if (index === -1) {
@@ -990,23 +927,17 @@ class StockfishEngine {
         if (index === -1) {
           this.topMoves.push(move);
           this.SortTopMoves();
-        } else {
-          if (move.depth >= this.topMoves[index].depth) {
-            this.topMoves[index] = move;
-            this.SortTopMoves();
-          }
+        } else if (move.depth >= this.topMoves[index].depth) {
+          this.topMoves[index] = move;
+          this.SortTopMoves();
         }
       }
     }
 
-    let top_pv_moves = this.topMoves.slice(0, 1);
+    const topPvMoves = this.topMoves.slice(0, 1);
 
     if (bestMoveSelected) {
-      this.BetterMintmaster.game.HintMoves(
-        top_pv_moves,
-        this.lastTopMoves,
-        isBestMove
-      );
+      this.BetterMintmaster.game.HintMoves(topPvMoves, this.lastTopMoves, isBestMove);
 
       if (getValueConfig(enumOptions.MoveAnalysis)) {
         this.AnalyzeLastMove();
@@ -1016,18 +947,14 @@ class StockfishEngine {
     if (
       bestMoveSelected &&
       getValueConfig(enumOptions.LegitAutoMove) &&
-      this.BetterMintmaster.game.controller.getPlayingAs() ===
-        this.BetterMintmaster.game.controller.getTurn()
+      this.BetterMintmaster.game.controller.getPlayingAs() === this.BetterMintmaster.game.controller.getTurn()
     ) {
-      const bestMove = top_pv_moves[0];
+      const bestMove = topPvMoves[0];
       if (!bestMove) return;
       const legalMoves = this.BetterMintmaster.game.controller.getLegalMoves();
-      const index = legalMoves.findIndex(
-        (move) => move.from === bestMove.from && move.to === bestMove.to
-      );
-      console.assert(index !== -1, "Illegal best move");
-      if (index === -1) return;
-      const moveData = legalMoves[index];
+      const moveData = legalMoves.find((m) => m.from === bestMove.from && m.to === bestMove.to);
+      console.assert(Boolean(moveData), "Illegal best move");
+      if (!moveData) return;
       moveData.userGenerated = true;
       if (bestMove.promotion !== null) {
         moveData.promotion = bestMove.promotion;
@@ -1074,34 +1001,22 @@ class StockfishEngine {
       }
     }
   }
+
   SortTopMoves() {
-    // sort the top move list to bring the best moves on top (index 0)
-    this.topMoves.sort(function (a, b) {
+    this.topMoves.sort((a, b) => {
       if (a.mate !== null && b.mate === null) {
         return a.mate < 0 ? 1 : -1;
       }
       if (a.mate === null && b.mate !== null) {
         return b.mate > 0 ? 1 : -1;
       }
-      // both moves has no mate, compare the depth first than centipawn
       if (a.mate === null && b.mate === null) {
-        if (a.depth === b.depth) {
-          if (a.cp === b.cp) return 0;
-          return a.cp > b.cp ? -1 : 1;
-        }
-        return a.depth > b.depth ? -1 : 1;
+        if (a.depth === b.depth) return b.cp - a.cp;
+        return b.depth - a.depth;
       }
-      // If both are check mate
-
-      if (a.mate < 0 && b.mate < 0) {
-        if (a.line.length === b.line.length) return 0;
-        return a.line.length < b.line.length ? 1 : -1;
+      if ((a.mate < 0 && b.mate < 0) || (a.mate > 0 && b.mate > 0)) {
+        return a.line.length - b.line.length;
       }
-      if (a.mate > 0 && b.mate > 0) {
-        if (a.line.length === b.line.length) return 0;
-        return a.line.length > b.line.length ? 1 : -1;
-      }
-
       return a.mate < b.mate ? 1 : -1;
     });
   }
@@ -1117,23 +1032,18 @@ class BetterMint {
       (event) => {
         this.options = event.detail;
         this.game.UpdateExtensionOptions();
-        // Pass the updated options explicitly
         this.engine.UpdateExtensionOptions(this.options);
 
-        // show a notification when the settings is updated, but only if the previous
-        // notification has gone
         if (
           getValueConfig(enumOptions.Notifications) &&
           window.toaster &&
-          window.toaster.notifications.findIndex(
-            (noti) => noti.id == "BetterMint-settings-updated"
-          ) == -1
+          !window.toaster.notifications.some((noti) => noti.id === "BetterMint-settings-updated")
         ) {
           window.toaster.add({
             id: "BetterMint-settings-updated",
             duration: 2000,
             icon: "circle-gearwheel",
-            message: `Settings updated!`,
+            message: "Settings updated!",
             style: {
               position: "fixed",
               bottom: "60px",
@@ -1150,61 +1060,53 @@ class BetterMint {
       false
     );
   }
+
   onEngineLoaded() {
     if (getValueConfig(enumOptions.Notifications) && window.toaster) {
       window.toaster.add({
         id: "chess.com",
         duration: 3000,
         icon: "circle-info",
-        content: `BetterMint is enabled!`,
+        content: "BetterMint is enabled!"
       });
     }
   }
 }
 
 function InitBetterMint(chessboard) {
-  // Get the extension options
-  requestOptions().then(function (options) {
+  requestOptions().then((options) => {
     try {
       BetterMintmaster = new BetterMint(chessboard, options);
 
-      // Add hotkeys
-      document.addEventListener("keypress", function (e) {
-        if (e.key === "q") {
-          BetterMintmaster.game.controller.moveBackward();
-        }
-        if (e.key === "e") {
-          BetterMintmaster.game.controller.moveForward();
-        }
-        if (e.key === "r") {
-          BetterMintmaster.game.controller.resetGame();
-        }
-        if (e.key === "w") {
+      const hotkeys = {
+        q: () => BetterMintmaster.game.controller.moveBackward(),
+        e: () => BetterMintmaster.game.controller.moveForward(),
+        r: () => BetterMintmaster.game.controller.resetGame(),
+        w: () => {
           BetterMintmaster.game.ResetGame();
           BetterMintmaster.game.RefreshEvalutionBar();
         }
+      };
+
+      document.addEventListener("keypress", (e) => {
+        hotkeys[e.key]?.();
       });
     } catch (e) {
-      console.error("Oh noes! BetterMintmaster didn't load");
-      console.error("Error details:", e);
-      console.error("Stack:", e.stack);
+      console.error("Oh noes! BetterMintmaster didn't load", e);
     }
   });
 }
 
-const observer = new MutationObserver(async function (mutations) {
-  mutations.forEach(async function (mutation) {
-    mutation.addedNodes.forEach(async function (node) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        if (node.tagName == "WC-CHESS-BOARD" || node.tagName == "CHESS-BOARD") {
-          if (Object.hasOwn(node, "game")) {
-            InitBetterMint(node);
-            observer.disconnect();
-          }
-        }
+const observer = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === "WC-CHESS-BOARD" || node.tagName === "CHESS-BOARD") && Object.hasOwn(node, "game")) {
+        InitBetterMint(node);
+        observer.disconnect();
+        return;
       }
-    })
-  })
+    }
+  }
 });
 
 observer.observe(document, {

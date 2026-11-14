@@ -1,7 +1,7 @@
 "use strict";
 
 const optionKeys = Object.keys(DefaultExtensionOptions);
-let fields = {};
+const fields = {};
 
 function UpdateVisibility() {
   const legitAutoMove = document.getElementById("option-legit-auto-move");
@@ -30,32 +30,25 @@ function parseUciOptionLine(line) {
   let defVal = "";
   let minVal = null;
   let maxVal = null;
-  let vars = [];
+  const vars = [];
 
   for (let i = 1; i < tokens.length; i++) {
-    if (tokens[i] === "default") {
-      i++;
-      defVal = tokens[i] !== undefined ? tokens[i] : "";
-    } else if (tokens[i] === "min") {
-      i++;
-      minVal = tokens[i] !== undefined ? parseInt(tokens[i], 10) : null;
-    } else if (tokens[i] === "max") {
-      i++;
-      maxVal = tokens[i] !== undefined ? parseInt(tokens[i], 10) : null;
-    } else if (tokens[i] === "var") {
-      i++;
-      if (tokens[i] !== undefined) vars.push(tokens[i]);
+    const token = tokens[i];
+    if (token === "default") {
+      defVal = tokens[++i] ?? "";
+    } else if (token === "min") {
+      const v = tokens[++i];
+      minVal = v !== undefined ? parseInt(v, 10) : null;
+    } else if (token === "max") {
+      const v = tokens[++i];
+      maxVal = v !== undefined ? parseInt(v, 10) : null;
+    } else if (token === "var") {
+      const v = tokens[++i];
+      if (v !== undefined) vars.push(v);
     }
   }
 
-  return {
-    name: name,
-    type: type,
-    default: defVal,
-    min: minVal,
-    max: maxVal,
-    vars: vars
-  };
+  return { name, type, default: defVal, min: minVal, max: maxVal, vars };
 }
 
 function renderDynamicUciOptions(optionsList, savedValues, container, onOptionChange) {
@@ -66,8 +59,8 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
     return;
   }
 
-  optionsList.forEach(function (opt) {
-    const currentVal = savedValues && savedValues[opt.name] !== undefined ? savedValues[opt.name] : opt.default;
+  optionsList.forEach((opt) => {
+    const currentVal = savedValues?.[opt.name] ?? opt.default;
 
     if (opt.type === "spin") {
       const col = document.createElement("div");
@@ -87,14 +80,12 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
       const input = document.createElement("input");
       input.type = "range";
       input.className = "range-slider";
-      input.min = opt.min !== null ? opt.min : 0;
-      input.max = opt.max !== null ? opt.max : 100;
+      input.min = opt.min ?? 0;
+      input.max = opt.max ?? 100;
       input.value = currentVal;
-      input.addEventListener("input", function () {
+      input.addEventListener("input", () => {
         badge.textContent = input.value;
-        if (typeof onOptionChange === "function") {
-          onOptionChange(opt.name, parseInt(input.value, 10));
-        }
+        onOptionChange?.(opt.name, parseInt(input.value, 10));
       });
       col.appendChild(input);
       container.appendChild(col);
@@ -110,10 +101,8 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
       input.checked = currentVal === true || currentVal === "true";
       const slider = document.createElement("span");
       slider.className = "toggle-slider";
-      input.addEventListener("change", function () {
-        if (typeof onOptionChange === "function") {
-          onOptionChange(opt.name, input.checked);
-        }
+      input.addEventListener("change", () => {
+        onOptionChange?.(opt.name, input.checked);
       });
       label.appendChild(labelText);
       label.appendChild(input);
@@ -127,17 +116,15 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
       label.textContent = opt.name;
       const select = document.createElement("select");
       select.className = "select-input";
-      opt.vars.forEach(function (v) {
+      opt.vars.forEach((v) => {
         const option = document.createElement("option");
         option.value = v;
         option.textContent = v;
         if (v === String(currentVal)) option.selected = true;
         select.appendChild(option);
       });
-      select.addEventListener("change", function () {
-        if (typeof onOptionChange === "function") {
-          onOptionChange(opt.name, select.value);
-        }
+      select.addEventListener("change", () => {
+        onOptionChange?.(opt.name, select.value);
       });
       col.appendChild(label);
       col.appendChild(select);
@@ -151,13 +138,11 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
       const input = document.createElement("input");
       input.type = "text";
       input.className = "text-input";
-      input.value = currentVal != null ? String(currentVal) : "";
+      input.value = String(currentVal ?? "");
       input.spellcheck = false;
       input.autocomplete = "off";
-      input.addEventListener("change", function () {
-        if (typeof onOptionChange === "function") {
-          onOptionChange(opt.name, input.value.trim());
-        }
+      input.addEventListener("change", () => {
+        onOptionChange?.(opt.name, input.value.trim());
       });
       col.appendChild(label);
       col.appendChild(input);
@@ -172,10 +157,8 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
       btn.type = "button";
       btn.className = "action-btn";
       btn.textContent = "Execute";
-      btn.addEventListener("click", function () {
-        if (typeof onOptionChange === "function") {
-          onOptionChange(opt.name, "");
-        }
+      btn.addEventListener("click", () => {
+        onOptionChange?.(opt.name, "");
       });
       row.appendChild(label);
       row.appendChild(btn);
@@ -187,22 +170,22 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
 let activeProbeWs = null;
 let probeTimeout = null;
 
-function probeEngine(url) {
-  const container = document.getElementById("engine-options-container");
-  if (!container) return;
+function resetProbe() {
   if (probeTimeout) {
     clearTimeout(probeTimeout);
     probeTimeout = null;
   }
   if (activeProbeWs) {
-    const oldProbe = activeProbeWs;
+    const ws = activeProbeWs;
     activeProbeWs = null;
-    oldProbe.onopen = null;
-    oldProbe.onmessage = null;
-    oldProbe.onclose = null;
-    oldProbe.onerror = null;
-    try { oldProbe.close(); } catch (e) {}
+    try { ws.close(); } catch {}
   }
+}
+
+function probeEngine(url) {
+  const container = document.getElementById("engine-options-container");
+  if (!container) return;
+  resetProbe();
   if (!url || typeof WebSocket === "undefined") {
     container.innerHTML = '<span class="status-text">Invalid WebSocket URL.</span>';
     return;
@@ -213,26 +196,24 @@ function probeEngine(url) {
   try {
     const ws = new WebSocket(url);
     activeProbeWs = ws;
-    probeTimeout = setTimeout(function () {
+    probeTimeout = setTimeout(() => {
       if (activeProbeWs !== ws) return;
-      activeProbeWs = null;
-      try { ws.close(); } catch (e) {}
+      resetProbe();
       container.innerHTML = '<span class="status-text">Connection timed out.</span>';
     }, 4000);
 
-    ws.addEventListener("open", function () {
+    ws.addEventListener("open", () => {
       if (activeProbeWs !== ws) return;
       if (probeTimeout) clearTimeout(probeTimeout);
-      probeTimeout = setTimeout(function () {
+      probeTimeout = setTimeout(() => {
         if (activeProbeWs !== ws) return;
-        activeProbeWs = null;
-        try { ws.close(); } catch (e) {}
+        resetProbe();
         container.innerHTML = '<span class="status-text">Engine handshake timed out.</span>';
       }, 4000);
       ws.send("uci\n");
     });
 
-    ws.addEventListener("message", function (event) {
+    ws.addEventListener("message", (event) => {
       if (activeProbeWs !== ws) return;
       const line = event.data;
       if (!line) return;
@@ -240,93 +221,78 @@ function probeEngine(url) {
       if (opt) {
         discovered.push(opt);
       } else if (line.trim() === "uciok") {
-        if (probeTimeout) {
-          clearTimeout(probeTimeout);
-          probeTimeout = null;
-        }
-        activeProbeWs = null;
-        try { ws.close(); } catch (e) {}
+        resetProbe();
         loadAndRenderEngineOptions(url, discovered, container);
       }
     });
 
-    ws.addEventListener("error", function () {
+    ws.addEventListener("error", () => {
       if (activeProbeWs !== ws) return;
-      if (probeTimeout) {
-        clearTimeout(probeTimeout);
-        probeTimeout = null;
-      }
-      activeProbeWs = null;
+      resetProbe();
       container.innerHTML = '<span class="status-text">Unable to connect to engine.</span>';
     });
-  } catch (err) {
-    if (probeTimeout) {
-      clearTimeout(probeTimeout);
-      probeTimeout = null;
-    }
-    activeProbeWs = null;
+  } catch {
+    resetProbe();
     container.innerHTML = '<span class="status-text">Failed to initialize engine socket.</span>';
   }
 }
 
 function loadAndRenderEngineOptions(url, optionsList, container) {
-  if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+  if (typeof chrome === "undefined" || !chrome.storage?.local) {
     renderDynamicUciOptions(optionsList, {}, container, null);
     return;
   }
   const storageKey = "engine_opts_" + btoa(url).replace(/=/g, "");
-  chrome.storage.local.get([storageKey], function (result) {
-    const saved = (result && result[storageKey]) || {};
-    renderDynamicUciOptions(optionsList, saved, container, function (name, val) {
+  chrome.storage.local.get([storageKey], (result) => {
+    const saved = result?.[storageKey] || {};
+    renderDynamicUciOptions(optionsList, saved, container, (name, val) => {
       saved[name] = val;
-      const update = {};
-      update[storageKey] = saved;
-      chrome.storage.local.set(update);
+      chrome.storage.local.set({ [storageKey]: saved });
       notifyTabsOfEngineOptions(saved);
     });
   });
 }
 
-function notifyTabsOfEngineOptions(customOptions) {
-  if (typeof chrome === "undefined" || !chrome.tabs || !chrome.tabs.query) return;
-  chrome.tabs.query({ url: "*://*.chess.com/*" }, function (tabs) {
-    tabs.forEach(function (tab) {
-      chrome.tabs.sendMessage(tab.id, {
-        type: "UpdateOptions",
-        data: { customEngineOptions: customOptions }
-      }).catch(function () {});
+function notifyTabs(data) {
+  if (typeof chrome === "undefined" || !chrome.tabs?.query) return;
+  chrome.tabs.query({ url: "*://*.chess.com/*" }, (tabs) => {
+    tabs.forEach((tab) => {
+      chrome.tabs.sendMessage(tab.id, { type: "UpdateOptions", data }).catch(() => {});
     });
   });
 }
 
+function notifyTabsOfEngineOptions(customOptions) {
+  notifyTabs({ customEngineOptions: customOptions });
+}
+
 function RestoreOptions() {
-  chrome.storage.sync.get(DefaultExtensionOptions, function (opts) {
-    let options = opts || {};
-    optionKeys.forEach(function (key) {
+  chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
+    const options = opts || {};
+    optionKeys.forEach((key) => {
       const field = fields[key];
       if (!field) return;
 
+      const val = options[key] ?? DefaultExtensionOptions[key];
       if (field.type === "checkbox") {
-        field.checked = options[key] !== undefined ? Boolean(options[key]) : Boolean(DefaultExtensionOptions[key]);
-      } else if (field.type === "range") {
-        field.value = options[key] !== undefined ? options[key] : DefaultExtensionOptions[key];
-        const badge = document.getElementById("badge-" + key);
-        if (badge) badge.textContent = field.value;
-      } else if (field.type === "text") {
-        field.value = options[key] !== undefined ? options[key] : DefaultExtensionOptions[key];
+        field.checked = Boolean(val);
+      } else {
+        field.value = val;
+        if (field.type === "range") {
+          const badge = document.getElementById("badge-" + key);
+          if (badge) badge.textContent = val;
+        }
       }
     });
     UpdateVisibility();
-    const urlField = fields["option-url-api-stockfish"];
-    if (urlField && urlField.value) {
-      probeEngine(urlField.value.trim());
-    }
+    const url = fields["option-url-api-stockfish"]?.value?.trim();
+    if (url) probeEngine(url);
   });
 }
 
 function OnOptionsChange(changedKey) {
-  let options = {};
-  optionKeys.forEach(function (key) {
+  const options = {};
+  optionKeys.forEach((key) => {
     const field = fields[key];
     if (!field) return;
 
@@ -334,7 +300,7 @@ function OnOptionsChange(changedKey) {
       options[key] = field.checked;
     } else if (field.type === "range") {
       const val = parseFloat(field.value);
-      options[key] = isNaN(val) ? 0 : val;
+      options[key] = Number.isNaN(val) ? 0 : val;
     } else if (field.type === "text") {
       options[key] = field.value.trim();
     }
@@ -346,62 +312,45 @@ function OnOptionsChange(changedKey) {
   }
 
   chrome.storage.sync.set(options);
-  chrome.tabs.query({ url: "*://*.chess.com/*" }, function (tabs) {
-    tabs.forEach(function (tab) {
-      chrome.tabs.sendMessage(tab.id, {
-        type: "UpdateOptions",
-        data: options,
-      }).catch(function () {});
-    });
-  });
+  notifyTabs(options);
 }
 
 function InitOptions() {
-  optionKeys.forEach(function (key) {
+  optionKeys.forEach((key) => {
     fields[key] = document.getElementById(key);
   });
 
-  document.querySelectorAll(".options-slider").forEach(function (slider) {
+  document.querySelectorAll(".options-slider").forEach((slider) => {
     const input = slider.querySelector("input[type='range']");
     const badge = slider.querySelector(".badge");
     if (!input) return;
 
-    const min = slider.getAttribute("data-min");
-    const max = slider.getAttribute("data-max");
-    if (min) input.min = min;
-    if (max) input.max = max;
+    if (slider.dataset.min) input.min = slider.dataset.min;
+    if (slider.dataset.max) input.max = slider.dataset.max;
 
-    input.addEventListener("input", function (event) {
+    input.addEventListener("input", () => {
       if (badge) badge.textContent = input.value;
-      if (!event.disableUpdate) {
-        OnOptionsChange();
-      }
-    });
-  });
-
-  document.querySelectorAll(".options-checkbox input[type='checkbox']").forEach(function (checkbox) {
-    checkbox.addEventListener("change", function () {
       OnOptionsChange();
     });
   });
 
-  document.querySelectorAll(".options-text input[type='text']").forEach(function (text) {
-    text.addEventListener("change", function () {
-      OnOptionsChange(text.id);
-    });
+  document.querySelectorAll(".options-checkbox input[type='checkbox']").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => OnOptionsChange());
+  });
+
+  document.querySelectorAll(".options-text input[type='text']").forEach((text) => {
+    text.addEventListener("change", () => OnOptionsChange(text.id));
   });
 
   RestoreOptions();
 }
 
-window.addEventListener("DOMContentLoaded", function () {
+window.addEventListener("DOMContentLoaded", () => {
   const githubLink = document.getElementById("github-link");
-  if (githubLink) {
-    githubLink.addEventListener("click", function (event) {
-      event.preventDefault();
-      chrome.tabs.create({ url: "https://github.com/y9felix/BetterMint" });
-    });
-  }
+  githubLink?.addEventListener("click", (event) => {
+    event.preventDefault();
+    chrome.tabs.create({ url: "https://github.com/y9felix/BetterMint" });
+  });
 
   InitOptions();
 });
