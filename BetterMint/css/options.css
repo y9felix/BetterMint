@@ -146,7 +146,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 24px 16px;
+    padding: 18px 16px;
     border-bottom: 1px solid var(--border-color);
     background-color: var(--bg-card);
 }
