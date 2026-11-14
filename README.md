@@ -24,15 +24,36 @@ High-performance chess companion and real-time analysis extension for Chess.com,
 
 ### 1. EngineWS Server
 
-Requires Python 3.10+ and a UCI-compliant chess engine binary (e.g. `stockfish`).
+Requires Python 3.10+ and a UCI-compliant chess engine (e.g. Stockfish).
 
+Install dependencies:
 ```bash
 cd EngineWS
 pip install -r requirements.txt
-./run.sh
 ```
 
-The WebSocket server starts listening on `ws://127.0.0.1:8000/ws`.
+Configure your engines in `EngineWS/config.json`:
+```json
+{
+  "default": "stockfish",
+  "engines": {
+    "stockfish": ["stockfish"],
+    "maia": ["lc0", "--weights=/path/to/weights.pb.gz"]
+  }
+}
+```
+
+Launch the server:
+- **Linux:**
+  ```bash
+  ./run.sh
+  ```
+- **Windows:**
+  ```cmd
+  run.bat
+  ```
+
+The server listens on `ws://127.0.0.1:8000/ws` (using the `default` engine), or `ws://127.0.0.1:8000/ws/{engine_name}`.
 
 ### 2. BetterMint Extension
 
@@ -40,14 +61,11 @@ The WebSocket server starts listening on `ws://127.0.0.1:8000/ws`.
 2. Enable **Developer mode** in the top-right corner.
 3. Click **Load unpacked** and select the `BetterMint` directory.
 
-### 3. Configuration
+### 3. Usage
 
 1. Click the BetterMint icon in your browser toolbar to open the options panel.
-2. In the **Engine Server** section:
-   - Ensure **Enable Engine Server** is enabled.
-   - Set **WebSocket URL** to `ws://127.0.0.1:8000/ws`.
-   - Set **Engine Path** to your engine binary (e.g. `/usr/bin/stockfish`).
-3. Expand **Engine Options** to customize detected UCI parameters.
+2. Under **Engine Server**, verify the **WebSocket API URL** is set to `ws://localhost:8000/ws` (or a named endpoint such as `ws://localhost:8000/ws/maia`).
+3. Expand **Engine UCI Options** to customize detected engine parameters (`Threads`, `Hash`, `UCI_Elo`, etc.) live.
 
 ---
 
