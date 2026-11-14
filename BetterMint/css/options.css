@@ -48,9 +48,7 @@ body {
 }
 
 details.collapse-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: block;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding-top: 8px;
 }
@@ -68,8 +66,16 @@ details.collapse-group > summary.collapse-summary {
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 600;
-    padding: 4px 0;
+    padding: 2px 0;
     transition: color 0.15s ease;
+}
+
+details.collapse-group[open] > summary.collapse-summary {
+    padding-bottom: 6px;
+}
+
+details.collapse-group:not([open]) > .collapse-content {
+    display: none;
 }
 
 details.collapse-group > summary.collapse-summary:hover {
@@ -146,7 +152,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 16px;
     border-bottom: 1px solid var(--border-color);
     background-color: var(--bg-card);
 }
@@ -158,17 +164,16 @@ details.collapse-group > summary.collapse-summary:hover::after {
 }
 
 .brand-logo {
+    display: block;
     width: 24px;
     height: 24px;
     object-fit: contain;
-    transform: translateY(0.7px);
 }
 
 .brand-title {
     font-size: 15px;
     font-weight: 700;
     line-height: 1;
-    margin-top: 1px;
     letter-spacing: -0.01em;
     color: var(--text-primary);
 }
@@ -205,17 +210,17 @@ details.collapse-group > summary.collapse-summary:hover::after {
 }
 
 .svg-icon {
+    display: block;
     width: 14px;
     height: 14px;
     pointer-events: none;
-    transform: translateY(0.2px);
 }
 
 .app-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px 11px;
+    padding: 16px;
     border-top: 1px solid var(--border-color);
     background-color: var(--bg-card);
 }
@@ -224,7 +229,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
     font-size: 11px;
     font-weight: 600;
     line-height: 1;
-    margin-top: 1px;
     color: var(--text-muted);
     letter-spacing: 0.03em;
 }

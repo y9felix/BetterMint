@@ -1,8 +1,10 @@
 import asyncio
 import json
+import logging
 import os
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.websockets import WebSocketDisconnect, WebSocketState
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -12,6 +14,12 @@ DEFAULT_CONFIG = {
         "stockfish": ["stockfish"]
     }
 }
+
+class HealthCheckLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return '"GET /health ' not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(HealthCheckLogFilter())
 
 def load_config(path: str = CONFIG_PATH) -> dict:
     if not os.path.exists(path):
@@ -94,6 +102,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health", include_in_schema=False)
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
 
 async def handle_engine(websocket: WebSocket, cmd: list[str], init_commands: list[str] | None = None):
     await websocket.accept()
