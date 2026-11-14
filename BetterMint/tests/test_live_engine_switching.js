@@ -165,4 +165,18 @@ MockWebSocket.instances[0].triggerOpen();
 fresh.UpdateOptions({ Foo: 1 });
 assert.ok(MockWebSocket.instances[0].sent.includes("setoption name Foo value 1"), "Empty option set must forward custom options");
 
+const evaluatingEngine = createEngine(masterMock);
+MockWebSocket.instances[0].triggerOpen();
+evaluatingEngine.isEvaluating = true;
+let restartedEngine = false;
+masterMock.game.UpdateEngine = () => { restartedEngine = true; };
+
+evaluatingEngine.UpdateExtensionOptions({ customEngineOptions: { MultiPV: 3 } });
+assert.strictEqual(MockWebSocket.instances[0].sent.includes("stop"), true, "Must issue stop before setoption mid-evaluation");
+assert.strictEqual(restartedEngine, false, "Must not restart engine before stop finishes");
+
+evaluatingEngine.ProcessMessage("bestmove (none)");
+assert.strictEqual(evaluatingEngine.isEvaluating, false, "bestmove (none) must reset isEvaluating to false");
+assert.strictEqual(restartedEngine, true, "Must restart engine evaluation after options applied");
+
 console.log("All live engine switching behavioral tests passed.");

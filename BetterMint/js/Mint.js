@@ -712,7 +712,17 @@ class StockfishEngine {
     const custom = options.customEngineOptions;
     if (custom && typeof custom === "object") {
       Object.assign(this.customEngineOptions, custom);
-      this.UpdateOptions(this.customEngineOptions);
+      const applyOptions = () => {
+        this.UpdateOptions(this.customEngineOptions);
+        if (this.BetterMintmaster && this.BetterMintmaster.game) {
+          this.BetterMintmaster.game.UpdateEngine(false);
+        }
+      };
+      if (this.isEvaluating) {
+        this.stopEvaluation(applyOptions);
+      } else {
+        applyOptions();
+      }
     }
     this.depth = getValueConfig(enumOptions.Depth) ?? 15;
     if (this.topMoves.length > 0) this.onTopMoves(null, !this.isEvaluating);
@@ -774,7 +784,7 @@ class StockfishEngine {
         }
       }
     } else if (typeof line === "string" && line.startsWith("bestmove ")) {
-      const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+      const bestMoveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/);
       if (bestMoveMatch) {
         if (this.stopTimeout !== null) {
           clearTimeout(this.stopTimeout);
@@ -789,8 +799,8 @@ class StockfishEngine {
         this.goDoneCallbacks = [];
         callbacks.forEach((cb) => cb());
 
-        if (!wasRequestedStop && bestMoveMatch[1] !== undefined) {
-          const bestMove = bestMoveMatch[1];
+        const bestMove = bestMoveMatch[1];
+        if (!wasRequestedStop && bestMove !== "(none)") {
           const index = this.topMoves.findIndex((object) => object.move === bestMove);
 
           if (index < 0) {
