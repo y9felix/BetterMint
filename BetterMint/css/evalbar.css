@@ -1,21 +1,13 @@
-.bettermint-evalbar-floating {
-    display: flex;
-    pointer-events: auto;
-    position: fixed;
-    width: 28px;
-    z-index: 20;
-}
-
 .evaluation-bar-bar {
     border-radius: .2rem;
     flex-shrink: 0;
-    height: 100%;
     isolation: isolate;
-    position: relative;
+    pointer-events: auto;
+    position: fixed;
     -webkit-user-select: none;
     user-select: none;
-    width: 100%;
-    min-width: 24px;
+    width: 28px;
+    z-index: 20;
 }
 
 .evaluation-bar-bar.evaluation-bar-flipped,

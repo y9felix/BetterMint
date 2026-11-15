@@ -176,7 +176,6 @@ class GameController {
     this.controller = chessboard.game;
     this.options = this.controller.getOptions();
     this.evalBar = null;
-    this.evalBarHost = null;
     this.evalBarFill = null;
     this.evalScore = null;
     this.evalScoreAbbreviated = null;
@@ -187,7 +186,6 @@ class GameController {
     this.turnStartTime = performance.now();
     this.autoMoveTimer = null;
     this.gameOverInterval = null;
-    this.analysisToolsObserver = null;
     this.lastAutoQueueClick = 0;
 
     this.controller.on("Move", () => {
@@ -350,16 +348,8 @@ class GameController {
       window.removeEventListener("resize", this.evalBarSyncHandler);
       this.evalBarSyncHandler = null;
     }
-    if (this.evalBarHost) {
-      this.evalBarHost.remove();
-      this.evalBarHost = null;
-    }
-    if (this.evalBar != null) {
-      const wrapper =
-        this.evalBar.parentElement && this.evalBar.parentElement.style?.flex === "1 1 auto"
-          ? this.evalBar.parentElement
-          : this.evalBar;
-      wrapper.remove();
+    if (this.evalBar) {
+      this.evalBar.remove();
       this.evalBar = null;
     }
     this.evalBarFill = null;
@@ -398,10 +388,6 @@ class GameController {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
     }
-    if (this.analysisToolsObserver) {
-      this.analysisToolsObserver.disconnect();
-      this.analysisToolsObserver = null;
-    }
     if (this.autoQueueObserver) {
       this.autoQueueObserver.disconnect();
       this.autoQueueObserver = null;
@@ -416,125 +402,84 @@ class GameController {
   }
 
   CreateAnalysisTools() {
-    if (this.analysisToolsObserver) {
-      this.analysisToolsObserver.disconnect();
-      this.analysisToolsObserver = null;
-    }
+    if (!getValueConfig(enumOptions.EvaluationBar) || this.evalBar != null) return;
+    const body = document.body || document.documentElement;
+    if (!body) return;
 
-    const mount = () => {
-      const layoutChessboard = this.chessboard.parentElement;
-      if (!layoutChessboard?.parentElement) return false;
+    const evalBar = document.createElement("div");
+    evalBar.className = "evaluation-bar-bar";
+    evalBar.innerHTML = `<span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-draw"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    body.appendChild(evalBar);
 
-      if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
-        const evalBar = document.createElement("div");
-        evalBar.style.flex = "1 1 auto";
-        evalBar.style.width = "100%";
-        evalBar.style.height = "100%";
-        evalBar.innerHTML = `<div class="evaluation-bar-bar"><span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-draw"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div></div>`;
+    this.evalBar = evalBar;
+    this.evalBarFill = evalBar.querySelector(".evaluation-bar-white");
+    this.evalScore = evalBar.querySelector(".evaluation-bar-score");
+    this.evalScoreAbbreviated = evalBar.querySelector(".evaluation-bar-scoreAbbreviated");
 
-        const getBoardRect = () => {
-          const inner =
-            this.chessboard.querySelector?.(".board, chess-board, svg.coordinates") ||
-            this.chessboard.shadowRoot?.querySelector?.(".board, svg.coordinates");
-          const rect = (inner || this.chessboard).getBoundingClientRect();
-          if (rect.width > rect.height + 2 && rect.height >= 50) {
-            const side = rect.height;
-            const insetX = (rect.width - side) / 2;
-            return {
-              left: rect.left + insetX,
-              right: rect.right - insetX,
-              top: rect.top,
-              bottom: rect.bottom,
-              width: side,
-              height: side
-            };
-          }
-          return rect;
+    const getBoardRect = () => {
+      const inner =
+        this.chessboard.querySelector?.(".board, chess-board, svg.coordinates") ||
+        this.chessboard.shadowRoot?.querySelector?.(".board, svg.coordinates");
+      const rect = (inner || this.chessboard).getBoundingClientRect();
+      if (rect.width > rect.height + 2 && rect.height >= 50) {
+        const side = rect.height;
+        const insetX = (rect.width - side) / 2;
+        return {
+          left: rect.left + insetX,
+          right: rect.right - insetX,
+          top: rect.top,
+          bottom: rect.bottom,
+          width: side,
+          height: side
         };
-
-        const boardRect = getBoardRect();
-        const nativeContainer =
-          layoutChessboard.querySelector("#board-layout-evaluation, .board-layout-evaluation") ||
-          layoutChessboard.parentElement.querySelector("#board-layout-evaluation, .board-layout-evaluation");
-        const nativeRect = nativeContainer?.getBoundingClientRect();
-        const hasNativeClass = Boolean(document.body?.classList?.contains("with-evaluation"));
-        const hasValidNativeSlot =
-          hasNativeClass &&
-          Boolean(nativeContainer) &&
-          boardRect.height >= 50 &&
-          nativeRect.width >= 24 &&
-          nativeRect.height >= 100 &&
-          nativeRect.right <= boardRect.left + 4 &&
-          boardRect.left - nativeRect.right <= 12;
-
-        let host;
-        if (hasValidNativeSlot) {
-          host = nativeContainer;
-          host.replaceChildren(evalBar);
-        } else {
-          host = document.createElement("div");
-          host.className = "bettermint-evalbar-floating";
-          host.appendChild(evalBar);
-          (document.body || document.documentElement).appendChild(host);
-          this.evalBarHost = host;
-
-          const syncPosition = () => {
-            if (!this.evalBarHost || !this.chessboard?.isConnected) return;
-            const rect = getBoardRect();
-            if (rect.width < 50 || rect.height < 50 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
-              this.evalBarHost.style.display = "none";
-              return;
-            }
-            this.evalBarHost.style.display = "flex";
-            this.evalBarHost.style.top = `${Math.round(rect.top)}px`;
-            this.evalBarHost.style.height = `${Math.round(rect.height)}px`;
-            this.evalBarHost.style.left = `${Math.max(4, Math.round(rect.left - 34))}px`;
-          };
-
-          syncPosition();
-          if (typeof ResizeObserver !== "undefined") {
-            this.evalBarResizeObserver = new ResizeObserver(syncPosition);
-            this.evalBarResizeObserver.observe(this.chessboard);
-            if (document.body) {
-              this.evalBarResizeObserver.observe(document.body);
-            }
-          }
-          this.evalBarSyncHandler = syncPosition;
-          window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
-          window.addEventListener("resize", syncPosition, { passive: true });
-        }
-
-        this.evalBar = host.querySelector(".evaluation-bar-bar");
-        this.evalBarFill = host.querySelector(".evaluation-bar-white");
-        this.evalScore = host.querySelector(".evaluation-bar-score");
-        this.evalScoreAbbreviated = host.querySelector(".evaluation-bar-scoreAbbreviated");
-        if (!this.options.isWhiteOnBottom && this.options.flipped) {
-          this.evalBar.classList.add("evaluation-bar-flipped");
-        }
-        if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
-          this.BetterMintmaster.engine.ensureTopMovesSorted?.();
-          this.updateEvaluationFromMove(this.BetterMintmaster.engine.topMoves[0]);
-        }
       }
-      return true;
+      return rect;
     };
 
-    if (mount()) return;
-
-    this.analysisToolsObserver = new MutationObserver(() => {
-      if (mount()) {
-        if (this.analysisToolsObserver) {
-          this.analysisToolsObserver.disconnect();
-          this.analysisToolsObserver = null;
-        }
+    const syncPosition = () => {
+      if (!this.evalBar || !this.chessboard?.isConnected) return;
+      const rect = getBoardRect();
+      if (rect.width < 50 || rect.height < 50 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
+        this.evalBar.style.display = "none";
+        return;
       }
-    });
-    const target = this.chessboard.parentElement || document.body;
-    this.analysisToolsObserver.observe(target, { childList: true, subtree: true });
+      this.evalBar.style.display = "block";
+      this.evalBar.style.top = `${Math.round(rect.top)}px`;
+      this.evalBar.style.height = `${Math.round(rect.height)}px`;
+      this.evalBar.style.left = `${Math.max(4, Math.round(rect.left - 34))}px`;
+    };
+
+    syncPosition();
+    if (typeof ResizeObserver !== "undefined") {
+      this.evalBarResizeObserver = new ResizeObserver(syncPosition);
+      this.evalBarResizeObserver.observe(this.chessboard);
+      if (document.body) {
+        this.evalBarResizeObserver.observe(document.body);
+      }
+    }
+    this.evalBarSyncHandler = syncPosition;
+    window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
+    window.addEventListener("resize", syncPosition, { passive: true });
+
+    if (!this.options.isWhiteOnBottom && this.options.flipped) {
+      this.evalBar.classList.add("evaluation-bar-flipped");
+    }
+    if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
+      this.BetterMintmaster.engine.ensureTopMovesSorted?.();
+      this.updateEvaluationFromMove(this.BetterMintmaster.engine.topMoves[0]);
+    }
   }
 
   RefreshEvalutionBar() {
-    if (getValueConfig(enumOptions.EvaluationBar)) {
+    if (!getValueConfig(enumOptions.EvaluationBar)) return;
+    if (this.evalBar?.isConnected) {
+      this.evalBar.classList.toggle(
+        "evaluation-bar-flipped",
+        Boolean(!this.options.isWhiteOnBottom && this.options.flipped)
+      );
+      this.SetEvaluation(0, false);
+      this.evalBarSyncHandler?.();
+    } else {
       this.removeEvaluationBar();
       this.CreateAnalysisTools();
     }
@@ -555,10 +500,6 @@ class GameController {
     if (this.gameOverInterval !== null) {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
-    }
-    if (this.analysisToolsObserver) {
-      this.analysisToolsObserver.disconnect();
-      this.analysisToolsObserver = null;
     }
     this.options = this.controller.getOptions();
     if (this.controller.getPlayingAs() === this.controller.getTurn()) {
@@ -1005,7 +946,7 @@ class StockfishEngine {
 
     if (typeof options.uciButton === "string" && options.uciButton.length > 0) {
       const buttonName = options.uciButton;
-      const runButton = () => {
+      this.stopEvaluation(() => {
         if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(buttonName)) {
           this.send(`setoption name ${buttonName}`);
           this.ready = false;
@@ -1013,29 +954,19 @@ class StockfishEngine {
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
           this.BetterMintmaster.game.UpdateEngine(false);
         }
-      };
-      if (this.isEvaluating) {
-        this.stopEvaluation(runButton);
-      } else {
-        runButton();
-      }
+      });
       return;
     }
 
     const custom = options.customEngineOptions;
     if (custom && typeof custom === "object") {
       Object.assign(this.customEngineOptions, custom);
-      const applyOptions = () => {
+      this.stopEvaluation(() => {
         this.UpdateOptions(this.customEngineOptions);
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
           this.BetterMintmaster.game.UpdateEngine(false);
         }
-      };
-      if (this.isEvaluating) {
-        this.stopEvaluation(applyOptions);
-      } else {
-        applyOptions();
-      }
+      });
       return;
     }
 
@@ -1315,24 +1246,14 @@ class StockfishEngine {
       const remainingDelay = Math.max(0, targetDelay - elapsed);
 
       const secondsTillAutoMove = (remainingDelay / 1000).toFixed(1);
-      if (getValueConfig(enumOptions.Notifications) && window.toaster && remainingDelay > 0) {
-        window.toaster.add({
-          id: "chess.com",
-          duration: remainingDelay + 1000,
-          icon: "circle-info",
-          message: `BetterMint: Auto move in ${secondsTillAutoMove}s`,
-          style: {
-            position: "fixed",
-            bottom: "60px",
-            right: "30px",
-            backgroundColor: "black",
-            color: "white",
-            fontSize: "14px",
-            padding: "12px 16px",
-            zIndex: "10000",
-            border: "1px solid #ffffff"
-          }
-        });
+      if (remainingDelay > 0) {
+        this.BetterMintmaster.showToast?.(
+          "chess.com",
+          remainingDelay + 1000,
+          "circle-info",
+          `BetterMint: Auto move in ${secondsTillAutoMove}s`,
+          { backgroundColor: "black", border: "1px solid #ffffff" }
+        );
       }
 
       if (remainingDelay <= 0) {
@@ -1388,31 +1309,40 @@ class BetterMint {
         this.game.UpdateExtensionOptions();
         this.engine.UpdateExtensionOptions(event.detail);
 
-        if (
-          getValueConfig(enumOptions.Notifications) &&
-          window.toaster &&
-          !window.toaster.notifications?.some((noti) => noti.id === "BetterMint-settings-updated")
-        ) {
-          window.toaster.add({
-            id: "BetterMint-settings-updated",
-            duration: 2000,
-            icon: "circle-gearwheel",
-            message: "Settings updated!",
-            style: {
-              position: "fixed",
-              bottom: "60px",
-              right: "30px",
-              backgroundColor: "#3498db",
-              color: "white",
-              fontSize: "14px",
-              padding: "12px 16px",
-              zIndex: "10000"
-            }
-          });
+        if (!window.toaster?.notifications?.some((noti) => noti.id === "BetterMint-settings-updated")) {
+          this.showToast(
+            "BetterMint-settings-updated",
+            2000,
+            "circle-gearwheel",
+            "Settings updated!",
+            { backgroundColor: "#3498db" }
+          );
         }
       },
       false
     );
+  }
+
+  showToast(id, duration, icon, message, extraStyle = {}) {
+    if (!getValueConfig(enumOptions.Notifications) || !window.toaster) return;
+    window.toaster.add({
+      id,
+      duration,
+      icon,
+      message,
+      style: Object.assign(
+        {
+          position: "fixed",
+          bottom: "60px",
+          right: "30px",
+          color: "white",
+          fontSize: "14px",
+          padding: "12px 16px",
+          zIndex: "10000"
+        },
+        extraStyle
+      )
+    });
   }
 
   onEngineLoaded() {
