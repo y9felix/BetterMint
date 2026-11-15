@@ -2,7 +2,7 @@
 "use strict";
 
 const TURN_BLACK = 2;
-const EVAL_BAR_OFFSET_PX = 42;
+const EVAL_BAR_OFFSET_PX = 40;
 const AUTO_QUEUE_COOLDOWN_MS = 4000;
 const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
