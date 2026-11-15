@@ -174,11 +174,11 @@ const DEFAULT_PRESETS = [
   {
     id: "puzzles",
     name: "Puzzles",
-    summary: "D14 · Queue · No HUD",
+    summary: "D14 · Queue · Hints",
     settings: buildPresetSettings({
       "option-depth": 14,
       "option-evaluation-bar": false,
-      "option-show-hints": false,
+      "option-show-hints": true,
       "option-move-analysis": false,
       "option-auto-queue": true,
       "option-legit-auto-move": true,
@@ -189,10 +189,10 @@ const DEFAULT_PRESETS = [
   {
     id: "bots",
     name: "Bots",
-    summary: "D14 · Auto · No HUD",
+    summary: "D14 · Auto · Eval",
     settings: buildPresetSettings({
       "option-depth": 14,
-      "option-evaluation-bar": false,
+      "option-evaluation-bar": true,
       "option-show-hints": false,
       "option-move-analysis": false,
       "option-auto-queue": false,
