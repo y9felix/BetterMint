@@ -9,19 +9,19 @@ const DefaultExtensionOptions = {
   "option-auto-queue": false,
   "option-legit-auto-move": false,
   "option-human-like-moves": true,
-  "option-move-pace": 1.5,
-  "option-physical-floor": 200,
+  "option-move-pace": 12.5,
+  "option-physical-floor": 600,
   "option-timing-spread": 0.80,
   "option-fast-recaptures": true,
-  "option-recapture-multiplier": 0.50,
+  "option-recapture-multiplier": 0.25,
   "option-fast-forced-moves": true,
-  "option-forced-multiplier": 0.35,
+  "option-forced-multiplier": 0.15,
   "option-fast-opening": true,
-  "option-opening-moves-threshold": 8,
-  "option-opening-multiplier": 0.35,
+  "option-opening-moves-threshold": 10,
+  "option-opening-multiplier": 0.40,
   "option-clock-scaling": true,
-  "option-clock-threshold": 60,
-  "option-clock-min-multiplier": 0.30
+  "option-clock-threshold": 180,
+  "option-clock-min-multiplier": 0.20
 };
 
 function getEngineOptionsStorageKey(url) {

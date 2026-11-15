@@ -2,10 +2,283 @@
 
 const PROBE_TIMEOUT_MS = 4000;
 const ENGINE_OPTS_DEBOUNCE_MS = 150;
+const CONFIG_STATUS_DURATION_MS = 2600;
+
+const THEME_COLOR_VARS = [
+  "--bg-primary",
+  "--bg-card",
+  "--border-color",
+  "--divider-color",
+  "--text-primary",
+  "--text-muted",
+  "--accent",
+  "--badge-bg",
+  "--badge-text",
+  "--track-bg",
+  "--thumb-bg",
+  "--error-text"
+];
+
+const THEMES = {
+  dark: {
+    label: "Dark",
+    next: "light",
+    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>',
+    colors: {
+      "--bg-primary": "#18181b",
+      "--bg-card": "#27272a",
+      "--border-color": "#3f3f46",
+      "--divider-color": "rgba(255, 255, 255, 0.06)",
+      "--text-primary": "#f4f4f5",
+      "--text-muted": "#a1a1aa",
+      "--accent": "#6366f1",
+      "--badge-bg": "#3f3f46",
+      "--badge-text": "#e4e4f7",
+      "--track-bg": "#3f3f46",
+      "--thumb-bg": "#ffffff",
+      "--error-text": "#f87171"
+    }
+  },
+  light: {
+    label: "Light",
+    next: "black",
+    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>',
+    colors: {
+      "--bg-primary": "#f4f4f5",
+      "--bg-card": "#ffffff",
+      "--border-color": "#d4d4d8",
+      "--divider-color": "rgba(0, 0, 0, 0.08)",
+      "--text-primary": "#18181b",
+      "--text-muted": "#52525b",
+      "--accent": "#4f46e5",
+      "--badge-bg": "#e4e4e7",
+      "--badge-text": "#27272a",
+      "--track-bg": "#d4d4d8",
+      "--thumb-bg": "#4f46e5",
+      "--error-text": "#dc2626"
+    }
+  },
+  black: {
+    label: "Black",
+    next: "dark",
+    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>',
+    colors: {
+      "--bg-primary": "#000000",
+      "--bg-card": "#0a0a0c",
+      "--border-color": "#222228",
+      "--divider-color": "rgba(255, 255, 255, 0.08)",
+      "--text-primary": "#f4f4f5",
+      "--text-muted": "#8e8e98",
+      "--accent": "#6366f1",
+      "--badge-bg": "#18181d",
+      "--badge-text": "#e4e4f7",
+      "--track-bg": "#27272c",
+      "--thumb-bg": "#ffffff",
+      "--error-text": "#f87171"
+    }
+  }
+};
+
+const baseDefaults =
+  typeof DefaultExtensionOptions !== "undefined" ? DefaultExtensionOptions : {};
+
+function buildPresetSettings(overrides) {
+  return Object.assign({}, baseDefaults, overrides);
+}
+
+const DEFAULT_PRESETS = [
+  {
+    id: "bullet",
+    name: "Bullet",
+    summary: "1m · 1.25s · 200ms",
+    settings: buildPresetSettings({
+      "option-evaluation-bar": true,
+      "option-show-hints": true,
+      "option-move-analysis": true,
+      "option-auto-queue": false,
+      "option-legit-auto-move": true,
+      "option-human-like-moves": true,
+      "option-move-pace": 1.25,
+      "option-physical-floor": 200,
+      "option-timing-spread": 0.45,
+      "option-fast-recaptures": true,
+      "option-recapture-multiplier": 0.50,
+      "option-fast-forced-moves": true,
+      "option-forced-multiplier": 0.35,
+      "option-fast-opening": true,
+      "option-opening-moves-threshold": 7,
+      "option-opening-multiplier": 0.65,
+      "option-clock-scaling": true,
+      "option-clock-threshold": 20,
+      "option-clock-min-multiplier": 0.40
+    }),
+    customEngineOptions: {}
+  },
+  {
+    id: "blitz",
+    name: "Blitz",
+    summary: "3m · 3.8s · 350ms",
+    settings: buildPresetSettings({
+      "option-evaluation-bar": true,
+      "option-show-hints": true,
+      "option-move-analysis": true,
+      "option-auto-queue": false,
+      "option-legit-auto-move": true,
+      "option-human-like-moves": true,
+      "option-move-pace": 3.8,
+      "option-physical-floor": 350,
+      "option-timing-spread": 0.65,
+      "option-fast-recaptures": true,
+      "option-recapture-multiplier": 0.35,
+      "option-fast-forced-moves": true,
+      "option-forced-multiplier": 0.25,
+      "option-fast-opening": true,
+      "option-opening-moves-threshold": 8,
+      "option-opening-multiplier": 0.50,
+      "option-clock-scaling": true,
+      "option-clock-threshold": 45,
+      "option-clock-min-multiplier": 0.28
+    }),
+    customEngineOptions: {}
+  },
+  {
+    id: "rapid",
+    name: "Rapid",
+    summary: "10m · 12.5s · 600ms",
+    settings: buildPresetSettings({
+      "option-evaluation-bar": true,
+      "option-show-hints": true,
+      "option-move-analysis": true,
+      "option-auto-queue": false,
+      "option-legit-auto-move": true,
+      "option-human-like-moves": true,
+      "option-move-pace": 12.5,
+      "option-physical-floor": 600,
+      "option-timing-spread": 0.80,
+      "option-fast-recaptures": true,
+      "option-recapture-multiplier": 0.25,
+      "option-fast-forced-moves": true,
+      "option-forced-multiplier": 0.15,
+      "option-fast-opening": true,
+      "option-opening-moves-threshold": 10,
+      "option-opening-multiplier": 0.40,
+      "option-clock-scaling": true,
+      "option-clock-threshold": 180,
+      "option-clock-min-multiplier": 0.20
+    }),
+    customEngineOptions: {}
+  },
+  {
+    id: "puzzles",
+    name: "Puzzles",
+    summary: "Auto · Queue · No HUD",
+    settings: buildPresetSettings({
+      "option-evaluation-bar": false,
+      "option-show-hints": false,
+      "option-move-analysis": false,
+      "option-auto-queue": true,
+      "option-legit-auto-move": true,
+      "option-human-like-moves": false
+    }),
+    customEngineOptions: {}
+  },
+  {
+    id: "bots",
+    name: "Bots",
+    summary: "Auto · No HUD",
+    settings: buildPresetSettings({
+      "option-evaluation-bar": false,
+      "option-show-hints": false,
+      "option-move-analysis": false,
+      "option-auto-queue": false,
+      "option-legit-auto-move": true,
+      "option-human-like-moves": false
+    }),
+    customEngineOptions: {}
+  }
+];
+
+let currentTheme = "dark";
+let activeThemeColors = null;
+let activeConfigName = null;
+let customConfigsCache = [];
+let presetOverridesCache = [];
+let popoverMode = null;
+let statusTimer = null;
+let themeInitialized = false;
+let configInitialized = false;
 
 const optionKeys =
   typeof DefaultExtensionOptions !== "undefined" ? Object.keys(DefaultExtensionOptions) : [];
 const fields = {};
+
+function getCurrentThemeColors() {
+  const palette = Object.assign({}, THEMES[currentTheme]?.colors || THEMES.dark.colors);
+  const root = document.documentElement;
+  if (root) {
+    const computed =
+      typeof window !== "undefined" && typeof window.getComputedStyle === "function"
+        ? window.getComputedStyle(root)
+        : null;
+    for (const v of THEME_COLOR_VARS) {
+      const override = activeThemeColors?.[v] || root.style?.getPropertyValue?.(v);
+      const val = (override || computed?.getPropertyValue?.(v) || "").trim();
+      if (val) palette[v] = val;
+    }
+  }
+  return palette;
+}
+
+function applyTheme(theme, customColors = null) {
+  const key = THEMES[theme] ? theme : "dark";
+  currentTheme = key;
+  const root = document.documentElement;
+  if (root) {
+    root.dataset.theme = key;
+    if (customColors && typeof customColors === "object") {
+      const cleanColors = {};
+      for (const v of THEME_COLOR_VARS) {
+        if (typeof customColors[v] === "string" && customColors[v].trim()) {
+          cleanColors[v] = customColors[v].trim();
+          root.style?.setProperty?.(v, cleanColors[v]);
+        } else {
+          root.style?.removeProperty?.(v);
+        }
+      }
+      activeThemeColors = Object.keys(cleanColors).length ? cleanColors : null;
+    } else {
+      activeThemeColors = null;
+      for (const v of THEME_COLOR_VARS) {
+        root.style?.removeProperty?.(v);
+      }
+    }
+  }
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    const meta = THEMES[key];
+    btn.innerHTML = meta.icon;
+    btn.title = `Theme: ${meta.label}`;
+    btn.setAttribute?.("aria-label", `Theme: ${meta.label}`);
+  }
+}
+
+function InitTheme() {
+  applyTheme("dark");
+  chrome.storage?.local?.get(["theme", "themeColors"], (res) => {
+    if (res?.theme) {
+      applyTheme(res.theme, res.themeColors || null);
+    } else if (res?.themeColors) {
+      applyTheme("dark", res.themeColors);
+    }
+  });
+  if (themeInitialized) return;
+  themeInitialized = true;
+  document.getElementById("theme-toggle")?.addEventListener("click", () => {
+    const next = THEMES[currentTheme]?.next || "dark";
+    applyTheme(next, null);
+    chrome.storage?.local?.set({ theme: next, themeColors: null });
+  });
+}
 
 function UpdateVisibility() {
   const legitAutoMove = document.getElementById("option-legit-auto-move");
@@ -190,6 +463,7 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
 let activeProbeWs = null;
 let probeTimeout = null;
 let probedUrl = null;
+let lastProbedOptions = [];
 
 function setEngineOptionsStatus(msg) {
   const container = document.getElementById("engine-options-container");
@@ -258,6 +532,7 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
           discovered.push(opt);
         } else if (trimmed === "uciok") {
           probedUrl = url;
+          lastProbedOptions = discovered.slice();
           resetProbe();
           onComplete(url, discovered, container);
           return;
@@ -311,6 +586,7 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
         return;
       }
       saved[name] = val;
+      setActiveConfigName(null);
       pendingEngineOpts = { key: storageKey, data: saved };
       if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
       engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, ENGINE_OPTS_DEBOUNCE_MS);
@@ -341,52 +617,581 @@ function probeIfExpanded() {
   }
 }
 
+function readCurrentSettings() {
+  const options = {};
+  optionKeys.forEach((key) => {
+    const field = fields[key];
+    if (!field) {
+      options[key] = baseDefaults[key];
+      return;
+    }
+    if (field.type === "checkbox") {
+      options[key] = Boolean(field.checked);
+    } else if (field.type === "range") {
+      const val = parseFloat(field.value);
+      options[key] = Number.isNaN(val) ? 0 : val;
+    } else {
+      options[key] = String(field.value ?? "").trim();
+    }
+  });
+  return options;
+}
+
+function normalizeSettings(raw) {
+  const normalized = {};
+  optionKeys.forEach((key) => {
+    const defVal = baseDefaults[key];
+    const incoming = raw && Object.prototype.hasOwnProperty.call(raw, key) ? raw[key] : defVal;
+    if (typeof defVal === "boolean") {
+      normalized[key] = Boolean(incoming);
+    } else if (typeof defVal === "number") {
+      const num = parseFloat(incoming);
+      normalized[key] = Number.isNaN(num) ? defVal : num;
+    } else {
+      normalized[key] = String(incoming ?? defVal ?? "").trim();
+    }
+  });
+  return normalized;
+}
+
+function applySettingsToDom(options) {
+  optionKeys.forEach((key) => {
+    const field = fields[key];
+    if (!field) return;
+    const val = options[key] ?? baseDefaults[key];
+    if (field.type === "checkbox") {
+      field.checked = Boolean(val);
+    } else {
+      field.value = val;
+      if (field.type === "range") {
+        const badge = document.getElementById("badge-" + key);
+        if (badge) badge.textContent = val;
+      }
+    }
+  });
+  UpdateVisibility();
+}
+
+function setActiveConfigName(name) {
+  activeConfigName = name || null;
+  chrome.storage?.local?.set({ activeConfigName });
+}
+
+function getEffectivePresets() {
+  return DEFAULT_PRESETS.map((preset) => {
+    const override = presetOverridesCache.find((p) => p.id === preset.id);
+    if (!override) return preset;
+    return {
+      id: preset.id,
+      name: preset.name,
+      summary: preset.summary,
+      settings: normalizeSettings(override.settings || preset.settings),
+      customEngineOptions: Object.assign({}, override.customEngineOptions || {})
+    };
+  });
+}
+
+function setConfigStatus(msg, isError = false) {
+  const el = document.getElementById("config-status");
+  if (!el) return;
+  if (statusTimer) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  el.textContent = msg || "";
+  el.classList?.toggle("is-error", Boolean(isError));
+  el.classList?.toggle("hidden", !msg);
+  if (msg) {
+    statusTimer = setTimeout(() => {
+      el.textContent = "";
+      el.classList?.add("hidden");
+      statusTimer = null;
+    }, CONFIG_STATUS_DURATION_MS);
+  }
+}
+
+function sanitizeFilename(name) {
+  const clean = String(name || "")
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "-")
+    .replace(/\s+/g, " ");
+  return clean || "config";
+}
+
+function stripMintExtension(filename) {
+  return String(filename || "").replace(/\.mint$/i, "").trim();
+}
+
+function getExportFilename(name = activeConfigName) {
+  return name ? `${sanitizeFilename(name)}.mint` : "config.mint";
+}
+
+function applyConfigProfile(rawSettings, customEngineOptions = {}, { name = null, markSaved = false } = {}) {
+  const prevUrl = fields["option-url-api-stockfish"]?.value?.trim();
+  const nextSettings = normalizeSettings(rawSettings);
+  const nextEngineOpts =
+    customEngineOptions && typeof customEngineOptions === "object"
+      ? Object.assign({}, customEngineOptions)
+      : {};
+
+  pendingEngineOpts = null;
+  if (engineOptsSyncTimer) {
+    clearTimeout(engineOptsSyncTimer);
+    engineOptsSyncTimer = null;
+  }
+
+  applySettingsToDom(nextSettings);
+  setActiveConfigName(markSaved ? name : null);
+
+  const nextUrl = nextSettings["option-url-api-stockfish"];
+  const engineKey =
+    typeof getEngineOptionsStorageKey === "function" ? getEngineOptionsStorageKey(nextUrl) : null;
+  if (engineKey) {
+    chrome.storage?.local?.set({ [engineKey]: nextEngineOpts });
+  }
+  chrome.storage?.sync?.set(nextSettings);
+
+  if (prevUrl !== nextUrl) {
+    probedUrl = null;
+    lastProbedOptions = [];
+    resetProbe();
+    if (document.getElementById("engine-options-details")?.open) {
+      if (nextUrl) probeEngine(nextUrl);
+    } else {
+      setEngineOptionsStatus("Expand to load engine options.");
+    }
+  } else if (document.getElementById("engine-options-details")?.open && probedUrl === nextUrl) {
+    const container = document.getElementById("engine-options-container");
+    if (container && lastProbedOptions.length > 0) {
+      loadAndRenderEngineOptions(nextUrl, lastProbedOptions, container);
+    }
+  }
+
+  notifyTabs(Object.assign({}, nextSettings, { customEngineOptions: nextEngineOpts }));
+  return nextSettings;
+}
+
+function saveCustomConfigEntry(name, settings, customEngineOptions) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return null;
+  const entry = {
+    name: trimmed,
+    settings: normalizeSettings(settings),
+    customEngineOptions: Object.assign({}, customEngineOptions || {}),
+    updatedAt: Date.now()
+  };
+  const filtered = customConfigsCache.filter(
+    (item) => item.name.toLowerCase() !== trimmed.toLowerCase()
+  );
+  customConfigsCache = [entry, ...filtered];
+  chrome.storage?.local?.set({ customConfigs: customConfigsCache });
+  return entry;
+}
+
+function deleteCustomConfigEntry(name) {
+  customConfigsCache = customConfigsCache.filter((item) => item.name !== name);
+  const updates = { customConfigs: customConfigsCache };
+  if (activeConfigName === name) {
+    activeConfigName = null;
+    updates.activeConfigName = null;
+  }
+  chrome.storage?.local?.set(updates);
+}
+
+function formatConfigSummary(settings) {
+  const depth = settings?.["option-depth"] ?? baseDefaults["option-depth"];
+  const pace = settings?.["option-move-pace"] ?? baseDefaults["option-move-pace"];
+  const auto = settings?.["option-legit-auto-move"] ? "Auto" : "Manual";
+  return `D${depth} · ${auto} · ${pace}s`;
+}
+
+function renderLoadList() {
+  const list = document.getElementById("config-load-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  list.appendChild(createEl("div", { className: "config-section-label", textContent: "Presets" }));
+  getEffectivePresets().forEach((preset) => {
+    const btn = createEl("button", { type: "button", className: "config-item-btn" }, [
+      createEl("span", { className: "config-item-name", textContent: preset.name }),
+      createEl("span", { className: "config-item-meta", textContent: preset.summary })
+    ]);
+    btn.addEventListener("click", () => {
+      applyConfigProfile(preset.settings, preset.customEngineOptions, { markSaved: false });
+      setConfigPopoverMode(null);
+      setConfigStatus(`Loaded ${preset.name}`);
+    });
+    list.appendChild(createEl("div", { className: "config-item-row config-item" }, [btn]));
+  });
+
+  list.appendChild(createEl("div", { className: "config-section-label", textContent: "Custom" }));
+  if (customConfigsCache.length === 0) {
+    list.appendChild(
+      createEl("div", { className: "config-empty", textContent: "No saved configs yet." })
+    );
+    return;
+  }
+
+  customConfigsCache.forEach((entry) => {
+    const isActive = activeConfigName === entry.name;
+    const selectBtn = createEl(
+      "button",
+      {
+        type: "button",
+        className: isActive ? "config-item-btn is-active" : "config-item-btn"
+      },
+      [
+        createEl("span", { className: "config-item-name", textContent: entry.name }),
+        createEl("span", {
+          className: "config-item-meta",
+          textContent: formatConfigSummary(entry.settings)
+        })
+      ]
+    );
+    selectBtn.addEventListener("click", () => {
+      applyConfigProfile(entry.settings, entry.customEngineOptions, {
+        name: entry.name,
+        markSaved: true
+      });
+      setConfigPopoverMode(null);
+      setConfigStatus(`Loaded ${entry.name}`);
+    });
+
+    const deleteBtn = createEl("button", {
+      type: "button",
+      className: "config-delete-btn",
+      title: `Delete ${entry.name}`,
+      textContent: "×"
+    });
+    deleteBtn.setAttribute?.("aria-label", `Delete ${entry.name}`);
+    deleteBtn.addEventListener("click", (event) => {
+      event?.stopPropagation?.();
+      deleteCustomConfigEntry(entry.name);
+      renderLoadList();
+    });
+
+    list.appendChild(
+      createEl("div", { className: "config-item-row config-item" }, [selectBtn, deleteBtn])
+    );
+  });
+}
+
+function setConfigPopoverMode(mode) {
+  popoverMode = mode || null;
+  const popover = document.getElementById("config-popover");
+  const toggleBtn = document.getElementById("config-toggle");
+  const menu = document.getElementById("config-menu");
+  const loadPanel = document.getElementById("config-load-panel");
+  const savePanel = document.getElementById("config-save-panel");
+  const saveError = document.getElementById("config-save-error");
+
+  if (toggleBtn) {
+    toggleBtn.setAttribute?.("aria-expanded", String(Boolean(popoverMode)));
+  }
+  if (!popover) return;
+
+  popover.classList?.toggle("hidden", !popoverMode);
+  popover.classList?.toggle("is-wide", popoverMode === "load" || popoverMode === "save");
+  menu?.classList?.toggle("hidden", popoverMode !== "menu");
+  loadPanel?.classList?.toggle("hidden", popoverMode !== "load");
+  savePanel?.classList?.toggle("hidden", popoverMode !== "save");
+  saveError?.classList?.add("hidden");
+
+  if (popoverMode === "load") {
+    refreshConfigStorage(() => renderLoadList());
+  } else if (popoverMode === "save") {
+    const input = document.getElementById("config-save-name");
+    if (input) {
+      input.value = activeConfigName || "";
+      input.focus?.();
+      input.select?.();
+    }
+  }
+}
+
+function refreshConfigStorage(cb) {
+  const url = fields["option-url-api-stockfish"]?.value?.trim() || baseDefaults["option-url-api-stockfish"];
+  const engineKey =
+    typeof getEngineOptionsStorageKey === "function" ? getEngineOptionsStorageKey(url) : null;
+  const keys = ["customConfigs", "presetOverrides", "activeConfigName"];
+  if (engineKey) keys.push(engineKey);
+
+  if (typeof chrome === "undefined" || !chrome.storage?.local) {
+    cb?.({ customConfigs: customConfigsCache, customEngineOptions: {} });
+    return;
+  }
+
+  chrome.storage.local.get(keys, (res) => {
+    if (Array.isArray(res?.customConfigs)) customConfigsCache = res.customConfigs;
+    if (Array.isArray(res?.presetOverrides)) presetOverridesCache = res.presetOverrides;
+    if (Object.prototype.hasOwnProperty.call(res || {}, "activeConfigName")) {
+      activeConfigName = res.activeConfigName || null;
+    }
+    const storedEngineOpts = engineKey ? res?.[engineKey] || {} : {};
+    const liveEngineOpts =
+      pendingEngineOpts && pendingEngineOpts.key === engineKey
+        ? pendingEngineOpts.data
+        : storedEngineOpts;
+    cb?.({
+      customConfigs: customConfigsCache,
+      presetOverrides: presetOverridesCache,
+      activeConfigName,
+      customEngineOptions: Object.assign({}, liveEngineOpts)
+    });
+  });
+}
+
+function buildExportSnapshot(cb) {
+  const settings = readCurrentSettings();
+  refreshConfigStorage((state) => {
+    const snapshot = {
+      format: "bettermint-config",
+      version: 2,
+      name: state.activeConfigName || null,
+      exportedAt: new Date().toISOString(),
+      settings,
+      customEngineOptions: state.customEngineOptions || {},
+      theme: {
+        id: currentTheme,
+        colors: getCurrentThemeColors()
+      },
+      presets: getEffectivePresets().map((preset) => ({
+        id: preset.id,
+        name: preset.name,
+        settings: preset.settings,
+        customEngineOptions: preset.customEngineOptions || {}
+      })),
+      customConfigs: state.customConfigs.map((entry) => ({
+        name: entry.name,
+        settings: entry.settings,
+        customEngineOptions: entry.customEngineOptions || {},
+        updatedAt: entry.updatedAt
+      }))
+    };
+    cb?.(snapshot, getExportFilename(state.activeConfigName));
+  });
+}
+
+function triggerFileDownload(filename, content) {
+  if (typeof Blob === "undefined" || typeof URL === "undefined" || !URL.createObjectURL) return;
+  const blob = new Blob([content], { type: "application/json" });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = createEl("a", {
+    href: objectUrl,
+    download: filename,
+    className: "hidden"
+  });
+  document.body?.appendChild?.(link);
+  link.click?.();
+  link.remove?.();
+  URL.revokeObjectURL?.(objectUrl);
+}
+
+function exportCurrentConfig() {
+  flushPendingEngineOpts();
+  buildExportSnapshot((snapshot, filename) => {
+    triggerFileDownload(filename, JSON.stringify(snapshot, null, 2));
+    setConfigPopoverMode(null);
+    setConfigStatus(`Exported ${filename}`);
+  });
+}
+
+function handleSaveSubmit() {
+  const input = document.getElementById("config-save-name");
+  const errorEl = document.getElementById("config-save-error");
+  const name = input?.value?.trim() || "";
+  if (!name) {
+    if (errorEl) {
+      errorEl.textContent = "Enter a config name.";
+      errorEl.classList?.remove("hidden");
+    }
+    input?.focus?.();
+    return;
+  }
+
+  flushPendingEngineOpts();
+  const settings = readCurrentSettings();
+  refreshConfigStorage((state) => {
+    saveCustomConfigEntry(name, settings, state.customEngineOptions);
+    setActiveConfigName(name);
+    setConfigPopoverMode(null);
+    setConfigStatus(`Saved ${name}`);
+  });
+}
+
+function importMintText(rawText, filename = "config.mint") {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(rawText || ""));
+  } catch {
+    return { ok: false, error: "Invalid .mint file." };
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return { ok: false, error: "Invalid .mint payload." };
+  }
+
+  const rawSettings =
+    parsed.settings && typeof parsed.settings === "object"
+      ? parsed.settings
+      : optionKeys.some((k) => Object.prototype.hasOwnProperty.call(parsed, k))
+        ? parsed
+        : null;
+
+  if (!rawSettings) {
+    return { ok: false, error: "No valid settings in .mint file." };
+  }
+
+  if (Array.isArray(parsed.presets)) {
+    const validPresets = parsed.presets.filter(
+      (p) => p && typeof p.id === "string" && p.settings && typeof p.settings === "object"
+    );
+    if (validPresets.length > 0) {
+      presetOverridesCache = validPresets.map((p) => ({
+        id: p.id,
+        settings: normalizeSettings(p.settings),
+        customEngineOptions:
+          p.customEngineOptions && typeof p.customEngineOptions === "object"
+            ? Object.assign({}, p.customEngineOptions)
+            : {}
+      }));
+      chrome.storage?.local?.set({ presetOverrides: presetOverridesCache });
+    }
+  }
+
+  if (Array.isArray(parsed.customConfigs)) {
+    parsed.customConfigs.forEach((entry) => {
+      if (entry && typeof entry.name === "string" && entry.name.trim() && entry.settings) {
+        saveCustomConfigEntry(entry.name, entry.settings, entry.customEngineOptions);
+      }
+    });
+  }
+
+  if (parsed.theme) {
+    const themeId = typeof parsed.theme === "string" ? parsed.theme : parsed.theme.id;
+    const themeColors =
+      typeof parsed.theme === "object" && parsed.theme.colors && typeof parsed.theme.colors === "object"
+        ? parsed.theme.colors
+        : null;
+    applyTheme(themeId || currentTheme, themeColors);
+    chrome.storage?.local?.set({ theme: currentTheme, themeColors: activeThemeColors });
+  }
+
+  const importedName =
+    (typeof parsed.name === "string" && parsed.name.trim()) ||
+    stripMintExtension(filename) ||
+    "Imported Config";
+  const engineOpts =
+    parsed.customEngineOptions && typeof parsed.customEngineOptions === "object"
+      ? parsed.customEngineOptions
+      : {};
+
+  saveCustomConfigEntry(importedName, rawSettings, engineOpts);
+  applyConfigProfile(rawSettings, engineOpts, { name: importedName, markSaved: true });
+
+  return { ok: true, name: importedName };
+}
+
+function InitConfigSystem() {
+  refreshConfigStorage();
+  if (configInitialized) return;
+  configInitialized = true;
+
+  document.getElementById("config-toggle")?.addEventListener("click", (event) => {
+    event?.stopPropagation?.();
+    setConfigPopoverMode(popoverMode ? null : "menu");
+  });
+
+  document.getElementById("config-action-load")?.addEventListener("click", () => {
+    setConfigPopoverMode("load");
+  });
+
+  document.getElementById("config-action-save")?.addEventListener("click", () => {
+    setConfigPopoverMode("save");
+  });
+
+  document.getElementById("config-action-export")?.addEventListener("click", () => {
+    exportCurrentConfig();
+  });
+
+  const importInput = document.getElementById("config-import-input");
+  document.getElementById("config-action-import")?.addEventListener("click", () => {
+    setConfigPopoverMode(null);
+    if (importInput) {
+      importInput.value = "";
+      importInput.click?.();
+    }
+  });
+
+  importInput?.addEventListener("change", () => {
+    const file = importInput.files?.[0];
+    if (!file) return;
+    const handleText = (text) => {
+      const result = importMintText(text, file.name);
+      if (result.ok) {
+        setConfigStatus(`Imported ${result.name}`);
+      } else {
+        setConfigStatus(result.error, true);
+      }
+    };
+    if (typeof file.text === "function") {
+      file.text().then(handleText).catch(() => setConfigStatus("Failed to read .mint file.", true));
+    } else if (typeof FileReader !== "undefined") {
+      const reader = new FileReader();
+      reader.onload = () => handleText(String(reader.result || ""));
+      reader.onerror = () => setConfigStatus("Failed to read .mint file.", true);
+      reader.readAsText(file);
+    }
+  });
+
+  document.getElementById("config-load-close")?.addEventListener("click", () => setConfigPopoverMode(null));
+  document.getElementById("config-save-close")?.addEventListener("click", () => setConfigPopoverMode(null));
+  document.getElementById("config-save-cancel")?.addEventListener("click", () => setConfigPopoverMode(null));
+  document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveSubmit);
+
+  document.getElementById("config-save-name")?.addEventListener("keydown", (event) => {
+    if (event?.key === "Enter") {
+      event.preventDefault?.();
+      handleSaveSubmit();
+    }
+  });
+
+  document.addEventListener?.("click", (event) => {
+    if (!popoverMode) return;
+    const popover = document.getElementById("config-popover");
+    const toggleBtn = document.getElementById("config-toggle");
+    const target = event?.target;
+    if (popover?.contains?.(target) || toggleBtn?.contains?.(target)) return;
+    setConfigPopoverMode(null);
+  });
+
+  document.addEventListener?.("keydown", (event) => {
+    if (event?.key === "Escape" && popoverMode) {
+      setConfigPopoverMode(null);
+    }
+  });
+}
+
 function RestoreOptions() {
   if (typeof chrome === "undefined" || !chrome.storage?.sync) {
     UpdateVisibility();
     return;
   }
   chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
-    const options = opts || {};
-    optionKeys.forEach((key) => {
-      const field = fields[key];
-      if (!field) return;
-
-      const val = options[key] ?? DefaultExtensionOptions[key];
-      if (field.type === "checkbox") {
-        field.checked = Boolean(val);
-      } else {
-        field.value = val;
-        if (field.type === "range") {
-          const badge = document.getElementById("badge-" + key);
-          if (badge) badge.textContent = val;
-        }
-      }
-    });
-    UpdateVisibility();
+    applySettingsToDom(opts || {});
     probeIfExpanded();
   });
 }
 
 function OnOptionsChange(changedKey) {
-  const options = {};
-  optionKeys.forEach((key) => {
-    const field = fields[key];
-    if (!field) return;
-
-    if (field.type === "checkbox") {
-      options[key] = field.checked;
-    } else if (field.type === "range") {
-      const val = parseFloat(field.value);
-      options[key] = Number.isNaN(val) ? 0 : val;
-    } else if (field.type === "text") {
-      options[key] = field.value.trim();
-    }
-  });
+  const options = readCurrentSettings();
 
   UpdateVisibility();
+  setActiveConfigName(null);
+
   if (changedKey === "option-url-api-stockfish") {
     probedUrl = null;
+    lastProbedOptions = [];
     resetProbe();
     if (document.getElementById("engine-options-details")?.open) {
       if (options["option-url-api-stockfish"]) probeEngine(options["option-url-api-stockfish"]);
@@ -415,6 +1220,8 @@ function InitOptions() {
   });
 
   document.getElementById("engine-options-details")?.addEventListener("toggle", probeIfExpanded);
+  InitTheme();
+  InitConfigSystem();
   RestoreOptions();
 }
 
@@ -434,6 +1241,20 @@ if (typeof window !== "undefined") {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    THEMES,
+    THEME_COLOR_VARS,
+    DEFAULT_PRESETS,
+    applyTheme,
+    getCurrentThemeColors,
+    getExportFilename,
+    getEffectivePresets,
+    applyConfigProfile,
+    buildExportSnapshot,
+    exportCurrentConfig,
+    importMintText,
+    saveCustomConfigEntry,
+    deleteCustomConfigEntry,
+    setConfigPopoverMode,
     parseUciOptionLine,
     uciRenderers,
     renderDynamicUciOptions,
@@ -442,6 +1263,14 @@ if (typeof module !== "undefined" && module.exports) {
     loadAndRenderEngineOptions,
     InitOptions,
     OnOptionsChange,
-    resetProbedUrlForTesting: () => { probedUrl = null; }
+    resetProbedUrlForTesting: () => {
+      probedUrl = null;
+      lastProbedOptions = [];
+      activeConfigName = null;
+      customConfigsCache = [];
+      presetOverridesCache = [];
+      popoverMode = null;
+      activeThemeColors = null;
+    }
   };
 }

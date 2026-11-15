@@ -928,8 +928,8 @@ class StockfishEngine {
     if (!getValueConfig(enumOptions.HumanLikeMoves)) {
       return 0;
     }
-    const movePace = numConfig(enumOptions.MovePace, 1.5);
-    const physicalFloor = numConfig(enumOptions.PhysicalFloor, 200);
+    const movePace = numConfig(enumOptions.MovePace, 12.5);
+    const physicalFloor = numConfig(enumOptions.PhysicalFloor, 600);
     const timingSpread = numConfig(enumOptions.TimingSpread, 0.80);
 
     let median = movePace * 1000;
@@ -939,22 +939,22 @@ class StockfishEngine {
     const lastMove = controller.getLastMove();
 
     if (getValueConfig(enumOptions.FastForcedMoves) && legalMoves?.length === 1) {
-      median *= numConfig(enumOptions.ForcedMultiplier, 0.35);
+      median *= numConfig(enumOptions.ForcedMultiplier, 0.15);
     } else if (getValueConfig(enumOptions.FastRecaptures) && lastMove && bestMove && bestMove.to === lastMove.to) {
-      median *= numConfig(enumOptions.RecaptureMultiplier, 0.50);
+      median *= numConfig(enumOptions.RecaptureMultiplier, 0.25);
     } else if (getValueConfig(enumOptions.FastOpening)) {
-      const openingThreshold = numConfig(enumOptions.OpeningMovesThreshold, 8);
+      const openingThreshold = numConfig(enumOptions.OpeningMovesThreshold, 10);
       const fullMoveNumber = parseInt((controller.getFEN() || "").split(" ")[5], 10) || 1;
       if (fullMoveNumber <= openingThreshold) {
-        median *= numConfig(enumOptions.OpeningMultiplier, 0.35);
+        median *= numConfig(enumOptions.OpeningMultiplier, 0.40);
       }
     }
 
     if (getValueConfig(enumOptions.ClockScaling)) {
       const remainingSeconds = getRemainingPlayerTimeSeconds();
-      const clockThreshold = numConfig(enumOptions.ClockThreshold, 60);
+      const clockThreshold = numConfig(enumOptions.ClockThreshold, 180);
       if (remainingSeconds != null && remainingSeconds < clockThreshold) {
-        const minMult = numConfig(enumOptions.ClockMinMultiplier, 0.30);
+        const minMult = numConfig(enumOptions.ClockMinMultiplier, 0.20);
         median *= Math.max(minMult, remainingSeconds / clockThreshold);
       }
     }
