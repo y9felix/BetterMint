@@ -199,6 +199,7 @@ class GameController {
     this.evalBarResizeObserver = null;
     this.evalBarSyncHandler = null;
     this.currentMarkings = [];
+    this.lastHintSignature = "";
     this.lastAnalysisMarkings = [];
     this.turnStartTime = performance.now();
     this.autoMoveTimer = null;
@@ -210,6 +211,7 @@ class GameController {
         clearTimeout(this.autoMoveTimer);
         this.autoMoveTimer = null;
       }
+      this.RemoveCurrentMarkings();
       if (this.controller.getPlayingAs() === this.controller.getTurn()) {
         this.turnStartTime = performance.now();
       }
@@ -342,7 +344,7 @@ class GameController {
   }
 
   RemoveLastAnalysisMarkings() {
-    if (this.lastAnalysisMarkings.length > 0) {
+    if (this.lastAnalysisMarkings?.length > 0) {
       this.lastAnalysisMarkings.forEach((key) => {
         this.controller.markings.removeOne(key);
       });
@@ -397,6 +399,10 @@ class GameController {
 
   destroy() {
     this.removeEvaluationBar();
+    if (this.controller?.markings) {
+      this.RemoveCurrentMarkings();
+      this.RemoveLastAnalysisMarkings();
+    }
     if (this.autoMoveTimer !== null) {
       clearTimeout(this.autoMoveTimer);
       this.autoMoveTimer = null;
@@ -531,6 +537,8 @@ class GameController {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
     }
+    this.RemoveCurrentMarkings();
+    this.RemoveLastAnalysisMarkings();
     this.boardOptions = this.controller.getOptions();
     if (this.controller.getPlayingAs() === this.controller.getTurn()) {
       this.turnStartTime = performance.now();
@@ -540,23 +548,33 @@ class GameController {
   }
 
   RemoveCurrentMarkings() {
+    this.lastHintSignature = "";
     this.currentMarkings.forEach((marking) => {
       const target = marking.data.square != null ? marking.data.square : `${marking.data.from}${marking.data.to}`;
-      this.controller.markings.removeOne(`${marking.type}|${target}`);
+      const key = `${marking.type}|${target}`;
+      if (marking.type === "effect" && this.lastAnalysisMarkings?.includes(key)) {
+        return;
+      }
+      this.controller.markings.removeOne(key);
     });
     this.currentMarkings = [];
   }
 
-  HintMoves(topMoves, isBestMove) {
+  HintMoves(topMoves) {
     const bestMove = topMoves[0];
     if (!bestMove) return;
 
     if (getValueConfig(enumOptions.ShowHints)) {
-      this.RemoveCurrentMarkings();
-      topMoves.forEach((move, idx) => {
-        if (isBestMove && move.depth !== bestMove.depth) return;
+      const legalMoves = this.controller.getLegalMoves?.();
+      const arrowColors = this.boardOptions?.arrowColors || {};
+      const seenEffects = new Set();
+      const nextMarkings = [];
+      let signature = "";
 
-        const arrowColors = this.boardOptions?.arrowColors || {};
+      topMoves.forEach((move, idx) => {
+        const resolved = resolveLegalMove(legalMoves, move);
+        const from = resolved ? resolved.from : move.from;
+        const to = resolved ? resolved.to : move.to;
         const color =
           idx === 0
             ? (arrowColors.alt || "#15781b")
@@ -566,22 +584,25 @@ class GameController {
             ? (arrowColors.default || "#003088")
             : (arrowColors.ctrl || "#882020");
 
-        this.currentMarkings.push({
+        signature += `${from}${to}${color};`;
+        nextMarkings.push({
           data: {
-            from: move.from,
-            color: color,
+            from,
+            color,
             opacity: 0.8,
-            to: move.to
+            to
           },
           node: true,
           persistent: true,
           type: "arrow"
         });
 
-        if (move.mate !== null) {
-          this.currentMarkings.push({
+        if (move.mate !== null && !seenEffects.has(to) && !this.lastAnalysisMarkings?.includes(`effect|${to}`)) {
+          seenEffects.add(to);
+          signature += `E:${to}:${move.mate < 0 ? 0 : 1};`;
+          nextMarkings.push({
             data: {
-              square: move.to,
+              square: to,
               type: move.mate < 0 ? "ResignWhite" : "WinnerWhite"
             },
             node: true,
@@ -590,8 +611,13 @@ class GameController {
           });
         }
       });
-      this.currentMarkings.reverse();
-      this.controller.markings.addMany(this.currentMarkings);
+
+      if (signature !== this.lastHintSignature) {
+        this.RemoveCurrentMarkings();
+        this.lastHintSignature = signature;
+        this.currentMarkings = nextMarkings.reverse();
+        this.controller.markings.addMany(this.currentMarkings);
+      }
     }
 
     if (getValueConfig(enumOptions.EvaluationBar)) {
@@ -1079,7 +1105,7 @@ class StockfishEngine {
         this.send("isready");
       }
     } else if (typeof line === "string" && line.startsWith("info ")) {
-      if (this.isRequestedStop || !line.includes(" pv ")) return;
+      if (this.isRequestedStop || !line.includes(" pv ") || /\b(?:upperbound|lowerbound)\b/.test(line)) return;
 
       const pvMatch = line.match(StockfishEngine.INFO_PV_RE);
       if (!pvMatch) return;
@@ -1247,18 +1273,24 @@ class StockfishEngine {
       bestMoveSelected = true;
     }
 
+    const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"] || 1, 10));
+
     if (!bestMoveSelected && move !== null) {
-      if (getValueConfig(enumOptions.EvaluationBar) && this.BetterMintmaster?.game?.updateEvaluationFromMove && this.topMoves.length > 0) {
-        const bestLiveMove = this.topMoves.reduce((best, cur) =>
-          StockfishEngine.compareMoves(cur, best) < 0 ? cur : best
-        );
-        this.BetterMintmaster.game.updateEvaluationFromMove(bestLiveMove);
+      if (this.topMoves.length > 0 && this.BetterMintmaster?.game?.HintMoves) {
+        const liveTopMoves = [...this.topMoves].sort(StockfishEngine.compareMoves).slice(0, multipvCount);
+        this.BetterMintmaster.game.HintMoves(liveTopMoves, false);
       }
       return;
     }
 
     this.ensureTopMovesSorted();
-    const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"] || 1, 10));
+    if (bestMoveSelected && move !== null) {
+      const bestIdx = this.topMoves.indexOf(move);
+      if (bestIdx > 0) {
+        this.topMoves.splice(bestIdx, 1);
+        this.topMoves.unshift(move);
+      }
+    }
     const topPvMoves = this.topMoves.slice(0, multipvCount);
 
     if (topPvMoves.length > 0) {
