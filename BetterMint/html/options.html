@@ -24,16 +24,106 @@
                 <input id="option-url-api-stockfish" type="text" class="text-input" spellcheck="false" autocomplete="off" />
             </div>
 
-            <div class="control-col options-slider">
-                <div class="slider-header">
-                    <span class="title">Search Depth</span>
-                    <span class="badge" id="badge-option-depth">3</span>
+            <details id="go-command-details" class="collapse-group">
+                <summary class="collapse-summary">Search Options</summary>
+                <div id="go-command-container" class="collapse-content">
+                    <div class="go-preview-row">
+                        <span class="go-preview-label">Preview</span>
+                        <code id="go-command-preview" class="go-preview-code">go depth 3</code>
+                    </div>
+
+                    <div class="control-col options-slider">
+                        <div class="slider-header">
+                            <span class="title">Search Depth</span>
+                            <span class="badge" id="badge-option-depth">3</span>
+                        </div>
+                        <input id="option-depth" type="range" min="0" max="50" step="1" value="3" class="range-slider" />
+                    </div>
+
+                    <div class="control-col options-slider">
+                        <div class="slider-header">
+                            <span class="title">Move Time (ms)</span>
+                            <span class="badge" id="badge-option-go-movetime">Off</span>
+                        </div>
+                        <input id="option-go-movetime" type="range" min="0" max="5000" step="50" value="0" class="range-slider" />
+                    </div>
+
+                    <div class="control-col options-slider">
+                        <div class="slider-header">
+                            <span class="title">Node Limit</span>
+                            <span class="badge" id="badge-option-go-nodes">Off</span>
+                        </div>
+                        <input id="option-go-nodes" type="range" min="0" max="5000000" step="10000" value="0" class="range-slider" />
+                    </div>
+
+                    <div class="control-col options-slider">
+                        <div class="slider-header">
+                            <span class="title">Mate in N</span>
+                            <span class="badge" id="badge-option-go-mate">Off</span>
+                        </div>
+                        <input id="option-go-mate" type="range" min="0" max="20" step="1" value="0" class="range-slider" />
+                    </div>
+
+                    <div class="control-col options-text">
+                        <label class="control-label-text" for="option-go-searchmoves">Search Moves</label>
+                        <input id="option-go-searchmoves" type="text" class="text-input" placeholder="e.g. e2e4 d2d4" spellcheck="false" autocomplete="off" />
+                    </div>
+
+                    <label class="control-row options-checkbox" for="option-go-clock-sync">
+                        <span class="control-label-text">Clock Sync</span>
+                        <input id="option-go-clock-sync" type="checkbox" class="toggle-input" />
+                        <span class="toggle-slider"></span>
+                    </label>
+
+                    <div id="go-clock-group" class="sub-panel hidden">
+                        <div class="control-col options-slider">
+                            <div class="slider-header">
+                                <span class="title">Clock Increment (ms)</span>
+                                <span class="badge" id="badge-option-go-clock-inc">0</span>
+                            </div>
+                            <input id="option-go-clock-inc" type="range" min="0" max="10000" step="500" value="0" class="range-slider" />
+                        </div>
+
+                        <div class="control-col options-slider">
+                            <div class="slider-header">
+                                <span class="title">Moves To Go</span>
+                                <span class="badge" id="badge-option-go-movestogo">Off</span>
+                            </div>
+                            <input id="option-go-movestogo" type="range" min="0" max="60" step="1" value="0" class="range-slider" />
+                        </div>
+                    </div>
+
+                    <label class="control-row options-checkbox" for="option-go-infinite">
+                        <span class="control-label-text">Infinite Mode</span>
+                        <input id="option-go-infinite" type="checkbox" class="toggle-input" />
+                        <span class="toggle-slider"></span>
+                    </label>
+
+                    <div id="go-infinite-group" class="sub-panel hidden">
+                        <div class="control-col options-slider">
+                            <div class="slider-header">
+                                <span class="title">Infinite Timer (ms)</span>
+                                <span class="badge" id="badge-option-go-infinite-timeout">Off</span>
+                            </div>
+                            <input id="option-go-infinite-timeout" type="range" min="0" max="15000" step="250" value="0" class="range-slider" />
+                        </div>
+
+                        <label class="control-row options-checkbox" for="option-go-eval-stable">
+                            <span class="control-label-text">Stop on Stable Eval</span>
+                            <input id="option-go-eval-stable" type="checkbox" class="toggle-input" />
+                            <span class="toggle-slider"></span>
+                        </label>
+
+                        <div class="control-row">
+                            <span class="control-label-text">Manual Interrupt</span>
+                            <button id="go-stop-btn" type="button" class="action-btn">Stop Search</button>
+                        </div>
+                    </div>
                 </div>
-                <input id="option-depth" type="range" min="1" max="50" value="3" class="range-slider" />
-            </div>
+            </details>
 
             <details id="engine-options-details" class="collapse-group">
-                <summary class="collapse-summary">Engine UCI Options</summary>
+                <summary class="collapse-summary">UCI Options</summary>
                 <div id="engine-options-container" class="collapse-content">
                     <span class="status-text">Expand to load engine options.</span>
                 </div>

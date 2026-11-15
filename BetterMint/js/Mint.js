@@ -36,6 +36,16 @@ function requestOptions() {
 const enumOptions = {
   UrlApiStockfish: "option-url-api-stockfish",
   Depth: "option-depth",
+  GoMovetime: "option-go-movetime",
+  GoNodes: "option-go-nodes",
+  GoMate: "option-go-mate",
+  GoSearchmoves: "option-go-searchmoves",
+  GoClockSync: "option-go-clock-sync",
+  GoClockInc: "option-go-clock-inc",
+  GoMovestogo: "option-go-movestogo",
+  GoInfinite: "option-go-infinite",
+  GoInfiniteTimeout: "option-go-infinite-timeout",
+  GoEvalStable: "option-go-eval-stable",
   EvaluationBar: "option-evaluation-bar",
   ShowHints: "option-show-hints",
   MoveAnalysis: "option-move-analysis",
@@ -58,14 +68,29 @@ const enumOptions = {
   ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
-const CLOCK_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
+const GO_OPTION_KEYS = new Set([
+  enumOptions.Depth,
+  enumOptions.GoMovetime,
+  enumOptions.GoNodes,
+  enumOptions.GoMate,
+  enumOptions.GoSearchmoves,
+  enumOptions.GoClockSync,
+  enumOptions.GoClockInc,
+  enumOptions.GoMovestogo,
+  enumOptions.GoInfinite,
+  enumOptions.GoInfiniteTimeout,
+  enumOptions.GoEvalStable
+]);
+
+const CLOCK_BOTTOM_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
+const CLOCK_TOP_SELECTOR = ".clock-component.clock-top, .clock-button-component.clock-top, .clock.clock-top, .clock-top";
 
 function cpToWinProbability(cp) {
   return 1 / (1 + Math.exp(-0.00368208 * cp));
 }
 
-function getRemainingPlayerTimeSeconds() {
-  const el = typeof document !== "undefined" ? document.querySelector(CLOCK_SELECTOR) : null;
+function parseClockElementSeconds(selector) {
+  const el = typeof document !== "undefined" ? document.querySelector(selector) : null;
   const text = el?.textContent?.trim();
   if (!text) return null;
   const colonMatch = text.match(/(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
@@ -81,6 +106,23 @@ function getRemainingPlayerTimeSeconds() {
   return secMatch ? Number(secMatch[1]) : null;
 }
 
+function getRemainingPlayerTimeSeconds() {
+  return parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
+}
+
+function getClockSyncTimesMs(controller) {
+  const bottomSec = parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
+  const topSec = parseClockElementSeconds(CLOCK_TOP_SELECTOR);
+  if (bottomSec === null || topSec === null) return null;
+  const playingAsBlack = controller?.getPlayingAs?.() === TURN_BLACK;
+  const wSec = playingAsBlack ? topSec : bottomSec;
+  const bSec = playingAsBlack ? bottomSec : topSec;
+  return {
+    wtime: Math.max(100, Math.round(wSec * 1000)),
+    btime: Math.max(100, Math.round(bSec * 1000))
+  };
+}
+
 let BetterMintmaster;
 let tempOptions = {};
 
@@ -91,6 +133,13 @@ function getValueConfig(key) {
 function numConfig(key, fallback) {
   const n = parseFloat(getValueConfig(key));
   return n > 0 ? n : fallback;
+}
+
+function nonNegIntConfig(key, fallback = 0) {
+  const raw = getValueConfig(key);
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isNaN(n) || n < 0 ? fallback : n;
 }
 
 function resolveLegalMove(legalMoves, bestMove) {
@@ -694,6 +743,7 @@ class StockfishEngine {
   }
 
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
+  static INFO_MULTIPV_RE = /\bmultipv (\d+)/;
   static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
   static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
   static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
@@ -704,6 +754,10 @@ class StockfishEngine {
     this.ready = false;
     this.isEvaluating = false;
     this.isRequestedStop = false;
+    this.isFinishingSearch = false;
+    this.infiniteTimer = null;
+    this.activeSearchInfinite = false;
+    this.evalStabilityHistory = [];
     this.readyCallbacks = [];
     this.goDoneCallbacks = [];
     this.stopTimeout = null;
@@ -712,7 +766,7 @@ class StockfishEngine {
     this.lastTopMoves = [];
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
-    this.depth = getValueConfig(enumOptions.Depth) ?? 15;
+    this.depth = nonNegIntConfig(enumOptions.Depth, 15);
     this.currentUrl = getValueConfig(enumOptions.UrlApiStockfish);
     this.targetUrl = this.currentUrl;
     this.isSwitching = false;
@@ -727,10 +781,10 @@ class StockfishEngine {
     this.staleBestMovesToIgnore = 0;
     this.pendingPosition = null;
 
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("focus", () => this.reconnectNow());
     }
-    if (typeof document !== "undefined") {
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
           this.reconnectNow();
@@ -841,21 +895,169 @@ class StockfishEngine {
     return Boolean(this.stockfish && this.stockfish.readyState === WebSocket.OPEN);
   }
 
+  clearInfiniteGuards() {
+    if (this.infiniteTimer != null) {
+      clearTimeout(this.infiniteTimer);
+      this.infiniteTimer = null;
+    }
+    this.activeSearchInfinite = false;
+    this.evalStabilityHistory = [];
+  }
+
+  buildGoCommand() {
+    const rawSearchmoves = String(getValueConfig(enumOptions.GoSearchmoves) || "").trim();
+    const validSearchmoves = [];
+    if (rawSearchmoves) {
+      const seen = new Set();
+      const legalMoves = this.BetterMintmaster?.game?.controller?.getLegalMoves?.();
+      for (const token of rawSearchmoves.toLowerCase().split(/\s+/)) {
+        if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(token) || seen.has(token)) continue;
+        if (Array.isArray(legalMoves)) {
+          const matched = resolveLegalMove(legalMoves, {
+            from: token.slice(0, 2),
+            to: token.slice(2, 4),
+            promotion: token.length > 4 ? token[4] : null
+          });
+          if (!matched) continue;
+        }
+        seen.add(token);
+        validSearchmoves.push(token);
+      }
+    }
+
+    if (getValueConfig(enumOptions.GoInfinite)) {
+      const parts = ["go", "infinite"];
+      if (validSearchmoves.length > 0) {
+        parts.push("searchmoves", ...validSearchmoves);
+      }
+      return { command: parts.join(" "), isInfinite: true };
+    }
+
+    const parts = ["go"];
+    const depth = this.depth !== undefined ? this.depth : nonNegIntConfig(enumOptions.Depth, 15);
+    const movetime = nonNegIntConfig(enumOptions.GoMovetime, 0);
+    const nodes = nonNegIntConfig(enumOptions.GoNodes, 0);
+    const mate = nonNegIntConfig(enumOptions.GoMate, 0);
+    const clockSync = Boolean(getValueConfig(enumOptions.GoClockSync));
+    const clockInc = nonNegIntConfig(enumOptions.GoClockInc, 0);
+    const movestogo = nonNegIntConfig(enumOptions.GoMovestogo, 0);
+    let hasBound = false;
+
+    if (depth > 0) {
+      parts.push("depth", String(depth));
+      hasBound = true;
+    }
+    if (movetime > 0) {
+      parts.push("movetime", String(movetime));
+      hasBound = true;
+    }
+    if (nodes > 0) {
+      parts.push("nodes", String(nodes));
+      hasBound = true;
+    }
+    if (mate > 0) {
+      parts.push("mate", String(mate));
+      hasBound = true;
+    }
+    if (clockSync) {
+      const times = getClockSyncTimesMs(this.BetterMintmaster?.game?.controller);
+      if (times) {
+        parts.push("wtime", String(times.wtime), "btime", String(times.btime));
+        if (clockInc > 0) {
+          parts.push("winc", String(clockInc), "binc", String(clockInc));
+        }
+        if (movestogo > 0) {
+          parts.push("movestogo", String(movestogo));
+        }
+        hasBound = true;
+      }
+    }
+    if (!hasBound) {
+      parts.push("depth", "1");
+    }
+    if (validSearchmoves.length > 0) {
+      parts.push("searchmoves", ...validSearchmoves);
+    }
+
+    return { command: parts.join(" "), isInfinite: false };
+  }
+
+  finishSearch() {
+    this.clearInfiniteGuards();
+    if (!this.isEvaluating || this.isRequestedStop || this.isFinishingSearch) return;
+    this.isFinishingSearch = true;
+    this.send("stop");
+  }
+
+  trackEvalStability(topMove, cpScore, mateScore) {
+    if (!this.activeSearchInfinite || !getValueConfig(enumOptions.GoEvalStable)) return;
+    if (this.isRequestedStop || this.isFinishingSearch || !topMove || topMove.depth < 10) return;
+
+    const scoreCp = mateScore !== null ? (mateScore > 0 ? 10000 : -10000) : cpScore;
+    if (scoreCp === null || scoreCp === undefined) return;
+
+    if (!Array.isArray(this.evalStabilityHistory)) {
+      this.evalStabilityHistory = [];
+    }
+    const last = this.evalStabilityHistory[this.evalStabilityHistory.length - 1];
+    if (last && last.depth === topMove.depth) {
+      this.evalStabilityHistory[this.evalStabilityHistory.length - 1] = {
+        depth: topMove.depth,
+        move: topMove.move,
+        scoreCp
+      };
+    } else if (!last || topMove.depth > last.depth) {
+      this.evalStabilityHistory.push({
+        depth: topMove.depth,
+        move: topMove.move,
+        scoreCp
+      });
+      if (this.evalStabilityHistory.length > 3) {
+        this.evalStabilityHistory.shift();
+      }
+    }
+
+    if (this.evalStabilityHistory.length === 3) {
+      const firstMove = this.evalStabilityHistory[0].move;
+      const sameMove = this.evalStabilityHistory.every((entry) => entry.move === firstMove);
+      const scores = this.evalStabilityHistory.map((entry) => entry.scoreCp);
+      const spread = Math.max(...scores) - Math.min(...scores);
+      if (sameMove && spread <= 15) {
+        this.finishSearch();
+      }
+    }
+  }
+
   go() {
     this.onReady(() => {
       this.stopEvaluation(() => {
         if (this.isEvaluating) return;
+        this.clearInfiniteGuards();
+        this.isFinishingSearch = false;
         this.isEvaluating = true;
-        this.send(`go depth ${this.depth}`);
+        const { command, isInfinite } = this.buildGoCommand();
+        this.activeSearchInfinite = isInfinite;
+        this.send(command);
+        if (isInfinite) {
+          const timeoutMs = nonNegIntConfig(enumOptions.GoInfiniteTimeout, 0);
+          if (timeoutMs > 0) {
+            this.infiniteTimer = setTimeout(() => {
+              this.infiniteTimer = null;
+              this.finishSearch();
+            }, timeoutMs);
+          }
+        }
       });
     });
   }
 
   handleDisconnect() {
+    this.clearInfiniteGuards();
     this.ready = false;
     this.loaded = false;
     this.isEvaluating = false;
     this.isRequestedStop = false;
+    this.isFinishingSearch = false;
     this.staleBestMovesToIgnore = 0;
     this.pendingPosition = null;
     this.readyCallbacks = [];
@@ -905,16 +1107,22 @@ class StockfishEngine {
   }
 
   stopEvaluation(callback) {
+    this.clearInfiniteGuards();
     if (!this.isEvaluating) {
+      this.isFinishingSearch = false;
       if (typeof callback === "function") callback();
       return;
     }
     if (typeof callback === "function") {
       this.goDoneCallbacks.push(callback);
     }
+    const alreadySentStop = Boolean(this.isFinishingSearch);
+    this.isFinishingSearch = false;
     if (!this.isRequestedStop) {
       this.isRequestedStop = true;
-      this.send("stop");
+      if (!alreadySentStop) {
+        this.send("stop");
+      }
       if (this.stopTimeout !== null) {
         clearTimeout(this.stopTimeout);
       }
@@ -1033,11 +1241,17 @@ class StockfishEngine {
       return;
     }
 
-    const nextDepth = getValueConfig(enumOptions.Depth) ?? 15;
+    if (options.stopSearch) {
+      this.finishSearch();
+      return;
+    }
+
+    const nextDepth = nonNegIntConfig(enumOptions.Depth, 15);
+    const goSettingsChanged = Object.keys(options).some((key) => GO_OPTION_KEYS.has(key));
     const depthChanged = nextDepth !== this.depth;
     this.depth = nextDepth;
 
-    if (depthChanged && this.BetterMintmaster && this.BetterMintmaster.game) {
+    if ((depthChanged || goSettingsChanged) && this.BetterMintmaster && this.BetterMintmaster.game) {
       this.BetterMintmaster.game.UpdateEngine(false);
       return;
     }
@@ -1113,8 +1327,14 @@ class StockfishEngine {
       const score = parseInt(scoreMatch[2], 10);
       const cpScore = scoreType === "cp" ? score : null;
       const mateScore = scoreType === "mate" ? score : null;
+      const multipvMatch = line.match(StockfishEngine.INFO_MULTIPV_RE);
+      const isPrimaryPv = !multipvMatch || parseInt(multipvMatch[1], 10) === 1;
 
-      this.onTopMoves(new TopMove(pvMatch[1], depth, cpScore, mateScore), false);
+      const parsedMove = new TopMove(pvMatch[1], depth, cpScore, mateScore);
+      this.onTopMoves(parsedMove, false);
+      if (isPrimaryPv) {
+        this.trackEvalStability(parsedMove, cpScore, mateScore);
+      }
     } else if (typeof line === "string" && line.startsWith("bestmove ")) {
       const bestMoveMatch = line.match(StockfishEngine.BESTMOVE_RE);
       if (bestMoveMatch) {
@@ -1126,7 +1346,9 @@ class StockfishEngine {
           clearTimeout(this.stopTimeout);
           this.stopTimeout = null;
         }
+        this.clearInfiniteGuards();
         this.isEvaluating = false;
+        this.isFinishingSearch = false;
         const wasRequestedStop = this.isRequestedStop;
         this.isRequestedStop = false;
 
@@ -1142,7 +1364,7 @@ class StockfishEngine {
             console.warn(`The engine returned the best move "${bestMove}" but it's not in the top move list.`);
             const bestMoveOnTop = new TopMove(
               bestMove,
-              getValueConfig(enumOptions.Depth),
+              nonNegIntConfig(enumOptions.Depth, 1) || 1,
               null,
               null
             );

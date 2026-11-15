@@ -212,10 +212,102 @@ let popoverMode = null;
 let statusTimer = null;
 let themeInitialized = false;
 let configInitialized = false;
+let goStopInitialized = false;
+
+const ZERO_OFF_SLIDER_KEYS = new Set([
+  "option-depth",
+  "option-go-movetime",
+  "option-go-nodes",
+  "option-go-mate",
+  "option-go-movestogo",
+  "option-go-infinite-timeout"
+]);
 
 const optionKeys =
   typeof DefaultExtensionOptions !== "undefined" ? Object.keys(DefaultExtensionOptions) : [];
 const fields = {};
+
+function formatBadgeValue(key, value) {
+  const num = Number(value);
+  if (ZERO_OFF_SLIDER_KEYS.has(key) && num === 0) return "Off";
+  if (key === "option-go-nodes" && !Number.isNaN(num)) {
+    return num.toLocaleString("en-US");
+  }
+  return value;
+}
+
+function parseSearchMovesTokens(raw) {
+  const seen = new Set();
+  const out = [];
+  for (const token of String(raw || "").trim().toLowerCase().split(/\s+/)) {
+    if (/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(token) && !seen.has(token)) {
+      seen.add(token);
+      out.push(token);
+    }
+  }
+  return out;
+}
+
+function buildGoPreviewCommand(options) {
+  const opts = options || readCurrentSettings();
+  const searchmoves = parseSearchMovesTokens(opts["option-go-searchmoves"]);
+  if (opts["option-go-infinite"]) {
+    const parts = ["go", "infinite"];
+    if (searchmoves.length > 0) parts.push("searchmoves", ...searchmoves);
+    return parts.join(" ");
+  }
+
+  const parts = ["go"];
+  const depth = parseInt(opts["option-depth"], 10) || 0;
+  const movetime = parseInt(opts["option-go-movetime"], 10) || 0;
+  const nodes = parseInt(opts["option-go-nodes"], 10) || 0;
+  const mate = parseInt(opts["option-go-mate"], 10) || 0;
+  const clockSync = Boolean(opts["option-go-clock-sync"]);
+  const clockInc = parseInt(opts["option-go-clock-inc"], 10) || 0;
+  const movestogo = parseInt(opts["option-go-movestogo"], 10) || 0;
+  let hasBound = false;
+
+  if (depth > 0) {
+    parts.push("depth", String(depth));
+    hasBound = true;
+  }
+  if (movetime > 0) {
+    parts.push("movetime", String(movetime));
+    hasBound = true;
+  }
+  if (nodes > 0) {
+    parts.push("nodes", String(nodes));
+    hasBound = true;
+  }
+  if (mate > 0) {
+    parts.push("mate", String(mate));
+    hasBound = true;
+  }
+  if (clockSync) {
+    parts.push("wtime", "<W>", "btime", "<B>");
+    if (clockInc > 0) {
+      parts.push("winc", String(clockInc), "binc", String(clockInc));
+    }
+    if (movestogo > 0) {
+      parts.push("movestogo", String(movestogo));
+    }
+    hasBound = true;
+  }
+  if (!hasBound) {
+    parts.push("depth", "1");
+  }
+  if (searchmoves.length > 0) {
+    parts.push("searchmoves", ...searchmoves);
+  }
+  return parts.join(" ");
+}
+
+function updateGoPreview(options = null) {
+  const el = document.getElementById("go-command-preview");
+  if (el) {
+    el.textContent = buildGoPreviewCommand(options);
+  }
+}
 
 function getCurrentThemeColors() {
   const palette = Object.assign({}, THEMES[currentTheme]?.colors || THEMES.dark.colors);
@@ -286,6 +378,18 @@ function InitTheme() {
 }
 
 function UpdateVisibility() {
+  const goClockSync = document.getElementById("option-go-clock-sync");
+  const goClockGroup = document.getElementById("go-clock-group");
+  if (goClockSync && goClockGroup) {
+    goClockGroup.classList.toggle("hidden", !goClockSync.checked);
+  }
+
+  const goInfinite = document.getElementById("option-go-infinite");
+  const goInfiniteGroup = document.getElementById("go-infinite-group");
+  if (goInfinite && goInfiniteGroup) {
+    goInfiniteGroup.classList.toggle("hidden", !goInfinite.checked);
+  }
+
   const autoQueue = document.getElementById("option-auto-queue");
   const autoQueueGroup = document.getElementById("auto-queue-group");
   if (autoQueue && autoQueueGroup) {
@@ -676,11 +780,12 @@ function applySettingsToDom(options) {
       field.value = val;
       if (field.type === "range") {
         const badge = document.getElementById("badge-" + key);
-        if (badge) badge.textContent = val;
+        if (badge) badge.textContent = formatBadgeValue(key, val);
       }
     }
   });
   UpdateVisibility();
+  updateGoPreview(options);
 }
 
 function setActiveConfigName(name) {
@@ -1198,6 +1303,7 @@ function OnOptionsChange(changedKey) {
   const options = readCurrentSettings();
 
   UpdateVisibility();
+  updateGoPreview(options);
   setActiveConfigName(null);
 
   if (changedKey === "option-url-api-stockfish") {
@@ -1224,11 +1330,24 @@ function InitOptions() {
     if (field.type === "range") {
       const badge = document.getElementById("badge-" + key);
       field.addEventListener("input", () => {
-        if (badge) badge.textContent = field.value;
+        if (badge) badge.textContent = formatBadgeValue(key, field.value);
+        if (key === "option-depth" || key.startsWith("option-go-")) {
+          updateGoPreview();
+        }
       });
+    } else if (key === "option-go-searchmoves") {
+      field.addEventListener("input", () => updateGoPreview());
     }
     field.addEventListener("change", () => OnOptionsChange(key));
   });
+
+  if (!goStopInitialized) {
+    goStopInitialized = true;
+    document.getElementById("go-stop-btn")?.addEventListener("click", () => {
+      notifyTabs({ stopSearch: true });
+      setConfigStatus("Stop sent");
+    });
+  }
 
   document.getElementById("engine-options-details")?.addEventListener("toggle", probeIfExpanded);
   InitTheme();
@@ -1255,6 +1374,9 @@ if (typeof module !== "undefined" && module.exports) {
     THEMES,
     THEME_COLOR_VARS,
     DEFAULT_PRESETS,
+    ZERO_OFF_SLIDER_KEYS,
+    formatBadgeValue,
+    buildGoPreviewCommand,
     applyTheme,
     getCurrentThemeColors,
     getExportFilename,

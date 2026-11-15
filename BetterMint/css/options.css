@@ -143,6 +143,34 @@ details.collapse-group > summary.collapse-summary:hover::after {
     padding-top: 4px;
 }
 
+.go-preview-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.go-preview-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.go-preview-code {
+    font-family: monospace;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .select-input {
     width: 100%;
     background-color: var(--bg-primary);
