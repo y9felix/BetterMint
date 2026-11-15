@@ -83,33 +83,23 @@ function getRemainingPlayerTimeSeconds() {
 let BetterMintmaster;
 let tempOptions = {};
 
-if (typeof window !== "undefined") {
-  requestOptions().then((options) => {
-    if (!BetterMintmaster) tempOptions = options;
-  });
-}
-
 function getValueConfig(key) {
   return (BetterMintmaster ? BetterMintmaster.options : tempOptions)[key];
 }
 
+function numConfig(key, fallback) {
+  const n = parseFloat(getValueConfig(key));
+  return n > 0 ? n : fallback;
+}
+
 function resolveLegalMove(legalMoves, bestMove) {
   if (!Array.isArray(legalMoves) || !bestMove) return null;
-  const exact = legalMoves.find(
-    (m) =>
-      m.from === bestMove.from &&
-      m.to === bestMove.to &&
-      (!bestMove.promotion || !m.promotion || m.promotion === bestMove.promotion)
-  );
-  if (exact || bestMove.promotion || bestMove.from[1] !== bestMove.to[1]) return exact || null;
-  if (bestMove.to === bestMove.from && bestMove.to[0] !== "g" && bestMove.to[0] !== "c") return null;
-  const wantFlag = bestMove.to > bestMove.from || (bestMove.to === bestMove.from && bestMove.to[0] === "g") ? "k" : "q";
-  const wantSan = wantFlag === "k" ? "O-O" : "O-O-O";
   return (
     legalMoves.find(
       (m) =>
         m.from === bestMove.from &&
-        (m.flags?.includes(wantFlag) || m.castle === wantFlag || m.san?.replace(/[+#!?]+$/, "") === wantSan)
+        m.to === bestMove.to &&
+        (!bestMove.promotion || !m.promotion || m.promotion === bestMove.promotion)
     ) || null
   );
 }
@@ -147,6 +137,16 @@ class GameController {
   static AUTO_QUEUE_KEYWORDS = [
     "play again", "new opponent", "next game", "new game", "rematch", "new"
   ];
+
+  static HIGHLIGHT_COLORS = Object.freeze({
+    BestMove: "#9eba5a",
+    Excellent: "#96bc4b",
+    Good: "#96af8b",
+    Inaccuracy: "#f0c15c",
+    Mistake: "#e6912c",
+    Blunder: "#b33430",
+    MissedWin: "#dbac16"
+  });
 
   constructor(BetterMintmaster, chessboard) {
     this.BetterMintmaster = BetterMintmaster;
@@ -321,6 +321,35 @@ class GameController {
       this.controller.markings.removeOne(`effect|${lastMove.to}`);
       this.controller.markings.removeOne(`highlight|${lastMove.to}`);
     }
+  }
+
+  ShowMoveAnalysis(square, moveScore) {
+    this.RemoveLastAnalysisMarkings();
+    if (!square || !moveScore) return;
+    const hlColor = GameController.HIGHLIGHT_COLORS[moveScore];
+    if (hlColor) {
+      this.controller.markings.addOne({
+        data: {
+          opacity: 0.5,
+          color: hlColor,
+          square
+        },
+        node: true,
+        persistent: true,
+        type: "highlight"
+      });
+      this.lastAnalysisMarkings.push(`highlight|${square}`);
+    }
+    this.controller.markings.addOne({
+      data: {
+        square,
+        type: moveScore
+      },
+      node: true,
+      persistent: true,
+      type: "effect"
+    });
+    this.lastAnalysisMarkings.push(`effect|${square}`);
   }
 
   removeEvaluationBar() {
@@ -627,16 +656,6 @@ class GameController {
 }
 
 class StockfishEngine {
-  static HIGHLIGHT_COLORS = Object.freeze({
-    BestMove: "#9eba5a",
-    Excellent: "#96bc4b",
-    Good: "#96af8b",
-    Inaccuracy: "#f0c15c",
-    Mistake: "#e6912c",
-    Blunder: "#b33430",
-    MissedWin: "#dbac16"
-  });
-
   static EP_THRESHOLDS = Object.freeze([
     [0, "BestMove"],
     [0.02, "Excellent"],
@@ -674,7 +693,6 @@ class StockfishEngine {
   constructor(BetterMintmaster) {
     this.BetterMintmaster = BetterMintmaster;
     this.loaded = false;
-    this.stopInFlight = false;
     this.ready = false;
     this.isEvaluating = false;
     this.isRequestedStop = false;
@@ -730,9 +748,6 @@ class StockfishEngine {
       this.staleBestMovesToIgnore = 0;
       this.send("uci");
       this.onReady(() => {
-        if (!this.loaded) {
-          this.UpdateOptions();
-        }
         this.send("ucinewgame");
         if (this.onEngineSwitchedCallback) {
           this.ready = false;
@@ -832,7 +847,6 @@ class StockfishEngine {
     this.ready = false;
     this.loaded = false;
     this.isEvaluating = false;
-    this.stopInFlight = false;
     this.isRequestedStop = false;
     this.staleBestMovesToIgnore = 0;
     this.pendingPosition = null;
@@ -883,34 +897,30 @@ class StockfishEngine {
   }
 
   stopEvaluation(callback) {
-    if (this.isEvaluating) {
-      if (typeof callback === "function") {
-        this.goDoneCallbacks.push(callback);
+    if (!this.isEvaluating) {
+      if (typeof callback === "function") callback();
+      return;
+    }
+    if (typeof callback === "function") {
+      this.goDoneCallbacks.push(callback);
+    }
+    if (!this.isRequestedStop) {
+      this.isRequestedStop = true;
+      this.send("stop");
+      if (this.stopTimeout !== null) {
+        clearTimeout(this.stopTimeout);
       }
-      if (!this.stopInFlight) {
-        this.stopInFlight = true;
-        this.isRequestedStop = true;
-        this.send("stop");
-        if (this.stopTimeout !== null) {
-          clearTimeout(this.stopTimeout);
+      this.stopTimeout = setTimeout(() => {
+        this.stopTimeout = null;
+        if (this.isRequestedStop) {
+          this.staleBestMovesToIgnore = (this.staleBestMovesToIgnore || 0) + 1;
+          this.isRequestedStop = false;
+          this.isEvaluating = false;
+          const callbacks = this.goDoneCallbacks;
+          this.goDoneCallbacks = [];
+          callbacks.forEach((cb) => cb());
         }
-        this.stopTimeout = setTimeout(() => {
-          this.stopTimeout = null;
-          if (this.stopInFlight) {
-            this.staleBestMovesToIgnore = (this.staleBestMovesToIgnore || 0) + 1;
-            this.stopInFlight = false;
-            this.isRequestedStop = false;
-            this.isEvaluating = false;
-            const callbacks = this.goDoneCallbacks;
-            this.goDoneCallbacks = [];
-            callbacks.forEach((cb) => cb());
-          }
-        }, STOP_TIMEOUT_MS);
-      }
-    } else {
-      if (typeof callback === "function") {
-        callback();
-      }
+      }, STOP_TIMEOUT_MS);
     }
   }
 
@@ -918,9 +928,9 @@ class StockfishEngine {
     if (!getValueConfig(enumOptions.HumanLikeMoves)) {
       return 0;
     }
-    const movePace = parseFloat(getValueConfig(enumOptions.MovePace)) || 1.5;
-    const physicalFloor = parseInt(getValueConfig(enumOptions.PhysicalFloor), 10) || 200;
-    const timingSpread = parseFloat(getValueConfig(enumOptions.TimingSpread)) || 0.80;
+    const movePace = numConfig(enumOptions.MovePace, 1.5);
+    const physicalFloor = numConfig(enumOptions.PhysicalFloor, 200);
+    const timingSpread = numConfig(enumOptions.TimingSpread, 0.80);
 
     let median = movePace * 1000;
 
@@ -929,27 +939,23 @@ class StockfishEngine {
     const lastMove = controller.getLastMove();
 
     if (getValueConfig(enumOptions.FastForcedMoves) && legalMoves?.length === 1) {
-      const forcedMult = parseFloat(getValueConfig(enumOptions.ForcedMultiplier)) || 0.35;
-      median *= forcedMult;
+      median *= numConfig(enumOptions.ForcedMultiplier, 0.35);
     } else if (getValueConfig(enumOptions.FastRecaptures) && lastMove && bestMove && bestMove.to === lastMove.to) {
-      const recapMult = parseFloat(getValueConfig(enumOptions.RecaptureMultiplier)) || 0.50;
-      median *= recapMult;
+      median *= numConfig(enumOptions.RecaptureMultiplier, 0.50);
     } else if (getValueConfig(enumOptions.FastOpening)) {
-      const openingThreshold = parseInt(getValueConfig(enumOptions.OpeningMovesThreshold), 10) || 8;
+      const openingThreshold = numConfig(enumOptions.OpeningMovesThreshold, 8);
       const fullMoveNumber = parseInt((controller.getFEN() || "").split(" ")[5], 10) || 1;
       if (fullMoveNumber <= openingThreshold) {
-        const openingMult = parseFloat(getValueConfig(enumOptions.OpeningMultiplier)) || 0.35;
-        median *= openingMult;
+        median *= numConfig(enumOptions.OpeningMultiplier, 0.35);
       }
     }
 
     if (getValueConfig(enumOptions.ClockScaling)) {
       const remainingSeconds = getRemainingPlayerTimeSeconds();
-      const clockThreshold = parseInt(getValueConfig(enumOptions.ClockThreshold), 10) || 60;
+      const clockThreshold = numConfig(enumOptions.ClockThreshold, 60);
       if (remainingSeconds != null && remainingSeconds < clockThreshold) {
-        const minMult = parseFloat(getValueConfig(enumOptions.ClockMinMultiplier)) || 0.30;
-        const factor = Math.max(minMult, remainingSeconds / clockThreshold);
-        median *= factor;
+        const minMult = numConfig(enumOptions.ClockMinMultiplier, 0.30);
+        median *= Math.max(minMult, remainingSeconds / clockThreshold);
       }
     }
 
@@ -1115,7 +1121,6 @@ class StockfishEngine {
         this.isEvaluating = false;
         const wasRequestedStop = this.isRequestedStop;
         this.isRequestedStop = false;
-        this.stopInFlight = false;
 
         const callbacks = this.goDoneCallbacks;
         this.goDoneCallbacks = [];
@@ -1171,14 +1176,11 @@ class StockfishEngine {
   }
 
   AnalyzeLastMove() {
-    let moveScore = null;
     const game = this.BetterMintmaster.game;
-    const controller = game.controller;
-    const lastMove = controller.getLastMove();
+    const lastMove = game.controller.getLastMove();
     if (!lastMove) return;
 
-    game.RemoveLastAnalysisMarkings();
-
+    let moveScore = null;
     if (this.lastTopMoves.length > 0 && this.topMoves.length > 0) {
       const lastBestMove = this.lastTopMoves[0];
       if (resolveLegalMove([lastMove], lastBestMove)) {
@@ -1198,32 +1200,7 @@ class StockfishEngine {
         }
       }
     }
-    if (moveScore !== null) {
-      const hlColor = StockfishEngine.HIGHLIGHT_COLORS[moveScore];
-      if (hlColor) {
-        controller.markings.addOne({
-          data: {
-            opacity: 0.5,
-            color: hlColor,
-            square: lastMove.to
-          },
-          node: true,
-          persistent: true,
-          type: "highlight"
-        });
-        game.lastAnalysisMarkings.push(`highlight|${lastMove.to}`);
-      }
-      controller.markings.addOne({
-        data: {
-          square: lastMove.to,
-          type: moveScore
-        },
-        node: true,
-        persistent: true,
-        type: "effect"
-      });
-      game.lastAnalysisMarkings.push(`effect|${lastMove.to}`);
-    }
+    game.ShowMoveAnalysis(lastMove.to, moveScore);
   }
 
   ensureTopMovesSorted() {
@@ -1278,73 +1255,74 @@ class StockfishEngine {
       }
     }
 
+    if (bestMoveSelected && topPvMoves[0]) {
+      this.maybeAutoMove(topPvMoves[0]);
+    }
+  }
+
+  maybeAutoMove(bestMove) {
+    const game = this.BetterMintmaster.game;
+    const controller = game.controller;
     if (
-      bestMoveSelected &&
-      getValueConfig(enumOptions.LegitAutoMove) &&
-      this.BetterMintmaster.game.controller.getPlayingAs() === this.BetterMintmaster.game.controller.getTurn()
+      !getValueConfig(enumOptions.LegitAutoMove) ||
+      controller.getPlayingAs() !== controller.getTurn()
     ) {
-      const game = this.BetterMintmaster.game;
-      const controller = game.controller;
-      const mode = controller.getMode?.();
-      if (mode === "gameOver" || mode === "analysis" || mode === "review") {
+      return;
+    }
+    const mode = controller.getMode?.();
+    if (mode === "gameOver" || mode === "analysis" || mode === "review") {
+      return;
+    }
+
+    const activeFen = controller.getFEN();
+    if (this.currentPositionFen && this.currentPositionFen !== activeFen) {
+      return;
+    }
+    if (game.autoMoveTimer !== null || this.lastAutoMovedFen === activeFen) {
+      return;
+    }
+
+    const matchedMove = resolveLegalMove(controller.getLegalMoves(), bestMove);
+    if (!matchedMove) return;
+
+    const moveData = Object.assign({}, matchedMove, { userGenerated: true });
+    if (bestMove.promotion) {
+      moveData.promotion = bestMove.promotion;
+    }
+
+    const executeAutoMove = () => {
+      const currentMode = controller.getMode?.();
+      if (
+        !getValueConfig(enumOptions.LegitAutoMove) ||
+        controller.getPlayingAs() !== controller.getTurn() ||
+        controller.getFEN() !== activeFen ||
+        currentMode === "gameOver" ||
+        currentMode === "analysis" ||
+        currentMode === "review"
+      ) {
         return;
       }
-
-      const activeFen = controller.getFEN();
-      if (this.currentPositionFen && this.currentPositionFen !== activeFen) {
-        return;
-      }
-
-      if (game.autoMoveTimer !== null || this.lastAutoMovedFen === activeFen) {
-        return;
-      }
-
-      const bestMove = topPvMoves[0];
-      if (!bestMove) return;
-      const legalMoves = controller.getLegalMoves();
-      const matchedMove = resolveLegalMove(legalMoves, bestMove);
-      if (!matchedMove) return;
-
-      const moveData = Object.assign({}, matchedMove, { userGenerated: true });
-      if (bestMove.promotion) {
-        moveData.promotion = bestMove.promotion;
-      }
-
-      const executeAutoMove = () => {
-        const currentMode = controller.getMode?.();
-        if (
-          !getValueConfig(enumOptions.LegitAutoMove) ||
-          controller.getPlayingAs() !== controller.getTurn() ||
-          controller.getFEN() !== activeFen ||
-          currentMode === "gameOver" ||
-          currentMode === "analysis" ||
-          currentMode === "review"
-        ) {
-          return;
+      try {
+        const result = controller.move(moveData);
+        if (result !== false && controller.getFEN() === activeFen) {
+          this.lastAutoMovedFen = activeFen;
         }
-        try {
-          const result = controller.move(moveData);
-          if (result !== false && controller.getFEN() === activeFen) {
-            this.lastAutoMovedFen = activeFen;
-          }
-        } catch (e) {
-          console.error("Failed to execute auto move:", e);
-        }
-      };
+      } catch (e) {
+        console.error("Failed to execute auto move:", e);
+      }
+    };
 
-      const targetDelay = this.calculateTargetDelay(bestMove);
-      const now = performance.now();
-      const elapsed = game.turnStartTime != null ? now - game.turnStartTime : 0;
-      const remainingDelay = Math.max(0, targetDelay - elapsed);
+    const targetDelay = this.calculateTargetDelay(bestMove);
+    const elapsed = game.turnStartTime != null ? performance.now() - game.turnStartTime : 0;
+    const remainingDelay = Math.max(0, targetDelay - elapsed);
 
-      if (remainingDelay <= 0) {
+    if (remainingDelay <= 0) {
+      executeAutoMove();
+    } else {
+      game.autoMoveTimer = setTimeout(() => {
+        game.autoMoveTimer = null;
         executeAutoMove();
-      } else {
-        game.autoMoveTimer = setTimeout(() => {
-          game.autoMoveTimer = null;
-          executeAutoMove();
-        }, remainingDelay);
-      }
+      }, remainingDelay);
     }
   }
 
@@ -1371,16 +1349,19 @@ class BetterMint {
   }
 }
 
+function attachGame(chessboard) {
+  BetterMintmaster.game?.destroy?.();
+  BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
+  BetterMintmaster.game.UpdateEngine(true);
+}
+
 function InitBetterMint(chessboard) {
-  try {
-    if (BetterMintmaster) {
-      BetterMintmaster.game?.destroy?.();
-      BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
-      BetterMintmaster.game.UpdateEngine(true);
-      return;
+  if (BetterMintmaster) {
+    try {
+      attachGame(chessboard);
+    } catch (e) {
+      console.error("Oh noes! BetterMintmaster didn't load", e);
     }
-  } catch (e) {
-    console.error("Oh noes! BetterMintmaster didn't load", e);
     return;
   }
 
@@ -1388,9 +1369,7 @@ function InitBetterMint(chessboard) {
     try {
       tempOptions = options;
       if (BetterMintmaster) {
-        BetterMintmaster.game?.destroy?.();
-        BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
-        BetterMintmaster.game.UpdateEngine(true);
+        attachGame(chessboard);
       } else {
         BetterMintmaster = new BetterMint(chessboard, options);
       }

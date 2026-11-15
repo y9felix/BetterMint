@@ -69,112 +69,95 @@ function parseUciOptionLine(line) {
   return { name, type, default: defVal, min: minVal, max: maxVal, vars };
 }
 
+function createEl(tag, props = {}, children = []) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v !== undefined && v !== null) el[k] = v;
+  }
+  for (const child of children) {
+    if (child) el.appendChild(child);
+  }
+  return el;
+}
+
 const uciRenderers = {
   spin(opt, currentVal, onOptionChange) {
-    const col = document.createElement("div");
-    col.className = "control-col options-slider";
-    const header = document.createElement("div");
-    header.className = "slider-header";
-    const title = document.createElement("span");
-    title.className = "title";
-    title.textContent = opt.name;
-    const badge = document.createElement("span");
-    badge.className = "badge";
-    badge.textContent = currentVal;
-    header.appendChild(title);
-    header.appendChild(badge);
-    col.appendChild(header);
-
-    const input = document.createElement("input");
-    input.type = "range";
-    input.className = "range-slider";
-    input.min = opt.min ?? 0;
-    input.max = opt.max ?? 100;
-    input.value = currentVal;
+    const badge = createEl("span", { className: "badge", textContent: currentVal });
+    const input = createEl("input", {
+      type: "range",
+      className: "range-slider",
+      min: opt.min ?? 0,
+      max: opt.max ?? 100,
+      value: currentVal
+    });
     input.addEventListener("input", () => {
       badge.textContent = input.value;
       onOptionChange?.(opt.name, parseInt(input.value, 10), false);
     });
-    col.appendChild(input);
-    return col;
+    return createEl("div", { className: "control-col options-slider" }, [
+      createEl("div", { className: "slider-header" }, [
+        createEl("span", { className: "title", textContent: opt.name }),
+        badge
+      ]),
+      input
+    ]);
   },
   check(opt, currentVal, onOptionChange) {
-    const label = document.createElement("label");
-    label.className = "control-row options-checkbox";
-    const labelText = document.createElement("span");
-    labelText.className = "control-label-text";
-    labelText.textContent = opt.name;
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.className = "toggle-input";
-    input.checked = currentVal === true || currentVal === "true";
-    const slider = document.createElement("span");
-    slider.className = "toggle-slider";
+    const input = createEl("input", {
+      type: "checkbox",
+      className: "toggle-input",
+      checked: currentVal === true || currentVal === "true"
+    });
     input.addEventListener("change", () => {
       onOptionChange?.(opt.name, input.checked, false);
     });
-    label.appendChild(labelText);
-    label.appendChild(input);
-    label.appendChild(slider);
-    return label;
+    return createEl("label", { className: "control-row options-checkbox" }, [
+      createEl("span", { className: "control-label-text", textContent: opt.name }),
+      input,
+      createEl("span", { className: "toggle-slider" })
+    ]);
   },
   combo(opt, currentVal, onOptionChange) {
-    const col = document.createElement("div");
-    col.className = "control-col";
-    const label = document.createElement("label");
-    label.className = "control-label-text";
-    label.textContent = opt.name;
-    const select = document.createElement("select");
-    select.className = "select-input";
-    (opt.vars || []).forEach((v) => {
-      const option = document.createElement("option");
-      option.value = v;
-      option.textContent = v;
-      if (v === String(currentVal)) option.selected = true;
-      select.appendChild(option);
-    });
+    const select = createEl(
+      "select",
+      { className: "select-input" },
+      (opt.vars || []).map((v) =>
+        createEl("option", { value: v, textContent: v, selected: v === String(currentVal) })
+      )
+    );
     select.addEventListener("change", () => {
       onOptionChange?.(opt.name, select.value, false);
     });
-    col.appendChild(label);
-    col.appendChild(select);
-    return col;
+    return createEl("div", { className: "control-col" }, [
+      createEl("label", { className: "control-label-text", textContent: opt.name }),
+      select
+    ]);
   },
   string(opt, currentVal, onOptionChange) {
-    const col = document.createElement("div");
-    col.className = "control-col options-text";
-    const label = document.createElement("label");
-    label.className = "control-label-text";
-    label.textContent = opt.name;
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "text-input";
-    input.value = String(currentVal ?? "");
-    input.spellcheck = false;
-    input.autocomplete = "off";
+    const input = createEl("input", {
+      type: "text",
+      className: "text-input",
+      value: String(currentVal ?? ""),
+      spellcheck: false,
+      autocomplete: "off"
+    });
     input.addEventListener("change", () => {
       onOptionChange?.(opt.name, input.value.trim(), false);
     });
-    col.appendChild(label);
-    col.appendChild(input);
-    return col;
+    return createEl("div", { className: "control-col options-text" }, [
+      createEl("label", { className: "control-label-text", textContent: opt.name }),
+      input
+    ]);
   },
   button(opt, _currentVal, onOptionChange) {
-    const row = document.createElement("div");
-    row.className = "control-row";
-    const label = document.createElement("span");
-    label.className = "control-label-text";
-    label.textContent = opt.name;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "action-btn";
-    btn.textContent = "Execute";
+    const btn = createEl("button", { type: "button", className: "action-btn", textContent: "Execute" });
     btn.addEventListener("click", () => {
       onOptionChange?.(opt.name, "", true);
     });
-    row.appendChild(label);
-    row.appendChild(btn);
-    return row;
+    return createEl("div", { className: "control-row" }, [
+      createEl("span", { className: "control-label-text", textContent: opt.name }),
+      btn
+    ]);
   }
 };
 
@@ -212,10 +195,7 @@ function setEngineOptionsStatus(msg) {
   const container = document.getElementById("engine-options-container");
   if (!container) return;
   container.innerHTML = "";
-  const span = document.createElement("span");
-  span.className = "status-text";
-  span.textContent = msg;
-  container.appendChild(span);
+  container.appendChild(createEl("span", { className: "status-text", textContent: msg }));
 }
 
 function resetProbe() {
