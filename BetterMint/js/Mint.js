@@ -83,10 +83,11 @@ function getRemainingPlayerTimeSeconds() {
 let BetterMintmaster;
 let tempOptions = {};
 
-const optionsPromise = typeof window !== "undefined" ? requestOptions() : Promise.resolve({});
-optionsPromise.then((options) => {
-  tempOptions = options;
-});
+if (typeof window !== "undefined") {
+  requestOptions().then((options) => {
+    if (!BetterMintmaster) tempOptions = options;
+  });
+}
 
 function getValueConfig(key) {
   return (BetterMintmaster ? BetterMintmaster.options : tempOptions)[key];
@@ -726,7 +727,6 @@ class StockfishEngine {
     const ws = this.stockfish;
     ws.addEventListener("open", () => {
       if (this.stockfish !== ws) return;
-      console.log("WebSocket connection opened.");
       this.staleBestMovesToIgnore = 0;
       this.send("uci");
       this.onReady(() => {
@@ -1250,12 +1250,12 @@ class StockfishEngine {
       bestMoveSelected = true;
     }
 
-    const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"] || 1, 10));
+    const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"], 10) || 1);
 
     if (!bestMoveSelected && move !== null) {
       if (this.topMoves.length > 0 && this.BetterMintmaster?.game?.HintMoves) {
         const liveTopMoves = [...this.topMoves].sort(StockfishEngine.compareMoves).slice(0, multipvCount);
-        this.BetterMintmaster.game.HintMoves(liveTopMoves, false);
+        this.BetterMintmaster.game.HintMoves(liveTopMoves);
       }
       return;
     }
@@ -1271,7 +1271,7 @@ class StockfishEngine {
     const topPvMoves = this.topMoves.slice(0, multipvCount);
 
     if (topPvMoves.length > 0) {
-      this.BetterMintmaster.game.HintMoves(topPvMoves, bestMoveSelected);
+      this.BetterMintmaster.game.HintMoves(topPvMoves);
 
       if (bestMoveSelected && getValueConfig(enumOptions.MoveAnalysis)) {
         this.AnalyzeLastMove();
@@ -1372,8 +1372,21 @@ class BetterMint {
 }
 
 function InitBetterMint(chessboard) {
-  optionsPromise.then((options) => {
+  try {
+    if (BetterMintmaster) {
+      BetterMintmaster.game?.destroy?.();
+      BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
+      BetterMintmaster.game.UpdateEngine(true);
+      return;
+    }
+  } catch (e) {
+    console.error("Oh noes! BetterMintmaster didn't load", e);
+    return;
+  }
+
+  requestOptions().then((options) => {
     try {
+      tempOptions = options;
       if (BetterMintmaster) {
         BetterMintmaster.game?.destroy?.();
         BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
