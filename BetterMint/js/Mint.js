@@ -244,7 +244,7 @@ class GameController {
     this.controller.on("UpdateOptions", (event) => {
       this.boardOptions = this.controller.getOptions();
       if (event.data.flipped !== undefined && this.evalBar != null) {
-        this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(this.boardOptions?.flipped));
+        this.evalBar.classList.toggle("bettermint-evalbar-flipped", Boolean(this.boardOptions?.flipped));
       }
       this.setupAutoQueueObserver();
     });
@@ -424,14 +424,14 @@ class GameController {
     if (!body) return;
 
     const evalBar = document.createElement("div");
-    evalBar.className = "evaluation-bar-bar";
-    evalBar.innerHTML = `<span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBar.className = "bettermint-evalbar";
+    evalBar.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">+0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
     body.appendChild(evalBar);
 
     this.evalBar = evalBar;
-    this.evalBarFill = evalBar.querySelector(".evaluation-bar-white");
-    this.evalScore = evalBar.querySelector(".evaluation-bar-score");
-    this.evalScoreAbbreviated = evalBar.querySelector(".evaluation-bar-scoreAbbreviated");
+    this.evalBarFill = evalBar.querySelector(".bettermint-evalbar-white");
+    this.evalScore = evalBar.querySelector(".bettermint-evalbar-score");
+    this.evalScoreAbbreviated = evalBar.querySelector(".bettermint-evalbar-scoreAbbreviated");
 
     const getBoardRect = () => {
       const inner =
@@ -486,13 +486,16 @@ class GameController {
       if (this.chessboard.parentElement) {
         this.evalBarResizeObserver.observe(this.chessboard.parentElement);
       }
+      if (document.body) {
+        this.evalBarResizeObserver.observe(document.body);
+      }
     }
     this.evalBarSyncHandler = syncPosition;
     window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
     window.addEventListener("resize", syncPosition, { passive: true });
 
     if (this.boardOptions?.flipped) {
-      this.evalBar.classList.add("evaluation-bar-flipped");
+      this.evalBar.classList.add("bettermint-evalbar-flipped");
     }
     if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
       this.BetterMintmaster.engine.ensureTopMovesSorted?.();
@@ -503,7 +506,7 @@ class GameController {
   RefreshEvaluationBar() {
     if (!getValueConfig(enumOptions.EvaluationBar)) return;
     if (this.evalBar?.isConnected) {
-      this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(this.boardOptions?.flipped));
+      this.evalBar.classList.toggle("bettermint-evalbar-flipped", Boolean(this.boardOptions?.flipped));
       this.SetEvaluation(0, false);
       this.evalBarSyncHandler?.();
     } else {
@@ -615,10 +618,10 @@ class GameController {
     this.evalScore.textContent = textNumber;
     this.evalScoreAbbreviated.textContent = textScoreAbb;
     const isDark = score >= 0;
-    this.evalScore.classList.toggle("evaluation-bar-dark", isDark);
-    this.evalScore.classList.toggle("evaluation-bar-light", !isDark);
-    this.evalScoreAbbreviated.classList.toggle("evaluation-bar-dark", isDark);
-    this.evalScoreAbbreviated.classList.toggle("evaluation-bar-light", !isDark);
+    this.evalScore.classList.toggle("bettermint-evalbar-dark", isDark);
+    this.evalScore.classList.toggle("bettermint-evalbar-light", !isDark);
+    this.evalScoreAbbreviated.classList.toggle("bettermint-evalbar-dark", isDark);
+    this.evalScoreAbbreviated.classList.toggle("bettermint-evalbar-light", !isDark);
   }
 }
 
