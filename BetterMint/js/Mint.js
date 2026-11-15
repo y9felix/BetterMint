@@ -388,8 +388,28 @@ class GameController {
     }
   }
 
+  destroy() {
+    this.removeEvaluationBar();
+    if (this.autoMoveTimer !== null) {
+      clearTimeout(this.autoMoveTimer);
+      this.autoMoveTimer = null;
+    }
+    if (this.gameOverInterval !== null) {
+      clearInterval(this.gameOverInterval);
+      this.gameOverInterval = null;
+    }
+    if (this.analysisToolsObserver) {
+      this.analysisToolsObserver.disconnect();
+      this.analysisToolsObserver = null;
+    }
+    if (this.autoQueueObserver) {
+      this.autoQueueObserver.disconnect();
+      this.autoQueueObserver = null;
+    }
+  }
+
   updateEvaluationFromMove(move) {
-    if (!move) return;
+    if (!move || (move.mate === null && move.cp === null)) return;
     let score = move.mate !== null ? move.mate : move.cp;
     if (this.controller.getTurn() === 2) score *= -1;
     this.SetEvaluation(score, move.mate !== null);
@@ -521,6 +541,7 @@ class GameController {
   }
 
   UpdateEngine(isNewGame) {
+    if (!this.BetterMintmaster?.engine) return;
     const FENs = this.controller.getFEN();
     this.BetterMintmaster.engine.UpdatePosition(FENs, isNewGame);
   }
@@ -721,15 +742,19 @@ class StockfishEngine {
       this.staleBestMovesToIgnore = 0;
       this.send("uci");
       this.onReady(() => {
-        this.UpdateOptions();
+        if (!this.loaded) {
+          this.UpdateOptions();
+        }
         this.send("ucinewgame");
         if (this.onEngineSwitchedCallback) {
+          this.ready = false;
           const cb = this.onEngineSwitchedCallback;
           this.onEngineSwitchedCallback = null;
           cb();
         } else {
           const controller = this.BetterMintmaster?.game?.controller;
           if (controller && controller.getMode?.() !== "gameOver" && typeof controller.getFEN === "function") {
+            this.ready = false;
             this.BetterMintmaster.game.UpdateEngine(false);
           }
         }
@@ -970,6 +995,10 @@ class StockfishEngine {
   UpdateExtensionOptions(options = {}) {
     const newUrl = options[enumOptions.UrlApiStockfish];
     if (newUrl && newUrl !== this.currentUrl) {
+      this.customEngineOptions =
+        options.customEngineOptions && typeof options.customEngineOptions === "object"
+          ? Object.assign({}, options.customEngineOptions)
+          : {};
       this.switchEngine(newUrl);
       return;
     }
@@ -1117,7 +1146,7 @@ class StockfishEngine {
             const bestMoveOnTop = new TopMove(
               bestMove,
               getValueConfig(enumOptions.Depth),
-              100,
+              null,
               null
             );
             this.onTopMoves(bestMoveOnTop, true);
@@ -1186,8 +1215,6 @@ class StockfishEngine {
           const evalDiff = -(bestMove.cp + lastBestMove.cp);
           const match = StockfishEngine.EVAL_THRESHOLDS.find(([th]) => evalDiff > th);
           moveScore = match ? match[1] : "Blunder";
-        } else {
-          console.assert(false, "Error while analyzing last move");
         }
       }
     }
@@ -1336,7 +1363,7 @@ class StockfishEngine {
         return b.mate > 0 ? 1 : -1;
       }
       if (a.mate === null && b.mate === null) {
-        if (a.depth === b.depth) return b.cp - a.cp;
+        if (a.depth === b.depth) return (b.cp ?? -Infinity) - (a.cp ?? -Infinity);
         return b.depth - a.depth;
       }
       if ((a.mate < 0 && b.mate < 0) || (a.mate > 0 && b.mate > 0)) {
@@ -1403,7 +1430,13 @@ class BetterMint {
 function InitBetterMint(chessboard) {
   optionsPromise.then((options) => {
     try {
-      BetterMintmaster = new BetterMint(chessboard, options);
+      if (BetterMintmaster) {
+        BetterMintmaster.game?.destroy?.();
+        BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
+        BetterMintmaster.game.UpdateEngine(true);
+      } else {
+        BetterMintmaster = new BetterMint(chessboard, options);
+      }
     } catch (e) {
       console.error("Oh noes! BetterMintmaster didn't load", e);
     }
@@ -1411,32 +1444,30 @@ function InitBetterMint(chessboard) {
 }
 
 if (typeof document !== "undefined") {
-  let initialized = false;
+  let activeBoard = null;
   let attachTimer = null;
 
-  const tryAttachBoard = (board, observer) => {
-    if (initialized || !board) return false;
+  const tryAttachBoard = (board) => {
+    if (!board || board === activeBoard) return false;
     if (board.game) {
-      initialized = true;
+      activeBoard = board;
       if (attachTimer !== null) {
         clearInterval(attachTimer);
         attachTimer = null;
       }
-      observer?.disconnect();
       InitBetterMint(board);
       return true;
     }
     return false;
   };
 
-  const watchForGameReady = (board, observer) => {
-    if (tryAttachBoard(board, observer) || attachTimer !== null) return;
-    observer?.disconnect();
+  const watchForGameReady = (board) => {
+    if (tryAttachBoard(board) || attachTimer !== null) return;
     let checks = 0;
     attachTimer = setInterval(() => {
       checks++;
       const target = board.isConnected ? board : document.querySelector("wc-chess-board, chess-board");
-      if (tryAttachBoard(target, observer) || checks >= 200) {
+      if (tryAttachBoard(target) || checks >= 200) {
         clearInterval(attachTimer);
         attachTimer = null;
       }
@@ -1444,21 +1475,21 @@ if (typeof document !== "undefined") {
   };
 
   const observer = new MutationObserver(() => {
+    if (activeBoard?.isConnected) return;
     const board = document.querySelector("wc-chess-board, chess-board");
-    if (board) {
-      watchForGameReady(board, observer);
+    if (board && board !== activeBoard) {
+      watchForGameReady(board);
     }
   });
 
   const existingBoard = document.querySelector("wc-chess-board, chess-board");
   if (existingBoard) {
-    watchForGameReady(existingBoard, observer);
-  } else {
-    observer.observe(document, {
-      childList: true,
-      subtree: true
-    });
+    watchForGameReady(existingBoard);
   }
+  observer.observe(document, {
+    childList: true,
+    subtree: true
+  });
 }
 
 if (typeof module !== "undefined" && module.exports) {

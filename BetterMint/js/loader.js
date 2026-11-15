@@ -42,12 +42,19 @@ const isExtensionPage =
 
 if (!isExtensionPage) {
   chrome.runtime.onMessage.addListener((request) => {
-    if (request?.data) {
-      window.dispatchEvent(
-        new CustomEvent("BetterMintUpdateOptions", {
-          detail: request.data,
-        })
-      );
+    if (!request?.data) return;
+    const dispatchUpdate = (detail) =>
+      window.dispatchEvent(new CustomEvent("BetterMintUpdateOptions", { detail }));
+    const newUrl = request.data["option-url-api-stockfish"];
+    const storageKey = getEngineOptionsStorageKey(newUrl);
+    if (newUrl && !request.data.customEngineOptions && storageKey && chrome.storage?.local) {
+      chrome.storage.local.get([storageKey], (res) => {
+        dispatchUpdate(
+          Object.assign({}, request.data, { customEngineOptions: res?.[storageKey] || {} })
+        );
+      });
+    } else {
+      dispatchUpdate(request.data);
     }
   });
 

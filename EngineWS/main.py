@@ -71,10 +71,13 @@ class EngineProcess:
             clean = raw_line.strip()
             if not clean or self._quit_sent:
                 continue
+            lower = clean.lower()
+            if lower.startswith("setoption ") and ("debug log file" in lower or "logfile" in lower):
+                continue
             try:
                 self._proc.stdin.write(f"{clean}\n".encode("utf-8"))
                 wrote = True
-                if clean.lower() == "quit":
+                if lower == "quit":
                     self._quit_sent = True
             except OSError:
                 break
@@ -107,8 +110,13 @@ class EngineProcess:
             pass
 
     async def wait_closed(self):
-        if not self._proc or self._proc.returncode is not None:
+        if not self._proc:
             return
+        if self._proc.stdin:
+            try:
+                self._proc.stdin.close()
+            except OSError:
+                pass
         try:
             await asyncio.wait_for(self._proc.wait(), timeout=2.0)
         except asyncio.TimeoutError:

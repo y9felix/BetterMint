@@ -143,5 +143,17 @@ class TestServerLogging(unittest.TestCase):
         self.assertEqual(calls, [b"isready\n", b"go depth 10\n", b"quit\n"])
         self.assertTrue(ep._quit_sent)
 
+    def test_engine_process_blocks_logfile_option(self):
+        from main import EngineProcess
+        proc = MagicMock()
+        proc.stdin = MagicMock()
+        proc.stdin.drain = AsyncMock()
+        proc.returncode = None
+        ep = EngineProcess(["stockfish"])
+        ep._proc = proc
+        asyncio.run(ep.put("setoption name Debug Log File value /tmp/evil.log\nsetoption name Threads value 4\n"))
+        calls = [c.args[0] for c in proc.stdin.write.call_args_list]
+        self.assertEqual(calls, [b"setoption name Threads value 4\n"])
+
 if __name__ == "__main__":
     unittest.main()
