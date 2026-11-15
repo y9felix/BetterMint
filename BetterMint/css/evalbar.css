@@ -1,6 +1,7 @@
 .evaluation-bar-bar {
     border-radius: .2rem;
     flex-shrink: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     isolation: isolate;
     pointer-events: auto;
     position: fixed;
@@ -34,7 +35,7 @@
     height: 100%;
     left: 0;
     position: absolute;
-    transition: transform 1s ease-in;
+    transition: transform 0.25s ease-out;
     width: 100%;
 }
 
@@ -48,21 +49,15 @@
     z-index: 1;
 }
 
-.evaluation-bar-bar .evaluation-bar-draw {
-    background-color: #777574;
-    z-index: 0;
-}
-
 .evaluation-bar-bar .evaluation-bar-score {
     display: none;
-    font-size: 1.2rem;
-    font-weight: 600;
-    -webkit-hyphens: auto;
-    hyphens: auto;
-    padding: .5rem .2rem;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    padding: 4px 2px;
     position: absolute;
     text-align: center;
-    width: 100%;
+    white-space: nowrap;
     z-index: 3;
 }
 
@@ -79,19 +74,18 @@
 .evaluation-bar-bar:hover .evaluation-bar-score {
     border-radius: .3rem;
     bottom: auto;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
     display: block;
     font-weight: 700;
-    -webkit-hyphens: auto;
-    hyphens: auto;
     left: 50%;
-    padding: .1rem .5rem;
+    min-width: 40px;
+    padding: 2px 6px;
     position: absolute;
     text-align: center;
     top: 50%;
     transform: translate(-50%, -50%) var(--flipTransform, rotate(0deg));
-    transition: opacity .2s;
-    transition-delay: .1s;
-    width: 45px;
+    transition: opacity .15s;
+    width: auto;
     z-index: 3;
 }
 
@@ -106,9 +100,10 @@
 }
 
 .evaluation-bar-bar .evaluation-bar-scoreAbbreviated {
-    font-size: 1rem;
+    font-size: 10px;
     font-weight: 600;
-    padding: .5rem 0;
+    line-height: 1;
+    padding: 4px 0;
     position: absolute;
     text-align: center;
     white-space: pre;

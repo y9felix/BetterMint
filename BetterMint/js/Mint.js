@@ -70,6 +70,10 @@ const CASTLING_EQUIVALENTS = Object.freeze({
 
 const CLOCK_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
 
+function cpToWinProbability(cp) {
+  return 1 / (1 + Math.exp(-0.00368208 * cp));
+}
+
 function getRemainingPlayerTimeSeconds() {
   const el = typeof document !== "undefined" ? document.querySelector(CLOCK_SELECTOR) : null;
   const text = el?.textContent?.trim();
@@ -239,8 +243,8 @@ class GameController {
 
     this.controller.on("UpdateOptions", (event) => {
       this.boardOptions = this.controller.getOptions();
-      if (event.data.flipped != undefined && this.evalBar != null) {
-        this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(event.data.flipped));
+      if (event.data.flipped !== undefined && this.evalBar != null) {
+        this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(this.boardOptions?.flipped));
       }
       this.setupAutoQueueObserver();
     });
@@ -421,7 +425,7 @@ class GameController {
 
     const evalBar = document.createElement("div");
     evalBar.className = "evaluation-bar-bar";
-    evalBar.innerHTML = `<span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-draw"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBar.innerHTML = `<span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
     body.appendChild(evalBar);
 
     this.evalBar = evalBar;
@@ -449,32 +453,45 @@ class GameController {
       return rect;
     };
 
+    let lastLayout = "";
     const syncPosition = () => {
       if (!this.evalBar || !this.chessboard?.isConnected) return;
       const rect = getBoardRect();
       if (rect.width < 50 || rect.height < 50 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
-        this.evalBar.style.display = "none";
+        if (lastLayout !== "none") {
+          this.evalBar.style.display = "none";
+          lastLayout = "none";
+        }
         return;
       }
+      const top = Math.round(rect.top);
+      const height = Math.round(rect.height);
+      const left = Math.max(4, Math.round(rect.left - EVAL_BAR_OFFSET_PX));
+      const overlapsBoard = rect.left < EVAL_BAR_OFFSET_PX;
+      const layoutKey = `${top}:${height}:${left}:${overlapsBoard ? 1 : 0}`;
+      if (layoutKey === lastLayout) return;
+      lastLayout = layoutKey;
+
       this.evalBar.style.display = "block";
-      this.evalBar.style.top = `${Math.round(rect.top)}px`;
-      this.evalBar.style.height = `${Math.round(rect.height)}px`;
-      this.evalBar.style.left = `${Math.max(4, Math.round(rect.left - EVAL_BAR_OFFSET_PX))}px`;
+      this.evalBar.style.top = `${top}px`;
+      this.evalBar.style.height = `${height}px`;
+      this.evalBar.style.left = `${left}px`;
+      this.evalBar.style.pointerEvents = overlapsBoard ? "none" : "";
     };
 
     syncPosition();
     if (typeof ResizeObserver !== "undefined") {
       this.evalBarResizeObserver = new ResizeObserver(syncPosition);
       this.evalBarResizeObserver.observe(this.chessboard);
-      if (document.body) {
-        this.evalBarResizeObserver.observe(document.body);
+      if (this.chessboard.parentElement) {
+        this.evalBarResizeObserver.observe(this.chessboard.parentElement);
       }
     }
     this.evalBarSyncHandler = syncPosition;
     window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
     window.addEventListener("resize", syncPosition, { passive: true });
 
-    if (!this.boardOptions.isWhiteOnBottom && this.boardOptions.flipped) {
+    if (this.boardOptions?.flipped) {
       this.evalBar.classList.add("evaluation-bar-flipped");
     }
     if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
@@ -486,10 +503,7 @@ class GameController {
   RefreshEvaluationBar() {
     if (!getValueConfig(enumOptions.EvaluationBar)) return;
     if (this.evalBar?.isConnected) {
-      this.evalBar.classList.toggle(
-        "evaluation-bar-flipped",
-        Boolean(!this.boardOptions.isWhiteOnBottom && this.boardOptions.flipped)
-      );
+      this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(this.boardOptions?.flipped));
       this.SetEvaluation(0, false);
       this.evalBarSyncHandler?.();
     } else {
@@ -589,7 +603,7 @@ class GameController {
     let textScoreAbb;
     if (!isMate) {
       const smallScore = score / 100;
-      percentage = Math.max(5, Math.min(95, 90 - ((score + 500) / 1000) * 90 + 5));
+      percentage = Math.max(5, Math.min(95, (1 - cpToWinProbability(score)) * 100));
       textNumber = (score >= 0 ? "+" : "") + smallScore.toFixed(2);
       textScoreAbb = Math.abs(smallScore).toFixed(1);
     } else {
@@ -630,8 +644,22 @@ class StockfishEngine {
   static evalToExpectedPoints(move) {
     if (!move) return null;
     if (move.mate !== null) return move.mate > 0 ? 1 : 0;
-    if (move.cp !== null) return 1 / (1 + Math.exp(-0.00368208 * move.cp));
+    if (move.cp !== null) return cpToWinProbability(move.cp);
     return null;
+  }
+
+  static compareMoves(a, b) {
+    if (a.mate !== null && b.mate === null) return a.mate < 0 ? 1 : -1;
+    if (a.mate === null && b.mate !== null) return b.mate > 0 ? 1 : -1;
+    if (a.mate === null && b.mate === null) {
+      if (a.depth === b.depth) return (b.cp ?? -Infinity) - (a.cp ?? -Infinity);
+      return b.depth - a.depth;
+    }
+    if ((a.mate < 0 && b.mate < 0) || (a.mate > 0 && b.mate > 0)) {
+      if (a.mate !== b.mate) return a.mate - b.mate;
+      return a.mate > 0 ? a.line.length - b.line.length : b.line.length - a.line.length;
+    }
+    return a.mate < b.mate ? 1 : -1;
   }
 
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
@@ -1216,7 +1244,15 @@ class StockfishEngine {
       bestMoveSelected = true;
     }
 
-    if (!bestMoveSelected && move !== null) return;
+    if (!bestMoveSelected && move !== null) {
+      if (getValueConfig(enumOptions.EvaluationBar) && this.BetterMintmaster?.game?.updateEvaluationFromMove && this.topMoves.length > 0) {
+        const bestLiveMove = this.topMoves.reduce((best, cur) =>
+          StockfishEngine.compareMoves(cur, best) < 0 ? cur : best
+        );
+        this.BetterMintmaster.game.updateEvaluationFromMove(bestLiveMove);
+      }
+      return;
+    }
 
     this.ensureTopMovesSorted();
     const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"] || 1, 10));
@@ -1280,23 +1316,7 @@ class StockfishEngine {
   }
 
   SortTopMoves() {
-    this.topMoves.sort((a, b) => {
-      if (a.mate !== null && b.mate === null) {
-        return a.mate < 0 ? 1 : -1;
-      }
-      if (a.mate === null && b.mate !== null) {
-        return b.mate > 0 ? 1 : -1;
-      }
-      if (a.mate === null && b.mate === null) {
-        if (a.depth === b.depth) return (b.cp ?? -Infinity) - (a.cp ?? -Infinity);
-        return b.depth - a.depth;
-      }
-      if ((a.mate < 0 && b.mate < 0) || (a.mate > 0 && b.mate > 0)) {
-        if (a.mate !== b.mate) return a.mate - b.mate;
-        return a.mate > 0 ? a.line.length - b.line.length : b.line.length - a.line.length;
-      }
-      return a.mate < b.mate ? 1 : -1;
-    });
+    this.topMoves.sort(StockfishEngine.compareMoves);
   }
 }
 
