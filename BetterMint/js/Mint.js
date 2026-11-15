@@ -1,17 +1,31 @@
 (() => {
 "use strict";
 
+const TURN_BLACK = 2;
+const EVAL_BAR_OFFSET_PX = 34;
+const AUTO_QUEUE_COOLDOWN_MS = 4000;
+const AUTO_QUEUE_RETRY_MS = 500;
+const AUTO_QUEUE_MAX_ATTEMPTS = 60;
+const STOP_TIMEOUT_MS = 150;
+const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
+
 let requestId = 0;
 
 function requestOptions() {
   const id = requestId++;
   return new Promise((resolve) => {
+    let timer = null;
     const listener = (evt) => {
-      if (evt.detail.requestId === id) {
+      if (evt.detail?.requestId === id) {
+        if (timer !== null) clearTimeout(timer);
         window.removeEventListener("BetterMintSendOptions", listener);
         resolve(evt.detail.data);
       }
     };
+    timer = setTimeout(() => {
+      window.removeEventListener("BetterMintSendOptions", listener);
+      resolve({});
+    }, OPTIONS_REQUEST_TIMEOUT_MS);
     window.addEventListener("BetterMintSendOptions", listener);
     window.dispatchEvent(
       new CustomEvent("BetterMintGetOptions", { detail: { id } })
@@ -174,7 +188,7 @@ class GameController {
     this.BetterMintmaster = BetterMintmaster;
     this.chessboard = chessboard;
     this.controller = chessboard.game;
-    this.options = this.controller.getOptions();
+    this.boardOptions = this.controller.getOptions();
     this.evalBar = null;
     this.evalBarFill = null;
     this.evalScore = null;
@@ -220,12 +234,12 @@ class GameController {
     this.controller.on("ResetGame", () => {
       setTimeout(() => {
         this.UpdateEngine(true);
-        this.RefreshEvalutionBar();
+        this.RefreshEvaluationBar();
       }, 50);
     });
 
     this.controller.on("UpdateOptions", (event) => {
-      this.options = this.controller.getOptions();
+      this.boardOptions = this.controller.getOptions();
       if (event.data.flipped != undefined && this.evalBar != null) {
         this.evalBar.classList.toggle("evaluation-bar-flipped", Boolean(event.data.flipped));
       }
@@ -254,7 +268,7 @@ class GameController {
   triggerAutoQueue() {
     if (!getValueConfig(enumOptions.AutoQueue)) return false;
     const now = Date.now();
-    if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < 4000) return false;
+    if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < AUTO_QUEUE_COOLDOWN_MS) return false;
 
     const matchesKeyword = (text, strictNew) =>
       GameController.AUTO_QUEUE_KEYWORDS.some((kw) => {
@@ -317,11 +331,11 @@ class GameController {
     let attempts = 0;
     this.gameOverInterval = setInterval(() => {
       attempts++;
-      if (attempts > 60 || this.triggerAutoQueue()) {
+      if (attempts > AUTO_QUEUE_MAX_ATTEMPTS || this.triggerAutoQueue()) {
         clearInterval(this.gameOverInterval);
         this.gameOverInterval = null;
       }
-    }, 500);
+    }, AUTO_QUEUE_RETRY_MS);
   }
 
   RemoveLastAnalysisMarkings() {
@@ -397,7 +411,7 @@ class GameController {
   updateEvaluationFromMove(move) {
     if (!move || (move.mate === null && move.cp === null)) return;
     let score = move.mate !== null ? move.mate : move.cp;
-    if (this.controller.getTurn() === 2) score *= -1;
+    if (this.controller.getTurn() === TURN_BLACK) score *= -1;
     this.SetEvaluation(score, move.mate !== null);
   }
 
@@ -446,7 +460,7 @@ class GameController {
       this.evalBar.style.display = "block";
       this.evalBar.style.top = `${Math.round(rect.top)}px`;
       this.evalBar.style.height = `${Math.round(rect.height)}px`;
-      this.evalBar.style.left = `${Math.max(4, Math.round(rect.left - 34))}px`;
+      this.evalBar.style.left = `${Math.max(4, Math.round(rect.left - EVAL_BAR_OFFSET_PX))}px`;
     };
 
     syncPosition();
@@ -461,7 +475,7 @@ class GameController {
     window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
     window.addEventListener("resize", syncPosition, { passive: true });
 
-    if (!this.options.isWhiteOnBottom && this.options.flipped) {
+    if (!this.boardOptions.isWhiteOnBottom && this.boardOptions.flipped) {
       this.evalBar.classList.add("evaluation-bar-flipped");
     }
     if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
@@ -470,12 +484,12 @@ class GameController {
     }
   }
 
-  RefreshEvalutionBar() {
+  RefreshEvaluationBar() {
     if (!getValueConfig(enumOptions.EvaluationBar)) return;
     if (this.evalBar?.isConnected) {
       this.evalBar.classList.toggle(
         "evaluation-bar-flipped",
-        Boolean(!this.options.isWhiteOnBottom && this.options.flipped)
+        Boolean(!this.boardOptions.isWhiteOnBottom && this.boardOptions.flipped)
       );
       this.SetEvaluation(0, false);
       this.evalBarSyncHandler?.();
@@ -501,12 +515,12 @@ class GameController {
       clearInterval(this.gameOverInterval);
       this.gameOverInterval = null;
     }
-    this.options = this.controller.getOptions();
+    this.boardOptions = this.controller.getOptions();
     if (this.controller.getPlayingAs() === this.controller.getTurn()) {
       this.turnStartTime = performance.now();
     }
     this.UpdateEngine(true);
-    this.RefreshEvalutionBar();
+    this.RefreshEvaluationBar();
   }
 
   RemoveCurrentMarkings() {
@@ -526,7 +540,7 @@ class GameController {
       topMoves.forEach((move, idx) => {
         if (isBestMove && move.depth !== bestMove.depth) return;
 
-        const arrowColors = this.options?.arrowColors || {};
+        const arrowColors = this.boardOptions?.arrowColors || {};
         const color =
           idx === 0
             ? (arrowColors.alt || "#15781b")
@@ -856,7 +870,7 @@ class StockfishEngine {
             this.goDoneCallbacks = [];
             callbacks.forEach((cb) => cb());
           }
-        }, 150);
+        }, STOP_TIMEOUT_MS);
       }
     } else {
       if (typeof callback === "function") {

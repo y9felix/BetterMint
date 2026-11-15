@@ -40,7 +40,7 @@ const isExtensionPage =
   typeof window !== "undefined" &&
   window.location?.protocol === "chrome-extension:";
 
-if (!isExtensionPage) {
+if (typeof window !== "undefined" && !isExtensionPage && typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((request) => {
     if (!request?.data) return;
     const dispatchUpdate = (detail) =>
@@ -78,4 +78,8 @@ if (!isExtensionPage) {
   });
 
   injectScript("js/Mint.js");
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { DefaultExtensionOptions, getEngineOptionsStorageKey };
 }

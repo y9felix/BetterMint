@@ -1,20 +1,10 @@
 const assert = require("assert");
-const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
-
-const src = fs.readFileSync(path.join(__dirname, "../js/Mint.js"), "utf8");
-assert.ok(src.includes("switchEngine"), "StockfishEngine must implement switchEngine");
-assert.ok(src.includes("this.currentUrl"), "StockfishEngine must track currentUrl");
-assert.ok(src.includes("this.targetUrl"), "StockfishEngine must track targetUrl");
-assert.ok(src.includes("this.isSwitching"), "StockfishEngine must track isSwitching");
-assert.ok(src.includes("this.engineUciOptions"), "StockfishEngine must track engineUciOptions");
-assert.ok(!src.includes("setoption name option-depth"), "Must not emit extension settings keys as UCI options");
-
-const start = src.indexOf("class StockfishEngine {");
-const end = src.indexOf("class BetterMint {");
-assert.ok(start !== -1 && end > start, "StockfishEngine class must be locatable");
-const classCode = src.slice(start, end);
+const {
+  StockfishEngine,
+  enumOptions,
+  setOptionsForTesting
+} = require(path.join(__dirname, "../js/Mint.js"));
 
 class MockWebSocket {
   constructor(url) {
@@ -66,19 +56,16 @@ MockWebSocket.CLOSING = 2;
 MockWebSocket.CLOSED = 3;
 MockWebSocket.instances = [];
 
+global.WebSocket = MockWebSocket;
+
+setOptionsForTesting({
+  [enumOptions.UrlApiStockfish]: "ws://localhost:8000/engineA",
+  [enumOptions.Depth]: 3
+});
+
 function createEngine(masterMock) {
   MockWebSocket.instances = [];
-  const sandbox = {
-    getValueConfig: (k) => (k === "UrlApiStockfish" ? "ws://localhost:8000/engineA" : 3),
-    enumOptions: { UrlApiStockfish: "UrlApiStockfish", Depth: "Depth" },
-    WebSocket: MockWebSocket,
-    console: { log: () => {}, warn: () => {}, error: () => {} },
-    setTimeout: setTimeout,
-    clearTimeout: clearTimeout,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(classCode + "\nthis.StockfishEngine = StockfishEngine;", sandbox);
-  return new sandbox.StockfishEngine(masterMock || { onEngineLoaded: () => {} });
+  return new StockfishEngine(masterMock || { onEngineLoaded: () => {} });
 }
 
 let engineUpdateCalls = 0;
@@ -90,8 +77,9 @@ const masterMock = {
     }
   }
 };
+
 const engine = createEngine(masterMock);
-assert.strictEqual(Object.prototype.toString.call(engine.engineUciOptions), "[object Set]", "engineUciOptions must be a Set");
+assert.ok(engine.engineUciOptions instanceof Set, "engineUciOptions must be a Set");
 assert.strictEqual(MockWebSocket.instances.length, 1);
 const ws1 = MockWebSocket.instances[0];
 assert.strictEqual(ws1.url, "ws://localhost:8000/engineA");
@@ -149,7 +137,7 @@ engine.ProcessMessage("uciok");
 assert.strictEqual(engineUpdateCalls, 0, "UpdateEngine must not be called before ucinewgame");
 
 engine.ProcessMessage("readyok");
-assert.strictEqual(ws2.sent.filter(cmd => cmd === "ucinewgame").length, 1);
+assert.strictEqual(ws2.sent.filter((cmd) => cmd === "ucinewgame").length, 1);
 assert.strictEqual(engineUpdateCalls, 1, "UpdateEngine must be called after ucinewgame completes");
 
 const preErrorAttempts = engine.reconnectAttempts;
@@ -159,8 +147,11 @@ assert.strictEqual(engine.reconnectAttempts, preErrorAttempts, "Error event must
 assert.doesNotThrow(() => {
   engine.initializeWebSocket("invalid://bad-scheme");
 });
+if (engine.reconnectTimer !== null) {
+  clearTimeout(engine.reconnectTimer);
+  engine.reconnectTimer = null;
+}
 
-MockWebSocket.instances = [];
 const fresh = createEngine(masterMock);
 MockWebSocket.instances[0].triggerOpen();
 fresh.UpdateOptions({ Foo: 1 });
@@ -180,7 +171,6 @@ evaluatingEngine.ProcessMessage("bestmove (none)");
 assert.strictEqual(evaluatingEngine.isEvaluating, false, "bestmove (none) must reset isEvaluating to false");
 assert.strictEqual(restartedEngine, true, "Must restart engine evaluation after options applied");
 
-MockWebSocket.instances = [];
 const lateEngine = createEngine(masterMock);
 for (let i = 0; i < 6; i++) {
   MockWebSocket.instances[MockWebSocket.instances.length - 1].close();

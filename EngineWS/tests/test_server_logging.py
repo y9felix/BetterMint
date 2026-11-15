@@ -10,6 +10,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from main import handle_engine
 
 class TestServerLogging(unittest.TestCase):
+    def _make_engine_mock(self):
+        mock_instance = MagicMock()
+        mock_instance.start = AsyncMock(return_value=mock_instance)
+        mock_instance.put = AsyncMock()
+        mock_instance.wait_closed = AsyncMock()
+        mock_instance._proc = None
+        return mock_instance
+
     def test_handle_engine_logs_spawn_and_uci_in(self):
         ws = MagicMock()
         ws.accept = AsyncMock()
@@ -22,8 +30,8 @@ class TestServerLogging(unittest.TestCase):
         stdout_trap = io.StringIO()
         with patch("sys.stdout", stdout_trap):
             with patch("main.EngineProcess") as mock_proc:
-                mock_instance = MagicMock()
-                def fake_read():
+                mock_instance = self._make_engine_mock()
+                async def fake_read():
                     ws.client_state = WebSocketState.DISCONNECTED
                     return None
                 mock_instance.read_line = fake_read
@@ -48,9 +56,9 @@ class TestServerLogging(unittest.TestCase):
         stdout_trap = io.StringIO()
         with patch("sys.stdout", stdout_trap):
             with patch("main.EngineProcess") as mock_proc:
-                mock_instance = MagicMock()
+                mock_instance = self._make_engine_mock()
                 mock_proc.return_value = mock_instance
-                mock_instance.read_line = MagicMock(return_value=None)
+                mock_instance.read_line = AsyncMock(return_value=None)
                 mock_stderr = AsyncMock()
                 mock_stderr.readline = AsyncMock(side_effect=[b"engine warning\n", b""])
                 mock_proc_obj = MagicMock()
@@ -75,13 +83,12 @@ class TestServerLogging(unittest.TestCase):
         stdout_trap = io.StringIO()
         with patch("sys.stdout", stdout_trap):
             with patch("main.EngineProcess") as mock_proc:
-                mock_instance = MagicMock()
+                mock_instance = self._make_engine_mock()
                 mock_proc.return_value = mock_instance
                 async def idle_blocking_readline():
                     await asyncio.sleep(60)
                     return ""
                 mock_instance.read_line = idle_blocking_readline
-                mock_instance._proc = None
                 asyncio.run(handle_engine(ws, ["/usr/bin/stockfish"]))
 
         out = stdout_trap.getvalue()
@@ -104,10 +111,9 @@ class TestServerLogging(unittest.TestCase):
         stdout_trap = io.StringIO()
         with patch("sys.stdout", stdout_trap):
             with patch("main.EngineProcess") as mock_proc:
-                mock_instance = MagicMock()
+                mock_instance = self._make_engine_mock()
                 mock_proc.return_value = mock_instance
                 mock_instance.read_line = AsyncMock(side_effect=["id author", "", "option name Hash", "uciok", None])
-                mock_instance._proc = None
                 asyncio.run(handle_engine(ws, ["/usr/bin/stockfish"]))
 
         sent = [call.args[0] for call in ws.send_text.await_args_list]
@@ -115,6 +121,7 @@ class TestServerLogging(unittest.TestCase):
         self.assertIn("option name Hash", sent)
         self.assertIn("uciok", sent)
         self.assertNotIn("", sent)
+
 
     def test_origin_validation(self):
         from main import is_allowed_ws_origin

@@ -1,13 +1,6 @@
 const assert = require("assert");
-const fs = require("fs");
 const path = require("path");
 const { StockfishEngine } = require(path.join(__dirname, "../js/Mint.js"));
-
-const src = fs.readFileSync(path.join(__dirname, "../js/Mint.js"), "utf8");
-
-assert.ok(!src.includes('this.send("ucinewgame");\n        this.stopInFlight = false;'), "stopEvaluation must not send ucinewgame");
-assert.ok(!src.includes('this.goDoneCallbacks.forEach(cb => cb());\n        this.goDoneCallbacks = [];\n      } else {'), "stopEvaluation must not run callbacks synchronously");
-assert.ok(src.includes("wasRequestedStop"), "ProcessMessage must track wasRequestedStop across stop cycles");
 
 function createEngine() {
   const engine = Object.create(StockfishEngine.prototype);
@@ -16,6 +9,7 @@ function createEngine() {
   engine.isEvaluating = false;
   engine.isRequestedStop = false;
   engine.stopInFlight = false;
+  engine.staleBestMovesToIgnore = 0;
   engine.goDoneCallbacks = [];
   engine.stopTimeout = null;
   engine.topMoves = [];

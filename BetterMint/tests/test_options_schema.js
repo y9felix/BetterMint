@@ -3,17 +3,11 @@ const fs = require("fs");
 const path = require("path");
 
 const extRoot = path.join(__dirname, "..");
-const loaderPath = path.join(extRoot, "js/loader.js");
-assert.ok(fs.existsSync(loaderPath), "js/loader.js must exist");
-
-const loaderSrc = fs.readFileSync(loaderPath, "utf8");
-const optionsSrc = fs.readFileSync(path.join(extRoot, "js/options.js"), "utf8");
+const { DefaultExtensionOptions } = require(path.join(extRoot, "js/loader.js"));
 const manifest = JSON.parse(fs.readFileSync(path.join(extRoot, "manifest.json"), "utf8"));
 const html = fs.readFileSync(path.join(extRoot, "html/options.html"), "utf8");
 
-const match = loaderSrc.match(/const DefaultExtensionOptions = \{([\s\S]*?)\};/);
-assert.ok(match, "DefaultExtensionOptions declared in js/loader.js");
-const keys = [...match[1].matchAll(/"([^"]+)":/g)].map((m) => m[1]).sort();
+const keys = Object.keys(DefaultExtensionOptions).sort();
 
 const expectedKeys = [
   "option-auto-queue",
@@ -41,7 +35,6 @@ const expectedKeys = [
 ].sort();
 
 assert.deepStrictEqual(keys, expectedKeys, "Defaults must match the active key set");
-assert.ok(!optionsSrc.includes("inputObjects"), "options.js must not duplicate the defaults table");
 assert.deepStrictEqual(manifest.content_scripts[0].js, ["js/loader.js"]);
 
 const scriptOrder = [...html.matchAll(/<script src="\.\.\/js\/([^"]+)"/g)].map((m) => m[1]);

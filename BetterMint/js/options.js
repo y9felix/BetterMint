@@ -1,6 +1,10 @@
 "use strict";
 
-const optionKeys = Object.keys(DefaultExtensionOptions);
+const PROBE_TIMEOUT_MS = 4000;
+const ENGINE_OPTS_DEBOUNCE_MS = 150;
+
+const optionKeys =
+  typeof DefaultExtensionOptions !== "undefined" ? Object.keys(DefaultExtensionOptions) : [];
 const fields = {};
 
 function UpdateVisibility() {
@@ -215,7 +219,7 @@ function resetProbe() {
   }
 }
 
-function probeEngine(url) {
+function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
   const container = document.getElementById("engine-options-container");
   if (!container) return;
   resetProbe();
@@ -242,7 +246,7 @@ function probeEngine(url) {
       if (activeProbeWs !== ws) return;
       resetProbe();
       setStatus("Connection timed out.");
-    }, 4000);
+    }, PROBE_TIMEOUT_MS);
 
     ws.addEventListener("open", () => {
       if (activeProbeWs !== ws) return;
@@ -251,7 +255,7 @@ function probeEngine(url) {
         if (activeProbeWs !== ws) return;
         resetProbe();
         setStatus("Engine handshake timed out.");
-      }, 4000);
+      }, PROBE_TIMEOUT_MS);
       ws.send("uci\n");
     });
 
@@ -269,7 +273,7 @@ function probeEngine(url) {
           discovered.push(opt);
         } else if (trimmed === "uciok") {
           resetProbe();
-          loadAndRenderEngineOptions(url, discovered, container);
+          onComplete(url, discovered, container);
           return;
         }
       }
@@ -323,7 +327,7 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
       saved[name] = val;
       pendingEngineOpts = { key: storageKey, data: saved };
       if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
-      engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, 150);
+      engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, ENGINE_OPTS_DEBOUNCE_MS);
     });
   });
 }
@@ -387,7 +391,7 @@ function OnOptionsChange(changedKey) {
   }
 
   chrome.storage?.sync?.set(options);
-  notifyTabs(options);
+  notifyTabs(changedKey ? { [changedKey]: options[changedKey] } : options);
 }
 
 function InitOptions() {
@@ -401,25 +405,34 @@ function InitOptions() {
       field.addEventListener("input", () => {
         if (badge) badge.textContent = field.value;
       });
-      field.addEventListener("change", () => OnOptionsChange());
-    } else if (field.type === "checkbox") {
-      field.addEventListener("change", () => OnOptionsChange());
-    } else if (field.type === "text") {
-      field.addEventListener("change", () => OnOptionsChange(key));
     }
+    field.addEventListener("change", () => OnOptionsChange(key));
   });
 
   RestoreOptions();
 }
 
-window.addEventListener("pagehide", flushPendingEngineOpts);
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPendingEngineOpts);
 
-window.addEventListener("DOMContentLoaded", () => {
-  const githubLink = document.getElementById("github-link");
-  githubLink?.addEventListener("click", (event) => {
-    event.preventDefault();
-    chrome.tabs?.create({ url: "https://github.com/y9felix/BetterMint" });
+  window.addEventListener("DOMContentLoaded", () => {
+    const githubLink = document.getElementById("github-link");
+    githubLink?.addEventListener("click", (event) => {
+      event.preventDefault();
+      chrome.tabs?.create({ url: "https://github.com/y9felix/BetterMint" });
+    });
+
+    InitOptions();
   });
+}
 
-  InitOptions();
-});
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    parseUciOptionLine,
+    uciRenderers,
+    renderDynamicUciOptions,
+    probeEngine,
+    resetProbe,
+    loadAndRenderEngineOptions
+  };
+}

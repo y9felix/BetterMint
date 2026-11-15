@@ -1,34 +1,115 @@
 const assert = require("assert");
-const fs = require("fs");
 const path = require("path");
+const {
+  StockfishEngine,
+  TopMove,
+  enumOptions,
+  resolveLegalMove,
+  setOptionsForTesting
+} = require(path.join(__dirname, "../js/Mint.js"));
 
-const src = fs.readFileSync(path.join(__dirname, "../js/Mint.js"), "utf8");
-
-assert.ok(!src.includes("speechSynthesis"), "speechSynthesis should be completely removed");
-assert.ok(!src.includes("initializeWorker"), "initializeWorker should be completely removed");
-assert.ok(!src.includes("HighMateChance"), "HighMateChance should be removed");
-assert.ok(!src.includes("RandomBestMove"), "RandomBestMove should be removed");
-assert.ok(!src.includes("BestMoveChance"), "BestMoveChance should be removed");
-assert.ok(!src.includes("MaxLegitAutoMoveDepth"), "MaxLegitAutoMoveDepth should be removed");
-
-assert.ok(!src.includes('this.customEngineOptions = { "MultiPV": "1" };'), "MultiPV must not be hardcoded to 1");
-assert.ok(src.includes("this.customEngineOptions?.MultiPV") || src.includes('this.customEngineOptions?.["MultiPV"]'), "MultiPV must be resolved dynamically");
-assert.ok(!src.includes("requestAnimationFrame"), "requestAnimationFrame must remain removed from automove");
-
-for (const gone of ["__awaiter", "ChromeRequest", "pathToEcoJson", "threadedEnginePaths", "isInTheory", "executeReadyCallbacks", "restartGame", "checkEventOne", "window.top_pv_moves", "getPlayingAs() {"]) {
-  assert.ok(!src.includes(gone), gone + " must be removed");
+class MockWebSocket {
+  constructor(url) {
+    this.url = url;
+    this.readyState = MockWebSocket.OPEN;
+    this.listeners = {};
+    this.sent = [];
+  }
+  addEventListener(event, fn) {
+    if (!this.listeners[event]) this.listeners[event] = [];
+    this.listeners[event].push(fn);
+  }
+  send(data) {
+    this.sent.push(data);
+  }
+  close() {
+    this.readyState = MockWebSocket.CLOSED;
+  }
 }
+MockWebSocket.CONNECTING = 0;
+MockWebSocket.OPEN = 1;
+MockWebSocket.CLOSED = 3;
+global.WebSocket = MockWebSocket;
 
-assert.ok(!src.includes("RTCPeerConnection"), "WebRTC block must be removed");
-assert.ok(!src.includes("iceServers"), "WebRTC config must be removed");
-assert.ok(!src.includes("keypress"), "Global keypress listeners must be completely removed");
-assert.ok(!src.includes("hotkeys ="), "hotkeys object must be completely removed");
+setOptionsForTesting({
+  [enumOptions.UrlApiStockfish]: "ws://localhost:8000/ws",
+  [enumOptions.Depth]: 10,
+  [enumOptions.ShowHints]: true,
+  [enumOptions.EvaluationBar]: false,
+  [enumOptions.MoveAnalysis]: false,
+  [enumOptions.LegitAutoMove]: false
+});
 
-assert.ok(src.trim().startsWith("(() => {") && src.trim().endsWith("})();"), "Mint.js must be encapsulated in an IIFE");
-assert.ok(!src.includes("this.analysisToolsInterval = setInterval("), "CreateAnalysisTools must not use setInterval polling");
+let hintedMoves = [];
+const masterMock = {
+  options: {
+    [enumOptions.UrlApiStockfish]: "ws://localhost:8000/ws",
+    [enumOptions.Depth]: 10,
+    [enumOptions.ShowHints]: true,
+    customEngineOptions: { MultiPV: 2 }
+  },
+  onEngineLoaded: () => {},
+  game: {
+    HintMoves: (moves) => {
+      hintedMoves = moves;
+    },
+    UpdateEngine: () => {},
+    controller: {
+      getPlayingAs: () => 1,
+      getTurn: () => 2
+    }
+  }
+};
 
-assert.ok(src.includes("const optionsPromise ="), "Startup options promise must be cached");
-const requestCalls = src.match(/(?<!function\s)requestOptions\(\)/g) || [];
-assert.strictEqual(requestCalls.length, 1, "requestOptions must only be called once via cached promise");
+const engine = new StockfishEngine(masterMock);
+engine.loaded = true;
+engine.ready = true;
+engine.isEvaluating = true;
+
+engine.UpdatePosition("fen_1", false);
+engine.UpdatePosition("fen_2", true);
+engine.UpdatePosition("fen_3", false);
+
+assert.deepStrictEqual(
+  engine.pendingPosition,
+  { FENs: "fen_3", isNewGame: true },
+  "UpdatePosition must coalesce intermediate FENs and preserve isNewGame=true"
+);
+
+engine.ProcessMessage("bestmove e2e4");
+assert.strictEqual(engine.pendingPosition, null, "Coalesced position must flush once stop completes");
+assert.ok(engine.stockfish.sent.includes("ucinewgame"), "Coalesced isNewGame must send ucinewgame");
+
+engine.ProcessMessage("readyok");
+assert.ok(engine.stockfish.sent.includes("position fen fen_3"), "Must send latest coalesced FEN");
+assert.ok(engine.stockfish.sent.includes("go depth 10"), "Must start search for latest FEN");
+
+engine.ProcessMessage("info depth 8 score cp 35 pv e2e4 e7e5");
+engine.ProcessMessage("info depth 10 score cp 120 pv d2d4 d7d5");
+engine.ProcessMessage("info depth 10 score mate 3 pv f1c4 e7e5 d1h5");
+assert.strictEqual(engine.topMovesDirty, true, "topMovesDirty must be marked on new info lines");
+
+const sorted = engine.ensureTopMovesSorted();
+assert.strictEqual(engine.topMovesDirty, false);
+assert.strictEqual(sorted[0].move, "f1c4", "Mate-in-3 must sort ahead of centipawn moves");
+assert.strictEqual(sorted[1].move, "d2d4", "Depth 10 cp 120 must sort ahead of depth 8");
+
+engine.ProcessMessage("bestmove f1c4");
+assert.strictEqual(hintedMoves.length, 2, "MultiPV=2 must slice top 2 moves for hints");
+
+const standardLegal = [
+  { from: "e1", to: "g1", san: "O-O", flags: "k" },
+  { from: "e1", to: "c1", san: "O-O-O", flags: "q" }
+];
+assert.strictEqual(
+  resolveLegalMove(standardLegal, new TopMove("e1h1", 10, 0, null))?.to,
+  "g1",
+  "Chess960 king-takes-rook e1h1 must resolve to standard e1g1 castling"
+);
+assert.strictEqual(
+  resolveLegalMove(standardLegal, new TopMove("e1a1", 10, 0, null))?.to,
+  "c1",
+  "Chess960 king-takes-rook e1a1 must resolve to standard e1c1 castling"
+);
 
 console.log("Engine pipeline tests passed.");

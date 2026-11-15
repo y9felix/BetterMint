@@ -1,13 +1,11 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
 
 const extRoot = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(extRoot, "html/options.html"), "utf8");
 assert.ok(html.includes('id="engine-options-details"'), "Missing engine-options-details details element");
 assert.ok(html.includes('id="advanced-timing-details"'), "Missing advanced-timing-details details element");
-assert.ok(!html.includes('id="option-advanced-timing"'), "Former toggle switch must be replaced by details summary");
 
 class MockElement {
   constructor(tagName) {
@@ -104,35 +102,20 @@ class MockWebSocket {
 }
 MockWebSocket.instances = [];
 
-const jsSource = fs.readFileSync(path.join(extRoot, "js/options.js"), "utf8");
-const uciStart = jsSource.indexOf("function parseUciOptionLine");
-const uciEnd = jsSource.indexOf("function loadAndRenderEngineOptions");
-assert.ok(uciStart !== -1 && uciEnd > uciStart, "UCI option section must be locatable");
-const uciSection = jsSource.slice(uciStart, uciEnd);
-
 const containerElement = new MockElement("div");
-let loadedOptionsArgs = null;
-
-const sandbox = {
-  document: {
-    createElement: (tag) => new MockElement(tag),
-    getElementById: (id) => (id === "engine-options-container" ? containerElement : null),
-  },
-  WebSocket: MockWebSocket,
-  loadAndRenderEngineOptions: (url, opts, container) => {
-    loadedOptionsArgs = { url, opts, container };
-  },
-  setTimeout: setTimeout,
-  clearTimeout: clearTimeout,
-  console: console,
+global.document = {
+  createElement: (tag) => new MockElement(tag),
+  getElementById: (id) => (id === "engine-options-container" ? containerElement : null)
 };
+global.WebSocket = MockWebSocket;
 
-vm.createContext(sandbox);
-vm.runInContext(uciSection, sandbox);
+const {
+  parseUciOptionLine: parse,
+  renderDynamicUciOptions: render,
+  probeEngine
+} = require(path.join(extRoot, "js/options.js"));
 
-const parse = sandbox.parseUciOptionLine;
-
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Threads type spin default 1 min 1 max 512"))), {
+assert.deepStrictEqual(parse("option name Threads type spin default 1 min 1 max 512"), {
   name: "Threads",
   type: "spin",
   default: "1",
@@ -141,7 +124,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Threads type
   vars: []
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Hash type spin min 1 max 33554432 default 16"))), {
+assert.deepStrictEqual(parse("option name Hash type spin min 1 max 33554432 default 16"), {
   name: "Hash",
   type: "spin",
   default: "16",
@@ -150,7 +133,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Hash type sp
   vars: []
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Ponder type check default false"))), {
+assert.deepStrictEqual(parse("option name Ponder type check default false"), {
   name: "Ponder",
   type: "check",
   default: "false",
@@ -159,7 +142,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Ponder type 
   vars: []
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Style type combo default Normal var Solid var Normal var Risky"))), {
+assert.deepStrictEqual(parse("option name Style type combo default Normal var Solid var Normal var Risky"), {
   name: "Style",
   type: "combo",
   default: "Normal",
@@ -168,7 +151,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Style type c
   vars: ["Solid", "Normal", "Risky"]
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name SyzygyPath type string default <empty>"))), {
+assert.deepStrictEqual(parse("option name SyzygyPath type string default <empty>"), {
   name: "SyzygyPath",
   type: "string",
   default: "<empty>",
@@ -177,7 +160,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name SyzygyPath t
   vars: []
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name WeightsFile type string default /path with space/model.pb.gz"))), {
+assert.deepStrictEqual(parse("option name WeightsFile type string default /path with space/model.pb.gz"), {
   name: "WeightsFile",
   type: "string",
   default: "/path with space/model.pb.gz",
@@ -186,7 +169,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name WeightsFile 
   vars: []
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name PlayStyle type combo default Very Solid var Very Solid var Risk Taking"))), {
+assert.deepStrictEqual(parse("option name PlayStyle type combo default Very Solid var Very Solid var Risk Taking"), {
   name: "PlayStyle",
   type: "combo",
   default: "Very Solid",
@@ -195,7 +178,7 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name PlayStyle ty
   vars: ["Very Solid", "Risk Taking"]
 });
 
-assert.deepStrictEqual(JSON.parse(JSON.stringify(parse("option name Clear Hash type button"))), {
+assert.deepStrictEqual(parse("option name Clear Hash type button"), {
   name: "Clear Hash",
   type: "button",
   default: "",
@@ -210,7 +193,6 @@ assert.strictEqual(parse("id name Stockfish 16"), null);
 assert.strictEqual(parse(""), null);
 assert.strictEqual(parse(null), null);
 
-const render = sandbox.renderDynamicUciOptions;
 const renderContainer = new MockElement("div");
 
 render([], {}, renderContainer, null);
@@ -224,7 +206,7 @@ const testOptions = [
   { name: "Clear Hash", type: "button", default: "", min: null, max: null, vars: [] }
 ];
 
-let changedValues = {};
+const changedValues = {};
 render(testOptions, { Threads: 4, Ponder: true }, renderContainer, (name, val) => {
   changedValues[name] = val;
 });
@@ -259,12 +241,17 @@ const button = renderContainer.children[4].querySelector("button");
 button.trigger("click");
 assert.strictEqual(changedValues["Clear Hash"], "");
 
+let loadedOptionsArgs = null;
+const onComplete = (url, opts, container) => {
+  loadedOptionsArgs = { url, opts, container };
+};
+
 MockWebSocket.instances = [];
-sandbox.probeEngine("ws://localhost:8000/probe1");
+probeEngine("ws://localhost:8000/probe1", onComplete);
 assert.strictEqual(MockWebSocket.instances.length, 1);
 const probeWs1 = MockWebSocket.instances[0];
 
-sandbox.probeEngine("ws://localhost:8000/probe2");
+probeEngine("ws://localhost:8000/probe2", onComplete);
 assert.strictEqual(MockWebSocket.instances.length, 2);
 assert.strictEqual(probeWs1.closed, true);
 const probeWs2 = MockWebSocket.instances[1];

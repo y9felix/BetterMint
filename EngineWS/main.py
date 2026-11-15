@@ -1,12 +1,8 @@
 import asyncio
-import inspect
 import json
-import logging
 import os
 from urllib.parse import urlparse
 from fastapi import FastAPI, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.websockets import WebSocketDisconnect, WebSocketState
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -16,12 +12,6 @@ DEFAULT_CONFIG = {
         "stockfish": ["stockfish"]
     }
 }
-
-class HealthCheckLogFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        return '"GET /health ' not in record.getMessage()
-
-logging.getLogger("uvicorn.access").addFilter(HealthCheckLogFilter())
 
 def load_config(path: str = CONFIG_PATH) -> dict:
     if not os.path.exists(path):
@@ -127,6 +117,7 @@ class EngineProcess:
                 pass
 
 MAX_CONCURRENT_ENGINES = 8
+VERBOSE_UCI = os.environ.get("BETTERMINT_VERBOSE", "1") != "0"
 engine_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENGINES)
 
 def is_allowed_ws_origin(websocket: WebSocket) -> bool:
@@ -142,18 +133,6 @@ def is_allowed_ws_origin(websocket: WebSocket) -> bool:
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://www.chess.com", "https://chess.com"],
-    allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
-
-@app.get("/health", include_in_schema=False)
-async def health() -> JSONResponse:
-    return JSONResponse({"status": "ok"})
-
 async def handle_engine(websocket: WebSocket, cmd: list[str]):
     if not is_allowed_ws_origin(websocket):
         await websocket.close(code=1008)
@@ -166,10 +145,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
         await websocket.accept()
         print(f"[ENGINE SPAWN] {' '.join(cmd)}", flush=True)
         try:
-            engine = EngineProcess(cmd)
-            start_op = engine.start()
-            if asyncio.iscoroutine(start_op):
-                await start_op
+            engine = await EngineProcess(cmd).start()
         except FileNotFoundError:
             print(f"[ENGINE ERROR] Binary not found: {' '.join(cmd)}", flush=True)
             try:
@@ -182,11 +158,10 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
         async def read_socket():
             try:
                 async for msg in websocket.iter_text():
-                    safe_msg = msg.replace("\r", "\\r").replace("\n", "\\n")
-                    print(f"[UCI IN] {safe_msg}", flush=True)
-                    put_op = engine.put(msg)
-                    if asyncio.iscoroutine(put_op):
-                        await put_op
+                    if VERBOSE_UCI:
+                        safe_msg = msg.replace("\r", "\\r").replace("\n", "\\n")
+                        print(f"[UCI IN] {safe_msg}", flush=True)
+                    await engine.put(msg)
             except WebSocketDisconnect:
                 pass
             except Exception as e:
@@ -198,9 +173,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                     app_state = getattr(websocket, "application_state", WebSocketState.CONNECTED)
                     if isinstance(app_state, WebSocketState) and app_state != WebSocketState.CONNECTED:
                         break
-                    res = engine.read_line()
-                    if asyncio.iscoroutine(res):
-                        res = await res
+                    res = await engine.read_line()
                     if res is None:
                         break
                     if res:
@@ -237,9 +210,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                     t.cancel()
             await asyncio.gather(task_in, task_out, task_err, return_exceptions=True)
             engine.terminate()
-            wait_closed = getattr(engine, "wait_closed", None)
-            if inspect.iscoroutinefunction(wait_closed):
-                await wait_closed()
+            await engine.wait_closed()
             print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
 
 @app.websocket("/ws")
