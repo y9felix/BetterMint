@@ -40,6 +40,7 @@ const enumOptions = {
   ShowHints: "option-show-hints",
   MoveAnalysis: "option-move-analysis",
   AutoQueue: "option-auto-queue",
+  RematchFirst: "option-rematch-first",
   LegitAutoMove: "option-legit-auto-move",
   HumanLikeMoves: "option-human-like-moves",
   MovePace: "option-move-pace",
@@ -241,7 +242,7 @@ class GameController {
     const now = Date.now();
     if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < AUTO_QUEUE_COOLDOWN_MS) return false;
 
-    const matchesKeyword = (text, strictNew) =>
+    const matchesKeywords = (text, strictNew) =>
       GameController.AUTO_QUEUE_KEYWORDS.some((kw) => {
         if (kw === "new") {
           return strictNew ? /^new\b/.test(text) : /\bnew\b/.test(text);
@@ -249,12 +250,12 @@ class GameController {
         return text.includes(kw);
       });
 
-    const findAndClick = (selector, strictNew) => {
+    const findAndClick = (selector, matcher) => {
       const elements = document.querySelectorAll(selector);
       for (const el of elements) {
         if (el.disabled) continue;
         const text = el.textContent?.trim().toLowerCase();
-        if (!text || !matchesKeyword(text, strictNew)) {
+        if (!text || !matcher(text)) {
           continue;
         }
         if (el.offsetWidth > 0 && el.offsetHeight > 0) {
@@ -266,8 +267,15 @@ class GameController {
       return false;
     };
 
-    if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, false)) return true;
-    return findAndClick("button:not([disabled]), [role='button']:not([disabled])", true);
+    const genericSelector = "button:not([disabled]), [role='button']:not([disabled])";
+    if (getValueConfig(enumOptions.RematchFirst)) {
+      const isRematch = (text) => text.includes("rematch");
+      if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, isRematch)) return true;
+      if (findAndClick(genericSelector, isRematch)) return true;
+    }
+
+    if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, (t) => matchesKeywords(t, false))) return true;
+    return findAndClick(genericSelector, (t) => matchesKeywords(t, true));
   }
 
   setupAutoQueueObserver() {

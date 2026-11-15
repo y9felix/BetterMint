@@ -7,6 +7,7 @@ const DefaultExtensionOptions = {
   "option-show-hints": true,
   "option-move-analysis": true,
   "option-auto-queue": false,
+  "option-rematch-first": false,
   "option-legit-auto-move": false,
   "option-human-like-moves": true,
   "option-move-pace": 12.5,

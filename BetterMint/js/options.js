@@ -286,6 +286,12 @@ function InitTheme() {
 }
 
 function UpdateVisibility() {
+  const autoQueue = document.getElementById("option-auto-queue");
+  const autoQueueGroup = document.getElementById("auto-queue-group");
+  if (autoQueue && autoQueueGroup) {
+    autoQueueGroup.classList.toggle("hidden", !autoQueue.checked);
+  }
+
   const legitAutoMove = document.getElementById("option-legit-auto-move");
   const pacingGroup = document.getElementById("pacing-group");
   if (legitAutoMove && pacingGroup) {
