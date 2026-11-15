@@ -1,33 +1,8 @@
-.board-layout-evaluation {
-    display: flex;
-    grid-column: evaluation;
-}
-
-.board-layout-evaluation>* {
-    margin-left: calc(var(--boardContainerWidth) - var(--boardWidth) - var(--gutterLeftOfBoard));
-    margin-right: calc(var(--gutterLeftOfBoard) + var(--boardWidth) - var(--boardContainerWidth));
-}
-
-@media (min-width: 960px) {
-    body.with-evaluation {
-        --evalAndGutter: calc(var(--gutterLeftOfBoard) + var(--evalWidth));
-        --evalWidth: 2rem;
-    }
-
-    .board-layout-evaluation {
-        width: var(--evalWidth);
-    }
-
-    .board-layout-evaluation>* {
-        margin: 0 0 0 calc(var(--boardContainerWidth) - var(--boardWidth));
-    }
-}
-
 .bettermint-evalbar-floating {
     display: flex;
     pointer-events: auto;
     position: fixed;
-    width: 20px;
+    width: 28px;
     z-index: 20;
 }
 
@@ -39,7 +14,8 @@
     position: relative;
     -webkit-user-select: none;
     user-select: none;
-    width: 20px;
+    width: 100%;
+    min-width: 24px;
 }
 
 .evaluation-bar-bar.evaluation-bar-flipped,
@@ -115,11 +91,12 @@
     font-weight: 700;
     -webkit-hyphens: auto;
     hyphens: auto;
+    left: 50%;
     padding: .1rem .5rem;
     position: absolute;
     text-align: center;
     top: 50%;
-    transform: translate(calc(10px - 50%), -50%) var(--flipTransform, rotate(0deg));
+    transform: translate(-50%, -50%) var(--flipTransform, rotate(0deg));
     transition: opacity .2s;
     transition-delay: .1s;
     width: 45px;

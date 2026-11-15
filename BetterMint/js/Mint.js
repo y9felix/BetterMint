@@ -408,21 +408,44 @@ class GameController {
       if (getValueConfig(enumOptions.EvaluationBar) && this.evalBar == null) {
         const evalBar = document.createElement("div");
         evalBar.style.flex = "1 1 auto";
+        evalBar.style.width = "100%";
         evalBar.style.height = "100%";
         evalBar.innerHTML = `<div class="evaluation-bar-bar"><span class="evaluation-bar-scoreAbbreviated evaluation-bar-dark">0.0</span><span class="evaluation-bar-score evaluation-bar-dark">+0.00</span><div class="evaluation-bar-fill"><div class="evaluation-bar-color evaluation-bar-black"></div><div class="evaluation-bar-color evaluation-bar-draw"></div><div class="evaluation-bar-color evaluation-bar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div></div>`;
 
-        const boardRect = this.chessboard.getBoundingClientRect();
+        const getBoardRect = () => {
+          const inner =
+            this.chessboard.querySelector?.(".board, chess-board, svg.coordinates") ||
+            this.chessboard.shadowRoot?.querySelector?.(".board, svg.coordinates");
+          const rect = (inner || this.chessboard).getBoundingClientRect();
+          if (rect.width > rect.height + 2 && rect.height >= 50) {
+            const side = rect.height;
+            const insetX = (rect.width - side) / 2;
+            return {
+              left: rect.left + insetX,
+              right: rect.right - insetX,
+              top: rect.top,
+              bottom: rect.bottom,
+              width: side,
+              height: side
+            };
+          }
+          return rect;
+        };
+
+        const boardRect = getBoardRect();
         const nativeContainer =
           layoutChessboard.querySelector("#board-layout-evaluation, .board-layout-evaluation") ||
           layoutChessboard.parentElement.querySelector("#board-layout-evaluation, .board-layout-evaluation");
         const nativeRect = nativeContainer?.getBoundingClientRect();
+        const hasNativeClass = Boolean(document.body?.classList?.contains("with-evaluation"));
         const hasValidNativeSlot =
+          hasNativeClass &&
           Boolean(nativeContainer) &&
           boardRect.height >= 50 &&
-          nativeRect.width >= 16 &&
+          nativeRect.width >= 24 &&
           nativeRect.height >= 100 &&
           nativeRect.right <= boardRect.left + 4 &&
-          boardRect.left - nativeRect.right <= 24;
+          boardRect.left - nativeRect.right <= 12;
 
         let host;
         if (hasValidNativeSlot) {
@@ -437,7 +460,7 @@ class GameController {
 
           const syncPosition = () => {
             if (!this.evalBarHost || !this.chessboard?.isConnected) return;
-            const rect = this.chessboard.getBoundingClientRect();
+            const rect = getBoardRect();
             if (rect.width < 50 || rect.height < 50 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
               this.evalBarHost.style.display = "none";
               return;
@@ -445,7 +468,7 @@ class GameController {
             this.evalBarHost.style.display = "flex";
             this.evalBarHost.style.top = `${Math.round(rect.top)}px`;
             this.evalBarHost.style.height = `${Math.round(rect.height)}px`;
-            this.evalBarHost.style.left = `${Math.max(4, Math.round(rect.left - 26))}px`;
+            this.evalBarHost.style.left = `${Math.max(4, Math.round(rect.left - 34))}px`;
           };
 
           syncPosition();
