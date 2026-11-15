@@ -2,7 +2,7 @@
 
 High-performance chess companion and real-time analysis extension for Chess.com, backed by a local UCI engine WebSocket server.
 
-[![Version](https://img.shields.io/badge/version-2.1.5-blue.svg)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.5)
+[![Version](https://img.shields.io/badge/version-2.1.6-blue.svg)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.6)
 [![License: RPL 1.5](https://img.shields.io/badge/License-RPL%201.5-green.svg)](LICENSE)
 [![Manifest](https://img.shields.io/badge/manifest-v3-orange.svg)](BetterMint/manifest.json)
 
@@ -66,20 +66,6 @@ The server listens on `ws://127.0.0.1:8000/ws` (using the `default` engine), or 
 1. Click the BetterMint icon in your browser toolbar to open the options panel.
 2. Under **Engine Server**, verify the **WebSocket API URL** is set to `ws://localhost:8000/ws` (or a named endpoint such as `ws://localhost:8000/ws/maia`).
 3. Expand **Engine UCI Options** to customize detected engine parameters (`Threads`, `Hash`, `UCI_Elo`, etc.) live.
-
----
-
-## Testing
-
-Run extension unit tests:
-```bash
-for f in BetterMint/tests/test_*.js; do node "$f"; done
-```
-
-Run EngineWS server tests:
-```bash
-python -m unittest discover EngineWS/tests
-```
 
 ---
 

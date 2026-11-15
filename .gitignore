@@ -1,3 +1,5 @@
+tests/
+test/
 _metadata/
 __pycache__/
 *.py[cod]
