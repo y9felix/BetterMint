@@ -610,8 +610,6 @@ class GameController {
 
 class StockfishEngine {
   static HIGHLIGHT_COLORS = Object.freeze({
-    Brilliant: "#1baca6",
-    GreatFind: "#5c8bb0",
     BestMove: "#9eba5a",
     Excellent: "#96bc4b",
     Good: "#96af8b",
@@ -621,15 +619,20 @@ class StockfishEngine {
     MissedWin: "#dbac16"
   });
 
-  static EVAL_THRESHOLDS = Object.freeze([
-    [100, "Brilliant"],
-    [0, "GreatFind"],
-    [-10, "BestMove"],
-    [-25, "Excellent"],
-    [-50, "Good"],
-    [-100, "Inaccuracy"],
-    [-250, "Mistake"]
+  static EP_THRESHOLDS = Object.freeze([
+    [0, "BestMove"],
+    [0.02, "Excellent"],
+    [0.05, "Good"],
+    [0.10, "Inaccuracy"],
+    [0.20, "Mistake"]
   ]);
+
+  static evalToExpectedPoints(move) {
+    if (!move) return null;
+    if (move.mate !== null) return move.mate > 0 ? 1 : 0;
+    if (move.cp !== null) return 1 / (1 + Math.exp(-0.00368208 * move.cp));
+    return null;
+  }
 
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
   static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
@@ -1140,24 +1143,24 @@ class StockfishEngine {
 
     if (this.lastTopMoves.length > 0 && this.topMoves.length > 0) {
       const lastBestMove = this.lastTopMoves[0];
-      if (lastBestMove.from === lastMove.from && lastBestMove.to === lastMove.to) {
+      if (
+        lastBestMove.from === lastMove.from &&
+        lastBestMove.to === lastMove.to &&
+        (!lastBestMove.promotion || !lastMove.promotion || lastBestMove.promotion === lastMove.promotion)
+      ) {
         moveScore = "BestMove";
       } else {
-        const bestMove = this.topMoves[0];
-        if (lastBestMove.mate !== null) {
-          if (bestMove.mate === null) {
-            moveScore = lastBestMove.mate > 0 ? "MissedWin" : "Brilliant";
-          } else if (bestMove.mate < 0) {
-            moveScore = lastBestMove.mate > 0 ? "BestMove" : "Brilliant";
+        const epBefore = StockfishEngine.evalToExpectedPoints(lastBestMove);
+        const epOpponent = StockfishEngine.evalToExpectedPoints(this.topMoves[0]);
+        if (epBefore !== null && epOpponent !== null) {
+          const epAfter = 1 - epOpponent;
+          const epLoss = epBefore - epAfter;
+          if (epBefore >= 0.90 && epAfter >= 0.40 && epAfter <= 0.65) {
+            moveScore = "MissedWin";
           } else {
-            moveScore = lastBestMove.mate > 0 ? "MissedWin" : "Blunder";
+            const match = StockfishEngine.EP_THRESHOLDS.find(([maxLoss]) => epLoss <= maxLoss);
+            moveScore = match ? match[1] : "Blunder";
           }
-        } else if (bestMove.mate !== null) {
-          moveScore = bestMove.mate < 0 ? "Brilliant" : "Blunder";
-        } else if (bestMove.cp !== null && lastBestMove.cp !== null) {
-          const evalDiff = -(bestMove.cp + lastBestMove.cp);
-          const match = StockfishEngine.EVAL_THRESHOLDS.find(([th]) => evalDiff > th);
-          moveScore = match ? match[1] : "Blunder";
         }
       }
     }
