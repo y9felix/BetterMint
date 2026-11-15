@@ -40,7 +40,6 @@ const enumOptions = {
   ShowHints: "option-show-hints",
   MoveAnalysis: "option-move-analysis",
   AutoQueue: "option-auto-queue",
-  Notifications: "option-notifications",
   LegitAutoMove: "option-legit-auto-move",
   HumanLikeMoves: "option-human-like-moves",
   MovePace: "option-move-pace",
@@ -1036,7 +1035,6 @@ class StockfishEngine {
     if (line === "uciok") {
       this.loaded = true;
       this.UpdateOptions();
-      this.BetterMintmaster.onEngineLoaded();
     } else if (line === "readyok") {
       this.ready = true;
       while (this.ready && this.readyCallbacks.length > 0) {
@@ -1259,16 +1257,6 @@ class StockfishEngine {
       const elapsed = game.turnStartTime != null ? now - game.turnStartTime : 0;
       const remainingDelay = Math.max(0, targetDelay - elapsed);
 
-      const secondsTillAutoMove = (remainingDelay / 1000).toFixed(1);
-      if (remainingDelay > 0) {
-        this.BetterMintmaster.showToast?.(
-          "chess.com",
-          remainingDelay + 1000,
-          "circle-info",
-          `BetterMint: Auto move in ${secondsTillAutoMove}s`
-        );
-      }
-
       if (remainingDelay <= 0) {
         this.lastAutoMovedFen = activeFen;
         controller.move(moveData);
@@ -1321,36 +1309,8 @@ class BetterMint {
         this.options = Object.assign({}, this.options, event.detail);
         this.game.UpdateExtensionOptions();
         this.engine.UpdateExtensionOptions(event.detail);
-
-        if (!window.toaster?.notifications?.some((noti) => noti.id === "BetterMint-settings-updated")) {
-          this.showToast(
-            "BetterMint-settings-updated",
-            2000,
-            "circle-info",
-            "Settings updated!"
-          );
-        }
       },
       false
-    );
-  }
-
-  showToast(id, duration, icon, content) {
-    if (!getValueConfig(enumOptions.Notifications) || !window.toaster) return;
-    window.toaster.add({
-      id,
-      duration,
-      icon,
-      content
-    });
-  }
-
-  onEngineLoaded() {
-    this.showToast(
-      "chess.com",
-      3000,
-      "circle-info",
-      "BetterMint is enabled!"
     );
   }
 }

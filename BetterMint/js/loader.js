@@ -6,7 +6,6 @@ const DefaultExtensionOptions = {
   "option-evaluation-bar": true,
   "option-show-hints": true,
   "option-move-analysis": true,
-  "option-notifications": false,
   "option-auto-queue": false,
   "option-legit-auto-move": false,
   "option-human-like-moves": true,
