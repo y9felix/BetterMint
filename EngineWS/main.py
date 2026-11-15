@@ -183,7 +183,10 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
             except Exception as e:
                 print(f"[WS ERROR] Egress: {e}", flush=True)
 
+        last_stderr = ""
+
         async def stream_stderr():
+            nonlocal last_stderr
             try:
                 proc = getattr(engine, "_proc", None)
                 if not proc or not proc.stderr:
@@ -191,6 +194,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                 while line := await proc.stderr.readline():
                     text = line.decode("utf-8", errors="replace").strip()
                     if text:
+                        last_stderr = text
                         print(f"[ENGINE STDERR] {text}", flush=True)
             except Exception as e:
                 print(f"[ENGINE ERROR] Stderr: {e}", flush=True)
@@ -205,12 +209,31 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                 return_when=asyncio.FIRST_COMPLETED
             )
         finally:
+            if task_out.done() and not task_err.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task_err), timeout=0.2)
+                except (asyncio.TimeoutError, Exception):
+                    pass
             for t in (task_in, task_out, task_err):
                 if not t.done():
                     t.cancel()
             await asyncio.gather(task_in, task_out, task_err, return_exceptions=True)
             engine.terminate()
             await engine.wait_closed()
+            proc = getattr(engine, "_proc", None)
+            rc = getattr(proc, "returncode", None) if proc else None
+            if (
+                isinstance(rc, int)
+                and rc != 0
+                and not getattr(engine, "_quit_sent", False)
+                and websocket.client_state == WebSocketState.CONNECTED
+            ):
+                detail = f": {last_stderr}" if last_stderr else ""
+                try:
+                    await websocket.send_text(f"info string Error: Engine crashed (exit {rc}){detail}")
+                    await websocket.close(code=1011)
+                except Exception:
+                    pass
             print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
 
 @app.websocket("/ws")

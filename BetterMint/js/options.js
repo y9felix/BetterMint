@@ -206,6 +206,17 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
 
 let activeProbeWs = null;
 let probeTimeout = null;
+let probedUrl = null;
+
+function setEngineOptionsStatus(msg) {
+  const container = document.getElementById("engine-options-container");
+  if (!container) return;
+  container.innerHTML = "";
+  const span = document.createElement("span");
+  span.className = "status-text";
+  span.textContent = msg;
+  container.appendChild(span);
+}
 
 function resetProbe() {
   if (probeTimeout) {
@@ -223,13 +234,7 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
   const container = document.getElementById("engine-options-container");
   if (!container) return;
   resetProbe();
-  const setStatus = (msg) => {
-    container.innerHTML = "";
-    const span = document.createElement("span");
-    span.className = "status-text";
-    span.textContent = msg;
-    container.appendChild(span);
-  };
+  const setStatus = setEngineOptionsStatus;
 
   if (!url || typeof WebSocket === "undefined") {
     setStatus("Invalid WebSocket URL.");
@@ -272,6 +277,7 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
         if (opt) {
           discovered.push(opt);
         } else if (trimmed === "uciok") {
+          probedUrl = url;
           resetProbe();
           onComplete(url, discovered, container);
           return;
@@ -341,6 +347,20 @@ function notifyTabs(data) {
   });
 }
 
+function probeIfExpanded() {
+  const details = document.getElementById("engine-options-details");
+  if (!details?.open) return;
+  const url = fields["option-url-api-stockfish"]?.value?.trim();
+  if (!url) {
+    resetProbe();
+    setEngineOptionsStatus("Invalid WebSocket URL.");
+    return;
+  }
+  if (probedUrl !== url) {
+    probeEngine(url);
+  }
+}
+
 function RestoreOptions() {
   if (typeof chrome === "undefined" || !chrome.storage?.sync) {
     UpdateVisibility();
@@ -364,8 +384,7 @@ function RestoreOptions() {
       }
     });
     UpdateVisibility();
-    const url = fields["option-url-api-stockfish"]?.value?.trim();
-    if (url) probeEngine(url);
+    probeIfExpanded();
   });
 }
 
@@ -386,8 +405,14 @@ function OnOptionsChange(changedKey) {
   });
 
   UpdateVisibility();
-  if (changedKey === "option-url-api-stockfish" && options["option-url-api-stockfish"]) {
-    probeEngine(options["option-url-api-stockfish"]);
+  if (changedKey === "option-url-api-stockfish") {
+    probedUrl = null;
+    resetProbe();
+    if (document.getElementById("engine-options-details")?.open) {
+      if (options["option-url-api-stockfish"]) probeEngine(options["option-url-api-stockfish"]);
+    } else {
+      setEngineOptionsStatus("Expand to load engine options.");
+    }
   }
 
   chrome.storage?.sync?.set(options);
@@ -409,6 +434,7 @@ function InitOptions() {
     field.addEventListener("change", () => OnOptionsChange(key));
   });
 
+  document.getElementById("engine-options-details")?.addEventListener("toggle", probeIfExpanded);
   RestoreOptions();
 }
 
@@ -433,6 +459,9 @@ if (typeof module !== "undefined" && module.exports) {
     renderDynamicUciOptions,
     probeEngine,
     resetProbe,
-    loadAndRenderEngineOptions
+    loadAndRenderEngineOptions,
+    InitOptions,
+    OnOptionsChange,
+    resetProbedUrlForTesting: () => { probedUrl = null; }
   };
 }

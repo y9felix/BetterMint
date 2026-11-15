@@ -192,6 +192,7 @@ class GameController {
           clearTimeout(this.autoMoveTimer);
           this.autoMoveTimer = null;
         }
+        this.RemoveCurrentMarkings();
         this.handleGameOver();
       }
     });
@@ -530,57 +531,66 @@ class GameController {
 
     if (getValueConfig(enumOptions.ShowHints)) {
       const legalMoves = this.controller.getLegalMoves?.();
-      const arrowColors = this.boardOptions?.arrowColors || {};
-      const seenEffects = new Set();
-      const nextMarkings = [];
-      let signature = "";
+      if (Array.isArray(legalMoves) && legalMoves.length === 0) {
+        this.RemoveCurrentMarkings();
+      } else {
+        const isSquare = (sq) => typeof sq === "string" && /^[a-h][1-8]$/.test(sq);
+        const arrowColors = this.boardOptions?.arrowColors || {};
+        const seenEffects = new Set();
+        const nextMarkings = [];
+        let signature = "";
 
-      topMoves.forEach((move, idx) => {
-        const resolved = resolveLegalMove(legalMoves, move);
-        const from = resolved ? resolved.from : move.from;
-        const to = resolved ? resolved.to : move.to;
-        const color =
-          idx === 0
-            ? (arrowColors.alt || "#15781b")
-            : idx <= 2
-            ? (arrowColors.shift || "#e68f00")
-            : idx <= 5
-            ? (arrowColors.default || "#003088")
-            : (arrowColors.ctrl || "#882020");
+        topMoves.forEach((move, idx) => {
+          const resolved = resolveLegalMove(legalMoves, move);
+          const from = resolved ? resolved.from : move.from;
+          const to = resolved ? resolved.to : move.to;
+          if (!isSquare(from) || !isSquare(to) || from === to) return;
 
-        signature += `${from}${to}${color};`;
-        nextMarkings.push({
-          data: {
-            from,
-            color,
-            opacity: 0.8,
-            to
-          },
-          node: true,
-          persistent: true,
-          type: "arrow"
-        });
+          const color =
+            idx === 0
+              ? (arrowColors.alt || "#15781b")
+              : idx <= 2
+              ? (arrowColors.shift || "#e68f00")
+              : idx <= 5
+              ? (arrowColors.default || "#003088")
+              : (arrowColors.ctrl || "#882020");
 
-        if (move.mate !== null && !seenEffects.has(to) && !this.lastAnalysisMarkings?.includes(`effect|${to}`)) {
-          seenEffects.add(to);
-          signature += `E:${to}:${move.mate < 0 ? 0 : 1};`;
+          signature += `${from}${to}${color};`;
           nextMarkings.push({
             data: {
-              square: to,
-              type: move.mate < 0 ? "ResignWhite" : "WinnerWhite"
+              from,
+              color,
+              opacity: 0.8,
+              to
             },
             node: true,
             persistent: true,
-            type: "effect"
+            type: "arrow"
           });
-        }
-      });
 
-      if (signature !== this.lastHintSignature) {
-        this.RemoveCurrentMarkings();
-        this.lastHintSignature = signature;
-        this.currentMarkings = nextMarkings.reverse();
-        this.controller.markings.addMany(this.currentMarkings);
+          if (move.mate !== null && !seenEffects.has(to) && !this.lastAnalysisMarkings?.includes(`effect|${to}`)) {
+            seenEffects.add(to);
+            signature += `E:${to}:${move.mate < 0 ? 0 : 1};`;
+            nextMarkings.push({
+              data: {
+                square: to,
+                type: move.mate < 0 ? "ResignWhite" : "WinnerWhite"
+              },
+              node: true,
+              persistent: true,
+              type: "effect"
+            });
+          }
+        });
+
+        if (signature !== this.lastHintSignature) {
+          this.RemoveCurrentMarkings();
+          this.lastHintSignature = signature;
+          this.currentMarkings = nextMarkings.reverse();
+          if (this.currentMarkings.length > 0) {
+            this.controller.markings.addMany(this.currentMarkings);
+          }
+        }
       }
     }
 
@@ -683,9 +693,10 @@ class StockfishEngine {
     this.engineUciOptions = new Set();
     this.customEngineOptions = Object.assign({}, BetterMintmaster?.options?.customEngineOptions);
     this.reconnectDelay = 500;
-    this.maxReconnectDelay = 3000;
+    this.maxReconnectDelay = 30000;
     this.reconnectAttempts = 0;
     this.reconnectTimer = null;
+    this.fatalError = null;
     this.staleBestMovesToIgnore = 0;
     this.pendingPosition = null;
 
@@ -716,7 +727,6 @@ class StockfishEngine {
     ws.addEventListener("open", () => {
       if (this.stockfish !== ws) return;
       console.log("WebSocket connection opened.");
-      this.reconnectAttempts = 0;
       this.staleBestMovesToIgnore = 0;
       this.send("uci");
       this.onReady(() => {
@@ -780,6 +790,7 @@ class StockfishEngine {
       this.currentUrl = newUrl;
       this.ready = false;
       this.loaded = false;
+      this.fatalError = null;
       this.staleBestMovesToIgnore = 0;
       this.pendingPosition = null;
       this.isSwitching = false;
@@ -842,20 +853,21 @@ class StockfishEngine {
       this.reconnectTimer = null;
     }
     this.reconnectAttempts = 0;
+    this.fatalError = null;
     this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
   }
 
   attemptReconnect() {
-    if (this.isSwitching || this.reconnectTimer !== null) return;
+    if (this.isSwitching || this.reconnectTimer !== null || this.fatalError) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     this.reconnectAttempts++;
-    const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, this.maxReconnectDelay);
+    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), this.maxReconnectDelay);
     if (this.reconnectAttempts === 1) {
       console.log(`Attempting to reconnect in ${delay / 1000} seconds...`);
     }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (!this.isSwitching) {
+      if (!this.isSwitching && !this.fatalError) {
         this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
       }
     }, delay);
@@ -1058,7 +1070,12 @@ class StockfishEngine {
 
     if (line === "uciok") {
       this.loaded = true;
+      this.reconnectAttempts = 0;
+      this.fatalError = null;
       this.UpdateOptions();
+    } else if (typeof line === "string" && line.startsWith("info string Error:")) {
+      this.fatalError = line.slice("info string ".length);
+      console.error(`[BetterMint] ${this.fatalError}`);
     } else if (line === "readyok") {
       this.ready = true;
       while (this.ready && this.readyCallbacks.length > 0) {
