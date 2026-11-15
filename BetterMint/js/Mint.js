@@ -57,17 +57,6 @@ const enumOptions = {
   ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
-const CASTLING_EQUIVALENTS = Object.freeze({
-  e1g1: "e1h1",
-  e1h1: "e1g1",
-  e1c1: "e1a1",
-  e1a1: "e1c1",
-  e8g8: "e8h8",
-  e8h8: "e8g8",
-  e8c8: "e8a8",
-  e8a8: "e8c8"
-});
-
 const CLOCK_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
 
 function cpToWinProbability(cp) {
@@ -105,47 +94,23 @@ function getValueConfig(key) {
 
 function resolveLegalMove(legalMoves, bestMove) {
   if (!Array.isArray(legalMoves) || !bestMove) return null;
-
-  let moveData = legalMoves.find(
+  const exact = legalMoves.find(
     (m) =>
       m.from === bestMove.from &&
       m.to === bestMove.to &&
       (!bestMove.promotion || !m.promotion || m.promotion === bestMove.promotion)
   );
-  if (moveData) return moveData;
-
-  const uci = `${bestMove.from}${bestMove.to}`;
-  const altUci = CASTLING_EQUIVALENTS[uci];
-  if (altUci) {
-    moveData = legalMoves.find((m) => `${m.from}${m.to}` === altUci);
-    if (moveData) return moveData;
-  }
-
-  const fromFile = bestMove.from.charCodeAt(0);
-  const toFile = bestMove.to.charCodeAt(0);
-  const fromRank = bestMove.from[1];
-  const toRank = bestMove.to[1];
-
-  if (!bestMove.promotion && fromRank === toRank && (fromRank === "1" || fromRank === "8")) {
-    const fileDelta = toFile - fromFile;
-    const isKingsideTarget = fileDelta > 0 || (fileDelta === 0 && bestMove.to[0] === "g");
-    const isQueensideTarget = fileDelta < 0 || (fileDelta === 0 && bestMove.to[0] === "c");
-
-    moveData = legalMoves.find((m) => {
-      if (m.from !== bestMove.from) return false;
-      const san = typeof m.san === "string" ? m.san.replace(/[+#!?]+$/, "") : "";
-      const flags = typeof m.flags === "string" ? m.flags : "";
-      const isKingsideMove = san === "O-O" || flags.includes("k") || m.castle === "k";
-      const isQueensideMove = san === "O-O-O" || flags.includes("q") || m.castle === "q";
-
-      if (isKingsideTarget && isKingsideMove) return true;
-      if (isQueensideTarget && isQueensideMove) return true;
-      return false;
-    });
-    if (moveData) return moveData;
-  }
-
-  return null;
+  if (exact || bestMove.promotion || bestMove.from[1] !== bestMove.to[1]) return exact || null;
+  if (bestMove.to === bestMove.from && bestMove.to[0] !== "g" && bestMove.to[0] !== "c") return null;
+  const wantFlag = bestMove.to > bestMove.from || (bestMove.to === bestMove.from && bestMove.to[0] === "g") ? "k" : "q";
+  const wantSan = wantFlag === "k" ? "O-O" : "O-O-O";
+  return (
+    legalMoves.find(
+      (m) =>
+        m.from === bestMove.from &&
+        (m.flags?.includes(wantFlag) || m.castle === wantFlag || m.san?.replace(/[+#!?]+$/, "") === wantSan)
+    ) || null
+  );
 }
 
 class TopMove {
@@ -1199,11 +1164,7 @@ class StockfishEngine {
 
     if (this.lastTopMoves.length > 0 && this.topMoves.length > 0) {
       const lastBestMove = this.lastTopMoves[0];
-      if (
-        lastBestMove.from === lastMove.from &&
-        lastBestMove.to === lastMove.to &&
-        (!lastBestMove.promotion || !lastMove.promotion || lastBestMove.promotion === lastMove.promotion)
-      ) {
+      if (resolveLegalMove([lastMove], lastBestMove)) {
         moveScore = "BestMove";
       } else {
         const epBefore = StockfishEngine.evalToExpectedPoints(lastBestMove);

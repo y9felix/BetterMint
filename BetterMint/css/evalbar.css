@@ -8,7 +8,7 @@
     -webkit-user-select: none;
     user-select: none;
     width: 28px;
-    z-index: 9999;
+    z-index: 5;
 }
 
 .bettermint-evalbar.bettermint-evalbar-flipped,
