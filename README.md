@@ -21,48 +21,51 @@ BetterMint is a Chrome extension that analyzes your Chess.com games with chess e
 
 ## Features
 
-- **UCI engines**: Connect to engines through websockets, hosted remotely or locally through EngineWS.
 - **Dynamic controls**: Adjust engine UCI options directly in the popup.
 - **Board HUD**: Display an evaluation bar, multi-line hint arrows, and move accuracy.
 - **Auto queue**: Rematch opponents and queue new games automatically.
 - **Humanized auto move**: Execute moves with natural delays, fast recaptures, and clock scaling.
-- **Configs**: Save, load, import, and export settings.
 
 ---
 
 ## Installation
 
-### 1. EngineWS server (for local engines)
+### 1. Engine backend
 
-**Requirements:** Python 3.10+, and a UCI engine (Stockfish, Maia).
+Choose one of two options:
 
-```bash
-cd EngineWS
-pip install -r requirements.txt
-```
+- **Remote sockets**: Use public engine endpoints from [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) (no local setup required).
+- **Local EngineWS server**: Run native engines on your computer.
 
-Set engine paths in `EngineWS/config.json`:
+  **Requirements:** Python 3.10+, and a UCI engine (Stockfish, Maia).
 
-```json
-{
-  "default": "stockfish",
-  "engines": {
-    "stockfish": ["stockfish"],
-    "maia": ["lc0", "--weights=/path/to/maia-1500.pb.gz"]
+  ```bash
+  cd EngineWS
+  pip install -r requirements.txt
+  ```
+
+  Set engine paths in `EngineWS/config.json`:
+
+  ```json
+  {
+    "default": "stockfish",
+    "engines": {
+      "stockfish": ["stockfish"],
+      "maia": ["lc0", "--weights=/path/to/maia-1500.pb.gz"]
+    }
   }
-}
-```
+  ```
 
-Start the server on `127.0.0.1:8000`:
-- **Linux / macOS:** `./run.sh`
-- **Windows:** `run.bat`
+  Start the server on `127.0.0.1:8000`:
+  - **Linux / macOS:** `./run.sh`
+  - **Windows:** `run.bat`
 
 ### 2. Chrome extension
 
 1. Open `chrome://extensions` in a Chromium browser (Brave, Chrome, Edge).
 2. Enable **Developer mode** (top right).
 3. Click **Load unpacked** and select the `BetterMint` directory.
-4. Verify the WebSocket URL in the popup (`ws://localhost:8000/ws`).
+4. Set the WebSocket URL in the popup (`ws://localhost:8000/ws` or a [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) endpoint).
 5. Open [Chess.com](https://www.chess.com) and play.
 
 ---
