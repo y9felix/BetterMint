@@ -2,7 +2,7 @@
 
 # BetterMint
 
-**Live Chess.com analysis and auto move, backed by local engines.**
+**Chess.com engine analysis and auto-move tool.**
 
 [![Version](https://img.shields.io/badge/version-2.1.11-7a5cff?style=for-the-badge)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.11)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4ade80?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
@@ -15,15 +15,13 @@
 
 ## What it is
 
-BetterMint runs local UCI chess engines and shows their analysis directly on Chess.com.
-
-A Chrome extension renders an evaluation bar, best-move arrows, and move accuracy on the board. A local Python server, EngineWS, runs native engines like Stockfish or Maia in the background and streams analysis over WebSockets.
+BetterMint is a Chrome extension that analyzes your Chess.com games with chess engines. It draws an evaluation bar, hint arrows, and move accuracy directly on the board. You can connect it to hosted engine sockets or run local engines with EngineWS.
 
 ---
 
 ## Features
 
-- **Local engines**: Run any UCI engine over WebSockets.
+- **UCI engines**: Connect to engines through websockets, hosted remotely or locally through EngineWS.
 - **Dynamic controls**: Adjust engine UCI options directly in the popup.
 - **Board HUD**: Display an evaluation bar, multi-line hint arrows, and move accuracy.
 - **Auto queue**: Rematch opponents and queue new games automatically.
@@ -34,7 +32,7 @@ A Chrome extension renders an evaluation bar, best-move arrows, and move accurac
 
 ## Installation
 
-### 1. EngineWS server
+### 1. EngineWS server (for local engines)
 
 **Requirements:** Python 3.10+, and a UCI engine (Stockfish, Maia).
 
@@ -72,7 +70,8 @@ Start the server on `127.0.0.1:8000`:
 ## Credits and license
 
 - **[thedemons](https://github.com/thedemons)**, original extension creator.
-- **[BotSolvers/BetterMint](https://github.com/BotSolvers/BetterMint)**, upstream V2 maintenance.
-- **[y9felix/BetterMint](https://github.com/y9felix/BetterMint)**, architecture refactor, dynamic UCI pipeline, and maintenance.
+- **[BotSolvers/BetterMint](https://github.com/BotSolvers/BetterMint)**, upstream V2.
+- **[ProtonDev](https://github.com/ProtonDev-sys)**, public engine sockets.
+- **[y9felix](https://github.com/y9felix)**, architecture refactor, dynamic UCI pipeline, and maintenance.
 
 Licensed under the **Reciprocal Public License 1.5 (RPL-1.5)**. See [LICENSE](LICENSE) for details.
