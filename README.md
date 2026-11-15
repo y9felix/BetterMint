@@ -11,13 +11,11 @@
 
 </div>
 
----
 
 ## What it is
 
 BetterMint is a Chrome extension that analyzes your Chess.com games with chess engines. It draws an evaluation bar, hint arrows, and move accuracy directly on the board. You can connect it to hosted engine sockets or run local engines with EngineWS.
 
----
 
 ## Features
 
@@ -26,7 +24,6 @@ BetterMint is a Chrome extension that analyzes your Chess.com games with chess e
 - **Auto queue**: Rematch opponents and queue new games automatically.
 - **Humanized auto move**: Execute moves with natural delays, fast recaptures, and clock scaling.
 
----
 
 ## Installation
 
@@ -68,7 +65,6 @@ Choose one of two options:
 4. Set the WebSocket URL in the popup (`ws://localhost:8000/ws` or a [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) endpoint).
 5. Open [Chess.com](https://www.chess.com) and play.
 
----
 
 ## Credits and license
 
