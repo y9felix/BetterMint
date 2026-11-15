@@ -90,8 +90,9 @@ const DEFAULT_PRESETS = [
   {
     id: "bullet",
     name: "Bullet",
-    summary: "1m · 1.25s · 200ms",
+    summary: "D8 · 1.25s · 200ms",
     settings: buildPresetSettings({
+      "option-depth": 8,
       "option-evaluation-bar": true,
       "option-show-hints": true,
       "option-move-analysis": true,
@@ -117,8 +118,9 @@ const DEFAULT_PRESETS = [
   {
     id: "blitz",
     name: "Blitz",
-    summary: "3m · 3.8s · 350ms",
+    summary: "D12 · 3.8s · 350ms",
     settings: buildPresetSettings({
+      "option-depth": 12,
       "option-evaluation-bar": true,
       "option-show-hints": true,
       "option-move-analysis": true,
@@ -144,8 +146,9 @@ const DEFAULT_PRESETS = [
   {
     id: "rapid",
     name: "Rapid",
-    summary: "10m · 12.5s · 600ms",
+    summary: "D16 · 12.5s · 600ms",
     settings: buildPresetSettings({
+      "option-depth": 16,
       "option-evaluation-bar": true,
       "option-show-hints": true,
       "option-move-analysis": true,
@@ -171,8 +174,9 @@ const DEFAULT_PRESETS = [
   {
     id: "puzzles",
     name: "Puzzles",
-    summary: "Auto · Queue · No HUD",
+    summary: "D14 · Queue · No HUD",
     settings: buildPresetSettings({
+      "option-depth": 14,
       "option-evaluation-bar": false,
       "option-show-hints": false,
       "option-move-analysis": false,
@@ -185,8 +189,9 @@ const DEFAULT_PRESETS = [
   {
     id: "bots",
     name: "Bots",
-    summary: "Auto · No HUD",
+    summary: "D14 · Auto · No HUD",
     settings: buildPresetSettings({
+      "option-depth": 14,
       "option-evaluation-bar": false,
       "option-show-hints": false,
       "option-move-analysis": false,
