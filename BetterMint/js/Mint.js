@@ -126,28 +126,23 @@ function resolveLegalMove(legalMoves, bestMove) {
   const fromRank = bestMove.from[1];
   const toRank = bestMove.to[1];
 
-  if (fromRank === toRank && (fromRank === "1" || fromRank === "8")) {
+  if (!bestMove.promotion && fromRank === toRank && (fromRank === "1" || fromRank === "8")) {
     const fileDelta = toFile - fromFile;
-    const isPossibleCastle =
-      Math.abs(fileDelta) >= 2 || bestMove.to[0] === "g" || bestMove.to[0] === "c";
+    const isKingsideTarget = fileDelta > 0 || (fileDelta === 0 && bestMove.to[0] === "g");
+    const isQueensideTarget = fileDelta < 0 || (fileDelta === 0 && bestMove.to[0] === "c");
 
-    if (isPossibleCastle) {
-      const isKingsideTarget = bestMove.to[0] === "g" || fileDelta > 0;
-      const isQueensideTarget = bestMove.to[0] === "c" || fileDelta < 0;
+    moveData = legalMoves.find((m) => {
+      if (m.from !== bestMove.from) return false;
+      const san = typeof m.san === "string" ? m.san.replace(/[+#!?]+$/, "") : "";
+      const flags = typeof m.flags === "string" ? m.flags : "";
+      const isKingsideMove = san === "O-O" || flags.includes("k") || m.castle === "k";
+      const isQueensideMove = san === "O-O-O" || flags.includes("q") || m.castle === "q";
 
-      moveData = legalMoves.find((m) => {
-        if (m.from !== bestMove.from) return false;
-        const san = typeof m.san === "string" ? m.san.replace(/[+#!?]+$/, "") : "";
-        const flags = typeof m.flags === "string" ? m.flags : "";
-        const isKingsideMove = san === "O-O" || flags.includes("k") || m.castle === "k";
-        const isQueensideMove = san === "O-O-O" || flags.includes("q") || m.castle === "q";
-
-        if (isKingsideTarget && isKingsideMove) return true;
-        if (isQueensideTarget && isQueensideMove) return true;
-        return false;
-      });
-      if (moveData) return moveData;
-    }
+      if (isKingsideTarget && isKingsideMove) return true;
+      if (isQueensideTarget && isQueensideMove) return true;
+      return false;
+    });
+    if (moveData) return moveData;
   }
 
   return null;
@@ -228,6 +223,10 @@ class GameController {
           this.ResetGame();
         }, 100);
       } else if (event.data === "gameOver") {
+        if (this.autoMoveTimer !== null) {
+          clearTimeout(this.autoMoveTimer);
+          this.autoMoveTimer = null;
+        }
         this.handleGameOver();
       }
     });
@@ -1308,7 +1307,15 @@ class StockfishEngine {
     ) {
       const game = this.BetterMintmaster.game;
       const controller = game.controller;
+      const mode = controller.getMode?.();
+      if (mode === "gameOver" || mode === "analysis" || mode === "review") {
+        return;
+      }
+
       const activeFen = controller.getFEN();
+      if (this.currentPositionFen && this.currentPositionFen !== activeFen) {
+        return;
+      }
 
       if (game.autoMoveTimer !== null || this.lastAutoMovedFen === activeFen) {
         return;
@@ -1318,13 +1325,34 @@ class StockfishEngine {
       if (!bestMove) return;
       const legalMoves = controller.getLegalMoves();
       const matchedMove = resolveLegalMove(legalMoves, bestMove);
-      console.assert(Boolean(matchedMove), "Illegal best move");
       if (!matchedMove) return;
 
       const moveData = Object.assign({}, matchedMove, { userGenerated: true });
-      if (bestMove.promotion !== null) {
+      if (bestMove.promotion) {
         moveData.promotion = bestMove.promotion;
       }
+
+      const executeAutoMove = () => {
+        const currentMode = controller.getMode?.();
+        if (
+          !getValueConfig(enumOptions.LegitAutoMove) ||
+          controller.getPlayingAs() !== controller.getTurn() ||
+          controller.getFEN() !== activeFen ||
+          currentMode === "gameOver" ||
+          currentMode === "analysis" ||
+          currentMode === "review"
+        ) {
+          return;
+        }
+        try {
+          const result = controller.move(moveData);
+          if (result !== false && controller.getFEN() === activeFen) {
+            this.lastAutoMovedFen = activeFen;
+          }
+        } catch (e) {
+          console.error("Failed to execute auto move:", e);
+        }
+      };
 
       const targetDelay = this.calculateTargetDelay(bestMove);
       const now = performance.now();
@@ -1332,19 +1360,11 @@ class StockfishEngine {
       const remainingDelay = Math.max(0, targetDelay - elapsed);
 
       if (remainingDelay <= 0) {
-        this.lastAutoMovedFen = activeFen;
-        controller.move(moveData);
+        executeAutoMove();
       } else {
         game.autoMoveTimer = setTimeout(() => {
           game.autoMoveTimer = null;
-          if (
-            getValueConfig(enumOptions.LegitAutoMove) &&
-            controller.getPlayingAs() === controller.getTurn() &&
-            controller.getFEN() === activeFen
-          ) {
-            this.lastAutoMovedFen = activeFen;
-            controller.move(moveData);
-          }
+          executeAutoMove();
         }, remainingDelay);
       }
     }
