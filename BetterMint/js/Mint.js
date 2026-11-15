@@ -1265,8 +1265,7 @@ class StockfishEngine {
           "chess.com",
           remainingDelay + 1000,
           "circle-info",
-          `BetterMint: Auto move in ${secondsTillAutoMove}s`,
-          { backgroundColor: "black", border: "1px solid #ffffff" }
+          `BetterMint: Auto move in ${secondsTillAutoMove}s`
         );
       }
 
@@ -1327,9 +1326,8 @@ class BetterMint {
           this.showToast(
             "BetterMint-settings-updated",
             2000,
-            "circle-gearwheel",
-            "Settings updated!",
-            { backgroundColor: "#3498db" }
+            "circle-info",
+            "Settings updated!"
           );
         }
       },
@@ -1337,37 +1335,23 @@ class BetterMint {
     );
   }
 
-  showToast(id, duration, icon, message, extraStyle = {}) {
+  showToast(id, duration, icon, content) {
     if (!getValueConfig(enumOptions.Notifications) || !window.toaster) return;
     window.toaster.add({
       id,
       duration,
       icon,
-      message,
-      style: Object.assign(
-        {
-          position: "fixed",
-          bottom: "60px",
-          right: "30px",
-          color: "white",
-          fontSize: "14px",
-          padding: "12px 16px",
-          zIndex: "10000"
-        },
-        extraStyle
-      )
+      content
     });
   }
 
   onEngineLoaded() {
-    if (getValueConfig(enumOptions.Notifications) && window.toaster) {
-      window.toaster.add({
-        id: "chess.com",
-        duration: 3000,
-        icon: "circle-info",
-        content: "BetterMint is enabled!"
-      });
-    }
+    this.showToast(
+      "chess.com",
+      3000,
+      "circle-info",
+      "BetterMint is enabled!"
+    );
   }
 }
 
