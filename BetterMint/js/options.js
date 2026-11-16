@@ -188,7 +188,6 @@ let currentTheme = "dark";
 let activeThemeColors = null;
 let activeConfigName = null;
 let customConfigsCache = [];
-let presetOverridesCache = [];
 let popoverMode = null;
 let statusTimer = null;
 let themeInitialized = false;
@@ -933,20 +932,6 @@ function setActiveConfigName(name) {
   storageSet("local", { activeConfigName });
 }
 
-function getEffectivePresets() {
-  return DEFAULT_PRESETS.map((preset) => {
-    const override = presetOverridesCache.find((p) => p.id === preset.id);
-    if (!override) return preset;
-    return {
-      id: preset.id,
-      name: preset.name,
-      summary: preset.summary,
-      settings: normalizeSettings(override.settings || preset.settings),
-      customEngineOptions: Object.assign({}, override.customEngineOptions || {})
-    };
-  });
-}
-
 function setConfigStatus(msg, isError = false) {
   const el = document.getElementById("config-status");
   if (!el) return;
@@ -1058,7 +1043,7 @@ function renderLoadList() {
   list.innerHTML = "";
 
   list.appendChild(createEl("div", { className: "config-section-label", textContent: "Presets" }));
-  getEffectivePresets().forEach((preset) => {
+  DEFAULT_PRESETS.forEach((preset) => {
     const btn = createEl("button", { type: "button", className: "config-item-btn" }, [
       createEl("span", { className: "config-item-name", textContent: preset.name }),
       createEl("span", { className: "config-item-meta", textContent: preset.summary })
@@ -1159,13 +1144,12 @@ function setConfigPopoverMode(mode) {
 function refreshConfigStorage(cb) {
   const url = fields["option-url-api-stockfish"]?.value?.trim() || baseDefaults["option-url-api-stockfish"];
   const engineKey = getEngineOptionsStorageKey(url);
-  const keys = ["customConfigs", "presetOverrides", "activeConfigName"];
+  const keys = ["customConfigs", "activeConfigName"];
   if (engineKey) keys.push(engineKey);
 
   if (typeof chrome === "undefined" || !chrome.storage?.local) {
     cb?.({
       customConfigs: customConfigsCache,
-      presetOverrides: presetOverridesCache,
       activeConfigName,
       customEngineOptions: {}
     });
@@ -1174,7 +1158,6 @@ function refreshConfigStorage(cb) {
 
   chrome.storage.local.get(keys, (res) => {
     if (Array.isArray(res?.customConfigs)) customConfigsCache = res.customConfigs;
-    if (Array.isArray(res?.presetOverrides)) presetOverridesCache = res.presetOverrides;
     if (Object.prototype.hasOwnProperty.call(res || {}, "activeConfigName")) {
       activeConfigName = res.activeConfigName || null;
     }
@@ -1185,7 +1168,6 @@ function refreshConfigStorage(cb) {
         : storedEngineOpts;
     cb?.({
       customConfigs: customConfigsCache,
-      presetOverrides: presetOverridesCache,
       activeConfigName,
       customEngineOptions: Object.assign({}, liveEngineOpts)
     });
@@ -1206,7 +1188,7 @@ function buildExportSnapshot(cb) {
         id: currentTheme,
         colors: getCurrentThemeColors()
       },
-      presets: getEffectivePresets().map((preset) => ({
+      presets: DEFAULT_PRESETS.map((preset) => ({
         id: preset.id,
         name: preset.name,
         settings: preset.settings,
@@ -1292,22 +1274,6 @@ function importMintText(rawText, filename = "config.mint") {
     return { ok: false, error: "No valid settings in .mint file." };
   }
 
-  if (Array.isArray(parsed.presets)) {
-    const validPresets = parsed.presets.filter(
-      (p) => isPlainObject(p) && typeof p.id === "string" && isPlainObject(p.settings)
-    );
-    if (validPresets.length > 0) {
-      presetOverridesCache = validPresets.map((p) => ({
-        id: p.id,
-        settings: normalizeSettings(p.settings),
-        customEngineOptions: isPlainObject(p.customEngineOptions)
-          ? Object.assign({}, p.customEngineOptions)
-          : {}
-      }));
-      storageSet("local", { presetOverrides: presetOverridesCache });
-    }
-  }
-
   if (Array.isArray(parsed.customConfigs)) {
     parsed.customConfigs.forEach((entry) => {
       if (
@@ -1346,6 +1312,9 @@ function importMintText(rawText, filename = "config.mint") {
 }
 
 function InitConfigSystem() {
+  if (typeof chrome !== "undefined") {
+    chrome.storage?.local?.remove?.("presetOverrides");
+  }
   refreshConfigStorage();
   if (configInitialized) return;
   configInitialized = true;
@@ -1522,7 +1491,6 @@ if (typeof module !== "undefined" && module.exports) {
       lastProbedOptions = [];
       activeConfigName = null;
       customConfigsCache = [];
-      presetOverridesCache = [];
       popoverMode = null;
       activeThemeColors = null;
     }
