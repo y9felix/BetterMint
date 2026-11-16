@@ -61,16 +61,6 @@
     z-index: 3;
 }
 
-.bettermint-evalbar .bettermint-evalbar-score.bettermint-evalbar-dark {
-    bottom: 0;
-    color: #403d39;
-}
-
-.bettermint-evalbar .bettermint-evalbar-score.bettermint-evalbar-light {
-    color: #fff;
-    top: 0;
-}
-
 .bettermint-evalbar:hover .bettermint-evalbar-score {
     border-radius: .3rem;
     bottom: auto;
@@ -81,7 +71,6 @@
     padding: 2px 6px;
     top: 50%;
     transform: translate(-50%, -50%) var(--flipTransform, rotate(0deg));
-    transition: opacity .15s;
     width: auto;
 }
 

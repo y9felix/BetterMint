@@ -921,8 +921,7 @@ function applyConfigProfile(rawSettings, customEngineOptions = {}, { name = null
   setActiveConfigName(markSaved ? name : null);
 
   const nextUrl = nextSettings["option-url-api-stockfish"];
-  const engineKey =
-    typeof getEngineOptionsStorageKey === "function" ? getEngineOptionsStorageKey(nextUrl) : null;
+  const engineKey = getEngineOptionsStorageKey(nextUrl);
   if (engineKey) {
     chrome.storage?.local?.set({ [engineKey]: nextEngineOpts });
   }
@@ -1081,8 +1080,7 @@ function setConfigPopoverMode(mode) {
 
 function refreshConfigStorage(cb) {
   const url = fields["option-url-api-stockfish"]?.value?.trim() || baseDefaults["option-url-api-stockfish"];
-  const engineKey =
-    typeof getEngineOptionsStorageKey === "function" ? getEngineOptionsStorageKey(url) : null;
+  const engineKey = getEngineOptionsStorageKey(url);
   const keys = ["customConfigs", "presetOverrides", "activeConfigName"];
   if (engineKey) keys.push(engineKey);
 
@@ -1391,9 +1389,8 @@ function InitOptions() {
       notifyTabs({ stopSearch: true });
       setConfigStatus("Stop sent");
     });
+    document.getElementById("engine-options-details")?.addEventListener("toggle", probeIfExpanded);
   }
-
-  document.getElementById("engine-options-details")?.addEventListener("toggle", probeIfExpanded);
   InitTheme();
   InitConfigSystem();
   RestoreOptions();
