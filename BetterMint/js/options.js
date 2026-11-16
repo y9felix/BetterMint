@@ -424,7 +424,8 @@ function applyTheme(theme, customColors = null) {
 
 function InitTheme() {
   applyTheme("dark");
-  chrome.storage?.local?.get(["theme", "themeColors"], (res) => {
+  const storage = typeof chrome !== "undefined" ? chrome.storage?.local : null;
+  storage?.get?.(["theme", "themeColors"], (res) => {
     if (res?.theme) {
       applyTheme(res.theme, res.themeColors || null);
     } else if (res?.themeColors) {
@@ -436,7 +437,7 @@ function InitTheme() {
   document.getElementById("theme-toggle")?.addEventListener("click", () => {
     const next = THEMES[currentTheme]?.next || "dark";
     applyTheme(next, null);
-    chrome.storage?.local?.set({ theme: next, themeColors: null });
+    storageSet("local", { theme: next, themeColors: null });
   });
 }
 
@@ -646,7 +647,11 @@ function resetProbe() {
   if (activeProbeWs) {
     const ws = activeProbeWs;
     activeProbeWs = null;
-    try { ws.close(); } catch {}
+    try {
+      ws.close();
+    } catch (err) {
+      console.warn("[BetterMint] Failed to close probe WebSocket:", err);
+    }
   }
 }
 
@@ -655,8 +660,12 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
   if (!container) return;
   resetProbe();
 
-  if (!url || typeof WebSocket === "undefined") {
-    setEngineOptionsStatus("Invalid WebSocket URL.");
+  if (typeof WebSocket === "undefined") {
+    setEngineOptionsStatus("WebSocket unavailable.");
+    return;
+  }
+  if (!url || !/^wss?:\/\//i.test(url)) {
+    setEngineOptionsStatus("Invalid WebSocket URL (use ws:// or wss://).");
     return;
   }
 
@@ -716,7 +725,8 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
       resetProbe();
       setEngineOptionsStatus("Unable to connect to engine.");
     });
-  } catch {
+  } catch (err) {
+    console.warn("[BetterMint] Failed to initialize engine probe socket:", err);
     resetProbe();
     setEngineOptionsStatus("Failed to initialize engine socket.");
   }
@@ -736,16 +746,46 @@ function invalidateEngineProbe(url) {
 let engineOptsSyncTimer = null;
 let pendingEngineOpts = null;
 
-function flushPendingEngineOpts() {
+function storageSet(area, data) {
+  const store = typeof chrome !== "undefined" ? chrome.storage?.[area] : null;
+  if (!store?.set) return;
+  store.set(data, () => {
+    const err = typeof chrome !== "undefined" ? chrome.runtime?.lastError : null;
+    if (err) {
+      console.error(`[BetterMint] Failed to write ${area} storage:`, err.message || err);
+      setConfigStatus("Failed to save settings.", true);
+    }
+  });
+}
+
+function flushPendingEngineOpts({ notify = true } = {}) {
   if (!pendingEngineOpts) return;
   if (engineOptsSyncTimer) {
     clearTimeout(engineOptsSyncTimer);
     engineOptsSyncTimer = null;
   }
-  const { key, data } = pendingEngineOpts;
+  const { key, url, data } = pendingEngineOpts;
   pendingEngineOpts = null;
-  chrome.storage?.local?.set({ [key]: data });
-  notifyTabs({ customEngineOptions: data });
+  storageSet("local", { [key]: data });
+  const activeUrl = fields["option-url-api-stockfish"]?.value?.trim();
+  if (notify && (!url || !activeUrl || url === activeUrl)) {
+    notifyTabs({ customEngineOptions: data });
+  }
+}
+
+function bindDynamicUciOptions(storageKey, optionsList, savedValues, container, url = null) {
+  const saved = Object.assign({}, savedValues || {});
+  renderDynamicUciOptions(optionsList, saved, container, (name, val, isButton) => {
+    if (isButton) {
+      notifyTabs({ uciButton: name });
+      return;
+    }
+    saved[name] = val;
+    setActiveConfigName(null);
+    pendingEngineOpts = { key: storageKey, url, data: saved };
+    if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
+    engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, ENGINE_OPTS_DEBOUNCE_MS);
+  });
 }
 
 function loadAndRenderEngineOptions(url, optionsList, container) {
@@ -755,18 +795,7 @@ function loadAndRenderEngineOptions(url, optionsList, container) {
   }
   const storageKey = getEngineOptionsStorageKey(url);
   chrome.storage.local.get([storageKey], (result) => {
-    const saved = Object.assign({}, result?.[storageKey] || {});
-    renderDynamicUciOptions(optionsList, saved, container, (name, val, isButton) => {
-      if (isButton) {
-        notifyTabs({ uciButton: name });
-        return;
-      }
-      saved[name] = val;
-      setActiveConfigName(null);
-      pendingEngineOpts = { key: storageKey, data: saved };
-      if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
-      engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, ENGINE_OPTS_DEBOUNCE_MS);
-    });
+    bindDynamicUciOptions(storageKey, optionsList, result?.[storageKey], container, url);
   });
 }
 
@@ -851,7 +880,7 @@ function applySettingsToDom(options) {
 
 function setActiveConfigName(name) {
   activeConfigName = name || null;
-  chrome.storage?.local?.set({ activeConfigName });
+  storageSet("local", { activeConfigName });
 }
 
 function getEffectivePresets() {
@@ -923,16 +952,16 @@ function applyConfigProfile(rawSettings, customEngineOptions = {}, { name = null
   const nextUrl = nextSettings["option-url-api-stockfish"];
   const engineKey = getEngineOptionsStorageKey(nextUrl);
   if (engineKey) {
-    chrome.storage?.local?.set({ [engineKey]: nextEngineOpts });
+    storageSet("local", { [engineKey]: nextEngineOpts });
   }
-  chrome.storage?.sync?.set(nextSettings);
+  storageSet("sync", nextSettings);
 
   if (prevUrl !== nextUrl) {
     invalidateEngineProbe(nextUrl);
   } else if (document.getElementById("engine-options-details")?.open && probedUrl === nextUrl) {
     const container = document.getElementById("engine-options-container");
-    if (container && lastProbedOptions.length > 0) {
-      loadAndRenderEngineOptions(nextUrl, lastProbedOptions, container);
+    if (container && lastProbedOptions.length > 0 && engineKey) {
+      bindDynamicUciOptions(engineKey, lastProbedOptions, nextEngineOpts, container, nextUrl);
     }
   }
 
@@ -953,7 +982,7 @@ function saveCustomConfigEntry(name, settings, customEngineOptions) {
     (item) => item.name.toLowerCase() !== trimmed.toLowerCase()
   );
   customConfigsCache = [entry, ...filtered];
-  chrome.storage?.local?.set({ customConfigs: customConfigsCache });
+  storageSet("local", { customConfigs: customConfigsCache });
   return entry;
 }
 
@@ -964,7 +993,7 @@ function deleteCustomConfigEntry(name) {
     activeConfigName = null;
     updates.activeConfigName = null;
   }
-  chrome.storage?.local?.set(updates);
+  storageSet("local", updates);
 }
 
 function formatConfigSummary(settings) {
@@ -1085,7 +1114,12 @@ function refreshConfigStorage(cb) {
   if (engineKey) keys.push(engineKey);
 
   if (typeof chrome === "undefined" || !chrome.storage?.local) {
-    cb?.({ customConfigs: customConfigsCache, customEngineOptions: {} });
+    cb?.({
+      customConfigs: customConfigsCache,
+      presetOverrides: presetOverridesCache,
+      activeConfigName,
+      customEngineOptions: {}
+    });
     return;
   }
 
@@ -1223,7 +1257,7 @@ function importMintText(rawText, filename = "config.mint") {
             ? Object.assign({}, p.customEngineOptions)
             : {}
       }));
-      chrome.storage?.local?.set({ presetOverrides: presetOverridesCache });
+      storageSet("local", { presetOverrides: presetOverridesCache });
     }
   }
 
@@ -1242,7 +1276,7 @@ function importMintText(rawText, filename = "config.mint") {
         ? parsed.theme.colors
         : null;
     applyTheme(themeId || currentTheme, themeColors);
-    chrome.storage?.local?.set({ theme: currentTheme, themeColors: activeThemeColors });
+    storageSet("local", { theme: currentTheme, themeColors: activeThemeColors });
   }
 
   const importedName =
@@ -1350,10 +1384,11 @@ function OnOptionsChange(changedKey) {
   setActiveConfigName(null);
 
   if (changedKey === "option-url-api-stockfish") {
+    flushPendingEngineOpts({ notify: false });
     invalidateEngineProbe(options["option-url-api-stockfish"]);
   }
 
-  chrome.storage?.sync?.set(options);
+  storageSet("sync", options);
   notifyTabs(changedKey ? { [changedKey]: options[changedKey] } : options);
 }
 

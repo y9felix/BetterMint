@@ -18,16 +18,17 @@ def load_config(path: str = CONFIG_PATH) -> dict:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_CONFIG, f, indent=2)
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"[CONFIG WARN] Failed to write default config '{path}': {e}", flush=True)
         return dict(DEFAULT_CONFIG)
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, dict):
                 return data
-    except (OSError, json.JSONDecodeError):
-        pass
+            print(f"[CONFIG WARN] Config '{path}' root is not an object; using defaults", flush=True)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"[CONFIG WARN] Failed to load '{path}': {e}; using defaults", flush=True)
     return dict(DEFAULT_CONFIG)
 
 def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
@@ -36,7 +37,12 @@ def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
         cmd = engines[engine_name]
     else:
         cmd = engines.get(cfg.get("default", "stockfish"), ["stockfish"])
-    return [cmd] if isinstance(cmd, str) else [str(c) for c in cmd]
+    if isinstance(cmd, str):
+        return [cmd] if cmd else ["stockfish"]
+    if isinstance(cmd, list):
+        parts = [str(c) for c in cmd if str(c)]
+        return parts or ["stockfish"]
+    return ["stockfish"]
 
 class EngineProcess:
     def __init__(self, cmd: list[str]):
@@ -151,7 +157,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
             try:
                 await websocket.send_text(f"info string Error: Engine binary '{cmd[0]}' not found")
                 await websocket.close()
-            except Exception:
+            except (WebSocketDisconnect, RuntimeError, OSError):
                 pass
             return
 
@@ -212,7 +218,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
             if task_out.done() and not task_err.done():
                 try:
                     await asyncio.wait_for(asyncio.shield(task_err), timeout=0.2)
-                except (asyncio.TimeoutError, Exception):
+                except asyncio.TimeoutError:
                     pass
             for t in (task_in, task_out, task_err):
                 if not t.done():
@@ -232,7 +238,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                 try:
                     await websocket.send_text(f"info string Error: Engine crashed (exit {rc}){detail}")
                     await websocket.close(code=1011)
-                except Exception:
+                except (WebSocketDisconnect, RuntimeError, OSError):
                     pass
             print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
 

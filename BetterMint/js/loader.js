@@ -59,6 +59,9 @@ if (typeof window !== "undefined" && !isExtensionPage && typeof chrome !== "unde
     const storageKey = getEngineOptionsStorageKey(newUrl);
     if (newUrl && !request.data.customEngineOptions && storageKey && chrome.storage?.local) {
       chrome.storage.local.get([storageKey], (res) => {
+        if (chrome.runtime?.lastError) {
+          console.warn("[BetterMint] Failed to read engine options:", chrome.runtime.lastError.message || chrome.runtime.lastError);
+        }
         dispatchUpdate(
           Object.assign({}, request.data, { customEngineOptions: res?.[storageKey] || {} })
         );
@@ -70,6 +73,9 @@ if (typeof window !== "undefined" && !isExtensionPage && typeof chrome !== "unde
 
   window.addEventListener("BetterMintGetOptions", (evt) => {
     chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
+      if (chrome.runtime?.lastError) {
+        console.warn("[BetterMint] Failed to read sync options:", chrome.runtime.lastError.message || chrome.runtime.lastError);
+      }
       const reply = (data) =>
         window.dispatchEvent(
           new CustomEvent("BetterMintSendOptions", {
@@ -79,6 +85,9 @@ if (typeof window !== "undefined" && !isExtensionPage && typeof chrome !== "unde
       const storageKey = getEngineOptionsStorageKey(opts?.["option-url-api-stockfish"]);
       if (storageKey && chrome.storage?.local) {
         chrome.storage.local.get([storageKey], (res) => {
+          if (chrome.runtime?.lastError) {
+            console.warn("[BetterMint] Failed to read engine options:", chrome.runtime.lastError.message || chrome.runtime.lastError);
+          }
           reply(Object.assign({}, opts, { customEngineOptions: res?.[storageKey] || {} }));
         });
       } else {

@@ -24,6 +24,7 @@ function requestOptions() {
     };
     timer = setTimeout(() => {
       window.removeEventListener("BetterMintSendOptions", listener);
+      console.warn("[BetterMint] Timed out waiting for extension options; using fallback.");
       resolve({});
     }, OPTIONS_REQUEST_TIMEOUT_MS);
     window.addEventListener("BetterMintSendOptions", listener);
@@ -856,7 +857,9 @@ class StockfishEngine {
         this.stockfish = null;
         try {
           oldWs.close();
-        } catch (e) {}
+        } catch (e) {
+          console.warn("[BetterMint] Failed to close previous engine WebSocket:", e);
+        }
       }
       this.currentUrl = newUrl;
       this.ready = false;
@@ -1196,8 +1199,12 @@ class StockfishEngine {
   }
 
   UpdateExtensionOptions(options = {}) {
+    if (Object.prototype.hasOwnProperty.call(options, enumOptions.Depth)) {
+      this.depth = nonNegIntConfig(enumOptions.Depth, 15);
+    }
+
     const newUrl = options[enumOptions.UrlApiStockfish];
-    if (newUrl && newUrl !== this.currentUrl) {
+    if (newUrl && newUrl !== (this.targetUrl || this.currentUrl)) {
       this.customEngineOptions =
         options.customEngineOptions && typeof options.customEngineOptions === "object"
           ? Object.assign({}, options.customEngineOptions)
@@ -1222,7 +1229,7 @@ class StockfishEngine {
 
     const custom = options.customEngineOptions;
     if (custom && typeof custom === "object") {
-      Object.assign(this.customEngineOptions, custom);
+      this.customEngineOptions = Object.assign({}, custom);
       this.stopEvaluation(() => {
         this.UpdateOptions(this.customEngineOptions);
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
