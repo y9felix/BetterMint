@@ -252,12 +252,16 @@ function normalizeRangeInput(rangeInput, rawText, key = null) {
 
   const rawMin = parseFloat(rangeInput.min);
   const rawMax = parseFloat(rangeInput.max);
-  const rawStep = parseFloat(rangeInput.step);
   const min = Number.isNaN(rawMin) ? 0 : rawMin;
   const max = Number.isNaN(rawMax) ? 100 : rawMax;
-  const step = Number.isNaN(rawStep) || rawStep <= 0 ? 1 : rawStep;
-
   const clamped = Math.min(max, Math.max(min, parsed));
+
+  if (String(rangeInput.step || "").toLowerCase() === "any") {
+    return clamped;
+  }
+
+  const rawStep = parseFloat(rangeInput.step);
+  const step = Number.isNaN(rawStep) || rawStep <= 0 ? 1 : rawStep;
   const stepStr = String(rangeInput.step || "");
   const dotIdx = stepStr.indexOf(".");
   const decimals = dotIdx === -1 ? 0 : stepStr.length - dotIdx - 1;
