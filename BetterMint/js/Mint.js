@@ -6,7 +6,7 @@ const EVAL_BAR_OFFSET_PX = 40;
 const AUTO_QUEUE_COOLDOWN_MS = 4000;
 const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
-const STOP_TIMEOUT_MS = 150;
+const STOP_TIMEOUT_MS = 1000;
 const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
 
 let requestId = 0;
@@ -775,6 +775,65 @@ class StockfishEngine {
   static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
   static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
 
+  static parseUciOptionLine(line) {
+    if (!line || typeof line !== "string" || !line.startsWith("option name ")) return null;
+    const rest = line.slice(12);
+    const typeIndex = rest.indexOf(" type ");
+    if (typeIndex === -1) return null;
+    const name = rest.slice(0, typeIndex).trim();
+    if (!name) return null;
+
+    const afterType = rest.slice(typeIndex + 6).trim();
+    const tokens = afterType.split(/\s+/);
+    const type = tokens[0];
+    if (!type) return null;
+
+    if (type === "button") {
+      return { name, type, hasDefault: false, default: null };
+    }
+
+    if (type === "string") {
+      const defMatch = afterType.match(/^string\s+default\s*(.*)$/);
+      if (!defMatch) {
+        return { name, type, hasDefault: false, default: null };
+      }
+      const rawDef = defMatch[1].trim();
+      return {
+        name,
+        type,
+        hasDefault: true,
+        default: rawDef === "<empty>" ? "" : rawDef
+      };
+    }
+
+    const keywords = new Set(["default", "min", "max", "var"]);
+    let currentKey = null;
+    let currentWords = [];
+    let hasDefault = false;
+    let defVal = "";
+
+    const flush = () => {
+      if (currentKey === "default") {
+        hasDefault = true;
+        defVal = currentWords.join(" ").trim();
+      }
+      currentWords = [];
+    };
+
+    for (let i = 1; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (keywords.has(token)) {
+        flush();
+        currentKey = token;
+      } else if (currentKey) {
+        currentWords.push(token);
+      }
+    }
+    flush();
+
+    return { name, type, hasDefault, default: hasDefault ? defVal : null };
+  }
+
   constructor(BetterMintmaster) {
     this.BetterMintmaster = BetterMintmaster;
     this.loaded = false;
@@ -799,6 +858,10 @@ class StockfishEngine {
     this.isSwitching = false;
     this.onEngineSwitchedCallback = null;
     this.engineUciOptions = new Set();
+    this.engineUciDefaults = new Map();
+    this.appliedEngineOptions = {};
+    this.pendingReadyCount = 0;
+    this.isReadySentForCurrentState = false;
     this.customEngineOptions = Object.assign({}, BetterMintmaster?.options?.customEngineOptions);
     this.reconnectDelay = 500;
     this.maxReconnectDelay = 30000;
@@ -834,22 +897,29 @@ class StockfishEngine {
     const ws = this.stockfish;
     ws.addEventListener("open", () => {
       if (this.stockfish !== ws) return;
+      this.loaded = false;
+      this.ready = false;
+      this.pendingReadyCount = 0;
+      this.isReadySentForCurrentState = false;
+      this.appliedEngineOptions = {};
       this.staleBestMovesToIgnore = 0;
       this.send("uci");
       this.onReady(() => {
+        this.ready = false;
+        this.isReadySentForCurrentState = false;
         this.send("ucinewgame");
-        if (this.onEngineSwitchedCallback) {
-          this.ready = false;
-          const cb = this.onEngineSwitchedCallback;
-          this.onEngineSwitchedCallback = null;
-          cb();
-        } else {
-          const controller = this.BetterMintmaster?.game?.controller;
-          if (controller && controller.getMode?.() !== "gameOver" && typeof controller.getFEN === "function") {
-            this.ready = false;
-            this.BetterMintmaster.game.UpdateEngine(false);
+        this.onReady(() => {
+          if (this.onEngineSwitchedCallback) {
+            const cb = this.onEngineSwitchedCallback;
+            this.onEngineSwitchedCallback = null;
+            cb();
+          } else {
+            const controller = this.BetterMintmaster?.game?.controller;
+            if (controller && controller.getMode?.() !== "gameOver" && typeof controller.getFEN === "function") {
+              this.BetterMintmaster.game.UpdateEngine(false);
+            }
           }
-        }
+        });
       });
     });
 
@@ -896,11 +966,15 @@ class StockfishEngine {
       this.currentUrl = newUrl;
       this.ready = false;
       this.loaded = false;
+      this.pendingReadyCount = 0;
+      this.isReadySentForCurrentState = false;
       this.fatalError = null;
       this.staleBestMovesToIgnore = 0;
       this.pendingPosition = null;
       this.isSwitching = false;
       this.engineUciOptions = new Set();
+      this.engineUciDefaults = new Map();
+      this.appliedEngineOptions = {};
       this.onEngineSwitchedCallback = () => {
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
           this.BetterMintmaster.game.UpdateEngine(false);
@@ -1084,6 +1158,9 @@ class StockfishEngine {
     this.clearInfiniteGuards();
     this.ready = false;
     this.loaded = false;
+    this.pendingReadyCount = 0;
+    this.isReadySentForCurrentState = false;
+    this.appliedEngineOptions = {};
     this.isEvaluating = false;
     this.isRequestedStop = false;
     this.isFinishingSearch = false;
@@ -1126,12 +1203,19 @@ class StockfishEngine {
     }, delay);
   }
 
+  sendIsReady() {
+    if (!this.loaded || !this.isWebSocketOpen() || this.isReadySentForCurrentState) return;
+    this.isReadySentForCurrentState = true;
+    this.pendingReadyCount = (this.pendingReadyCount || 0) + 1;
+    this.send("isready");
+  }
+
   onReady(callback) {
     if (this.ready) {
       callback();
     } else {
       this.readyCallbacks.push(callback);
-      this.send("isready");
+      this.sendIsReady();
     }
   }
 
@@ -1251,6 +1335,7 @@ class StockfishEngine {
         if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(buttonName)) {
           this.send(`setoption name ${buttonName}`);
           this.ready = false;
+          this.isReadySentForCurrentState = false;
         }
         if (this.BetterMintmaster && this.BetterMintmaster.game) {
           this.BetterMintmaster.game.UpdateEngine(false);
@@ -1302,16 +1387,39 @@ class StockfishEngine {
   UpdateOptions(options = null) {
     const opts = options || this.customEngineOptions;
     if (!opts || typeof opts !== "object") return;
+    if (!this.appliedEngineOptions || typeof this.appliedEngineOptions !== "object") {
+      this.appliedEngineOptions = {};
+    }
     let sentAny = false;
+
+    for (const [prevKey, prevVal] of Object.entries(this.appliedEngineOptions)) {
+      const incoming = Object.prototype.hasOwnProperty.call(opts, prevKey) ? opts[prevKey] : undefined;
+      const isActiveInNext = incoming !== "" && incoming !== undefined && incoming !== null;
+      if (isActiveInNext) continue;
+
+      if (this.engineUciDefaults?.has(prevKey)) {
+        const defVal = this.engineUciDefaults.get(prevKey);
+        if (String(prevVal) !== String(defVal)) {
+          this.send(
+            defVal === "" ? `setoption name ${prevKey} value` : `setoption name ${prevKey} value ${defVal}`
+          );
+          sentAny = true;
+        }
+      }
+      delete this.appliedEngineOptions[prevKey];
+    }
+
     for (const [key, value] of Object.entries(opts)) {
       if (value === "" || value === undefined || value === null) continue;
       if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(key)) {
         this.send(`setoption name ${key} value ${value}`);
+        this.appliedEngineOptions[key] = value;
         sentAny = true;
       }
     }
     if (sentAny) {
       this.ready = false;
+      this.isReadySentForCurrentState = false;
     }
   }
 
@@ -1319,9 +1427,12 @@ class StockfishEngine {
     const line = event && typeof event === "object" ? event.data : event;
 
     if (line && typeof line === "string" && line.startsWith("option name ")) {
-      const typeIndex = line.indexOf(" type ");
-      if (typeIndex !== -1) {
-        this.engineUciOptions.add(line.substring("option name ".length, typeIndex).trim());
+      const parsedOpt = StockfishEngine.parseUciOptionLine(line);
+      if (parsedOpt) {
+        this.engineUciOptions.add(parsedOpt.name);
+        if (parsedOpt.hasDefault && this.engineUciDefaults) {
+          this.engineUciDefaults.set(parsedOpt.name, parsedOpt.default);
+        }
       }
       return;
     }
@@ -1331,17 +1442,30 @@ class StockfishEngine {
       this.reconnectAttempts = 0;
       this.fatalError = null;
       this.UpdateOptions();
+      if (this.readyCallbacks.length > 0) {
+        this.sendIsReady();
+      }
     } else if (typeof line === "string" && line.startsWith("info string Error:")) {
       this.fatalError = line.slice("info string ".length);
       console.error(`[BetterMint] ${this.fatalError}`);
     } else if (line === "readyok") {
+      if (this.pendingReadyCount > 0) {
+        this.pendingReadyCount--;
+      }
+      this.isReadySentForCurrentState = false;
+      if (this.pendingReadyCount > 0) {
+        if (this.readyCallbacks.length > 0) {
+          this.sendIsReady();
+        }
+        return;
+      }
       this.ready = true;
       while (this.ready && this.readyCallbacks.length > 0) {
         const cb = this.readyCallbacks.shift();
         cb();
       }
       if (!this.ready && this.readyCallbacks.length > 0) {
-        this.send("isready");
+        this.sendIsReady();
       }
     } else if (typeof line === "string" && line.startsWith("info ")) {
       if (this.isRequestedStop || !line.includes(" pv ") || /\b(?:upperbound|lowerbound)\b/.test(line)) return;
@@ -1427,6 +1551,7 @@ class StockfishEngine {
     this.onReady(() => {
       if (isNewGame) {
         this.ready = false;
+        this.isReadySentForCurrentState = false;
         this.send("ucinewgame");
         this.onReady(go);
       } else {
