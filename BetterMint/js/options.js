@@ -218,6 +218,54 @@ function formatBadgeValue(key, value) {
 }
 
 const editableBadgesBound = new WeakSet();
+const baseRangeSteps = new WeakMap();
+
+function isPlainObject(val) {
+  return Boolean(val) && typeof val === "object" && !Array.isArray(val);
+}
+
+function normalizeBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (s === "false" || s === "0" || s === "off" || s === "") return false;
+    if (s === "true" || s === "1" || s === "on") return true;
+  }
+  return Boolean(value);
+}
+
+function getBaseRangeStep(rangeInput) {
+  if (baseRangeSteps.has(rangeInput)) return baseRangeSteps.get(rangeInput);
+  const step = rangeInput.step != null && rangeInput.step !== "" ? String(rangeInput.step) : "";
+  baseRangeSteps.set(rangeInput, step);
+  return step;
+}
+
+function restoreBaseRangeStep(rangeInput) {
+  const baseStep = getBaseRangeStep(rangeInput);
+  if (baseStep && rangeInput.step !== baseStep) {
+    rangeInput.step = baseStep;
+  }
+}
+
+function setRangeExactValue(rangeInput, value) {
+  const baseStep = getBaseRangeStep(rangeInput);
+  const rawMin = parseFloat(rangeInput.min);
+  const min = Number.isNaN(rawMin) ? 0 : rawMin;
+  const numVal = Number(value);
+  const baseNum = parseFloat(baseStep);
+
+  if (baseStep && Number.isFinite(numVal) && Number.isFinite(baseNum) && baseNum > 0) {
+    const steps = (numVal - min) / baseNum;
+    const aligned = Math.abs(steps - Math.round(steps)) < 1e-9;
+    if (aligned) {
+      rangeInput.step = baseStep;
+    } else {
+      rangeInput.step = Number.isInteger(numVal) && Number.isInteger(min) ? "1" : "any";
+    }
+  }
+  rangeInput.value = String(value);
+}
 
 function normalizeRangeInput(rangeInput, rawText, key = null) {
   const trimmed = String(rawText ?? "").trim().replace(/,/g, "");
@@ -237,18 +285,18 @@ function normalizeRangeInput(rangeInput, rawText, key = null) {
   const max = Number.isNaN(rawMax) ? 100 : rawMax;
   const clamped = Math.min(max, Math.max(min, parsed));
 
-  const rawStep = parseFloat(rangeInput.step);
-  const step = Number.isNaN(rawStep) || rawStep <= 0 ? 1 : rawStep;
-  const stepStr = String(rangeInput.step || "");
+  const stepStr = getBaseRangeStep(rangeInput);
   const dotIdx = stepStr.indexOf(".");
   const decimals = dotIdx === -1 ? 0 : stepStr.length - dotIdx - 1;
-  const snapped = Math.min(max, Math.max(min, min + Math.round((clamped - min) / step) * step));
-  return decimals > 0 ? Number(snapped.toFixed(decimals)) : Math.round(snapped);
+  return decimals > 0 ? Number(clamped.toFixed(decimals)) : Math.round(clamped);
 }
 
 function bindEditableBadge(badge, rangeInput, { key = null, onCommit } = {}) {
   if (!badge || !rangeInput || editableBadgesBound.has(badge)) return;
   editableBadgesBound.add(badge);
+  getBaseRangeStep(rangeInput);
+  rangeInput.addEventListener("pointerdown", () => restoreBaseRangeStep(rangeInput));
+  rangeInput.addEventListener("keydown", () => restoreBaseRangeStep(rangeInput));
   badge.title = "Click to edit";
 
   badge.addEventListener("click", (event) => {
@@ -277,7 +325,7 @@ function bindEditableBadge(badge, rangeInput, { key = null, onCommit } = {}) {
       if (shouldCommit) {
         const nextVal = normalizeRangeInput(rangeInput, editor.value, key);
         if (nextVal !== null) {
-          rangeInput.value = String(nextVal);
+          setRangeExactValue(rangeInput, nextVal);
           badge.textContent = key ? formatBadgeValue(key, rangeInput.value) : String(rangeInput.value);
           onCommit?.(nextVal);
         }
@@ -395,7 +443,7 @@ function applyTheme(theme, customColors = null) {
   const root = document.documentElement;
   if (root) {
     root.dataset.theme = key;
-    if (customColors && typeof customColors === "object") {
+    if (isPlainObject(customColors)) {
       const cleanColors = {};
       for (const v of THEME_COLOR_VARS) {
         if (typeof customColors[v] === "string" && customColors[v].trim()) {
@@ -737,7 +785,7 @@ function invalidateEngineProbe(url) {
   lastProbedOptions = [];
   resetProbe();
   if (document.getElementById("engine-options-details")?.open) {
-    if (url) probeEngine(url);
+    probeEngine(url);
   } else {
     setEngineOptionsStatus("Expand to load engine options.");
   }
@@ -848,7 +896,7 @@ function normalizeSettings(raw) {
     const defVal = baseDefaults[key];
     const incoming = raw && Object.prototype.hasOwnProperty.call(raw, key) ? raw[key] : defVal;
     if (typeof defVal === "boolean") {
-      normalized[key] = Boolean(incoming);
+      normalized[key] = normalizeBoolean(incoming);
     } else if (typeof defVal === "number") {
       const num = parseFloat(incoming);
       normalized[key] = Number.isNaN(num) ? defVal : num;
@@ -865,13 +913,13 @@ function applySettingsToDom(options) {
     if (!field) return;
     const val = options[key] ?? baseDefaults[key];
     if (field.type === "checkbox") {
-      field.checked = Boolean(val);
+      field.checked = normalizeBoolean(val);
+    } else if (field.type === "range") {
+      setRangeExactValue(field, val);
+      const badge = document.getElementById("badge-" + key);
+      if (badge) badge.textContent = formatBadgeValue(key, val);
     } else {
       field.value = val;
-      if (field.type === "range") {
-        const badge = document.getElementById("badge-" + key);
-        if (badge) badge.textContent = formatBadgeValue(key, val);
-      }
     }
   });
   UpdateVisibility();
@@ -935,10 +983,9 @@ function getExportFilename(name = activeConfigName) {
 function applyConfigProfile(rawSettings, customEngineOptions = {}, { name = null, markSaved = false } = {}) {
   const prevUrl = fields["option-url-api-stockfish"]?.value?.trim();
   const nextSettings = normalizeSettings(rawSettings);
-  const nextEngineOpts =
-    customEngineOptions && typeof customEngineOptions === "object"
-      ? Object.assign({}, customEngineOptions)
-      : {};
+  const nextEngineOpts = isPlainObject(customEngineOptions)
+    ? Object.assign({}, customEngineOptions)
+    : {};
 
   pendingEngineOpts = null;
   if (engineOptsSyncTimer) {
@@ -1229,16 +1276,15 @@ function importMintText(rawText, filename = "config.mint") {
     return { ok: false, error: "Invalid .mint file." };
   }
 
-  if (!parsed || typeof parsed !== "object") {
+  if (!isPlainObject(parsed)) {
     return { ok: false, error: "Invalid .mint payload." };
   }
 
-  const rawSettings =
-    parsed.settings && typeof parsed.settings === "object"
-      ? parsed.settings
-      : optionKeys.some((k) => Object.prototype.hasOwnProperty.call(parsed, k))
-        ? parsed
-        : null;
+  const rawSettings = isPlainObject(parsed.settings)
+    ? parsed.settings
+    : optionKeys.some((k) => Object.prototype.hasOwnProperty.call(parsed, k))
+      ? parsed
+      : null;
 
   if (!rawSettings) {
     return { ok: false, error: "No valid settings in .mint file." };
@@ -1246,16 +1292,15 @@ function importMintText(rawText, filename = "config.mint") {
 
   if (Array.isArray(parsed.presets)) {
     const validPresets = parsed.presets.filter(
-      (p) => p && typeof p.id === "string" && p.settings && typeof p.settings === "object"
+      (p) => isPlainObject(p) && typeof p.id === "string" && isPlainObject(p.settings)
     );
     if (validPresets.length > 0) {
       presetOverridesCache = validPresets.map((p) => ({
         id: p.id,
         settings: normalizeSettings(p.settings),
-        customEngineOptions:
-          p.customEngineOptions && typeof p.customEngineOptions === "object"
-            ? Object.assign({}, p.customEngineOptions)
-            : {}
+        customEngineOptions: isPlainObject(p.customEngineOptions)
+          ? Object.assign({}, p.customEngineOptions)
+          : {}
       }));
       storageSet("local", { presetOverrides: presetOverridesCache });
     }
@@ -1263,7 +1308,12 @@ function importMintText(rawText, filename = "config.mint") {
 
   if (Array.isArray(parsed.customConfigs)) {
     parsed.customConfigs.forEach((entry) => {
-      if (entry && typeof entry.name === "string" && entry.name.trim() && entry.settings) {
+      if (
+        isPlainObject(entry) &&
+        typeof entry.name === "string" &&
+        entry.name.trim() &&
+        isPlainObject(entry.settings)
+      ) {
         saveCustomConfigEntry(entry.name, entry.settings, entry.customEngineOptions);
       }
     });
@@ -1272,7 +1322,7 @@ function importMintText(rawText, filename = "config.mint") {
   if (parsed.theme) {
     const themeId = typeof parsed.theme === "string" ? parsed.theme : parsed.theme.id;
     const themeColors =
-      typeof parsed.theme === "object" && parsed.theme.colors && typeof parsed.theme.colors === "object"
+      isPlainObject(parsed.theme) && isPlainObject(parsed.theme.colors)
         ? parsed.theme.colors
         : null;
     applyTheme(themeId || currentTheme, themeColors);
@@ -1283,10 +1333,9 @@ function importMintText(rawText, filename = "config.mint") {
     (typeof parsed.name === "string" && parsed.name.trim()) ||
     stripMintExtension(filename) ||
     "Imported Config";
-  const engineOpts =
-    parsed.customEngineOptions && typeof parsed.customEngineOptions === "object"
-      ? parsed.customEngineOptions
-      : {};
+  const engineOpts = isPlainObject(parsed.customEngineOptions)
+    ? parsed.customEngineOptions
+    : {};
 
   saveCustomConfigEntry(importedName, rawSettings, engineOpts);
   applyConfigProfile(rawSettings, engineOpts, { name: importedName, markSaved: true });
@@ -1330,8 +1379,10 @@ function InitConfigSystem() {
     if (!file) return;
     file.text().then(
       (text) => {
-        const result = importMintText(text, file.name);
-        setConfigStatus(result.ok ? `Imported ${result.name}` : result.error, !result.ok);
+        refreshConfigStorage(() => {
+          const result = importMintText(text, file.name);
+          setConfigStatus(result.ok ? `Imported ${result.name}` : result.error, !result.ok);
+        });
       },
       () => setConfigStatus("Failed to read .mint file.", true)
     );

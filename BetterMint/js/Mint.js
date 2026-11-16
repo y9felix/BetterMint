@@ -346,6 +346,9 @@ class GameController {
     }
 
     if (!getValueConfig(enumOptions.AutoQueue)) return;
+    const observeTarget =
+      typeof document !== "undefined" ? document.body || document.documentElement : null;
+    if (!observeTarget) return;
 
     let lastCheckTime = 0;
     this.autoQueueObserver = new MutationObserver(() => {
@@ -355,7 +358,7 @@ class GameController {
       this.triggerAutoQueue();
     });
 
-    this.autoQueueObserver.observe(document.body, { childList: true, subtree: true });
+    this.autoQueueObserver.observe(observeTarget, { childList: true, subtree: true });
     this.triggerAutoQueue();
   }
 
@@ -1567,7 +1570,11 @@ function attachGame(chessboard) {
   BetterMintmaster.game.UpdateEngine(true);
 }
 
+let pendingInitBoard = null;
+let pendingOptionsPromise = null;
+
 function InitBetterMint(chessboard) {
+  pendingInitBoard = chessboard;
   if (BetterMintmaster) {
     try {
       attachGame(chessboard);
@@ -1577,18 +1584,22 @@ function InitBetterMint(chessboard) {
     return;
   }
 
-  requestOptions().then((options) => {
-    try {
-      tempOptions = options;
-      if (BetterMintmaster) {
-        attachGame(chessboard);
-      } else {
-        BetterMintmaster = new BetterMint(chessboard, options);
+  if (!pendingOptionsPromise) {
+    pendingOptionsPromise = requestOptions().then((options) => {
+      pendingOptionsPromise = null;
+      const targetBoard = pendingInitBoard || chessboard;
+      try {
+        tempOptions = options;
+        if (BetterMintmaster) {
+          attachGame(targetBoard);
+        } else {
+          BetterMintmaster = new BetterMint(targetBoard, options);
+        }
+      } catch (e) {
+        console.error("Oh noes! BetterMintmaster didn't load", e);
       }
-    } catch (e) {
-      console.error("Oh noes! BetterMintmaster didn't load", e);
-    }
-  });
+    });
+  }
 }
 
 if (typeof document !== "undefined") {

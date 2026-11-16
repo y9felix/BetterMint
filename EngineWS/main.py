@@ -32,7 +32,9 @@ def load_config(path: str = CONFIG_PATH) -> dict:
     return dict(DEFAULT_CONFIG)
 
 def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
-    engines = cfg.get("engines") or {}
+    engines = cfg.get("engines")
+    if not isinstance(engines, dict):
+        engines = {}
     if engine_name and engine_name in engines:
         cmd = engines[engine_name]
     else:
@@ -224,6 +226,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
                 if not t.done():
                     t.cancel()
             await asyncio.gather(task_in, task_out, task_err, return_exceptions=True)
+            quit_already_sent = getattr(engine, "_quit_sent", False)
             engine.terminate()
             await engine.wait_closed()
             proc = getattr(engine, "_proc", None)
@@ -231,7 +234,7 @@ async def handle_engine(websocket: WebSocket, cmd: list[str]):
             if (
                 isinstance(rc, int)
                 and rc != 0
-                and not getattr(engine, "_quit_sent", False)
+                and not quit_already_sent
                 and websocket.client_state == WebSocketState.CONNECTED
             ):
                 detail = f": {last_stderr}" if last_stderr else ""
