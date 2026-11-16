@@ -37,7 +37,7 @@
                             <span class="title">Search Depth</span>
                             <span class="badge" id="badge-option-depth">3</span>
                         </div>
-                        <input id="option-depth" type="range" min="0" max="50" value="3" class="range-slider" />
+                        <input id="option-depth" type="range" min="0" max="50" step="1" value="3" class="range-slider" />
                     </div>
 
                     <div class="control-col">
@@ -45,7 +45,7 @@
                             <span class="title">Move Time (ms)</span>
                             <span class="badge" id="badge-option-go-movetime">Off</span>
                         </div>
-                        <input id="option-go-movetime" type="range" min="0" max="5000" value="0" class="range-slider" />
+                        <input id="option-go-movetime" type="range" min="0" max="5000" step="50" value="0" class="range-slider" />
                     </div>
 
                     <div class="control-col">
@@ -53,7 +53,7 @@
                             <span class="title">Node Limit</span>
                             <span class="badge" id="badge-option-go-nodes">Off</span>
                         </div>
-                        <input id="option-go-nodes" type="range" min="0" max="5000000" value="0" class="range-slider" />
+                        <input id="option-go-nodes" type="range" min="0" max="5000000" step="10000" value="0" class="range-slider" />
                     </div>
 
                     <div class="control-col">
@@ -61,7 +61,7 @@
                             <span class="title">Mate in N</span>
                             <span class="badge" id="badge-option-go-mate">Off</span>
                         </div>
-                        <input id="option-go-mate" type="range" min="0" max="20" value="0" class="range-slider" />
+                        <input id="option-go-mate" type="range" min="0" max="20" step="1" value="0" class="range-slider" />
                     </div>
 
                     <div class="control-col">
@@ -81,7 +81,7 @@
                                 <span class="title">Clock Increment (ms)</span>
                                 <span class="badge" id="badge-option-go-clock-inc">0</span>
                             </div>
-                            <input id="option-go-clock-inc" type="range" min="0" max="10000" value="0" class="range-slider" />
+                            <input id="option-go-clock-inc" type="range" min="0" max="10000" step="100" value="0" class="range-slider" />
                         </div>
 
                         <div class="control-col">
@@ -89,7 +89,7 @@
                                 <span class="title">Moves To Go</span>
                                 <span class="badge" id="badge-option-go-movestogo">Off</span>
                             </div>
-                            <input id="option-go-movestogo" type="range" min="0" max="60" value="0" class="range-slider" />
+                            <input id="option-go-movestogo" type="range" min="0" max="60" step="1" value="0" class="range-slider" />
                         </div>
                     </div>
 
@@ -105,7 +105,7 @@
                                 <span class="title">Infinite Timer (ms)</span>
                                 <span class="badge" id="badge-option-go-infinite-timeout">Off</span>
                             </div>
-                            <input id="option-go-infinite-timeout" type="range" min="0" max="15000" value="0" class="range-slider" />
+                            <input id="option-go-infinite-timeout" type="range" min="0" max="15000" step="250" value="0" class="range-slider" />
                         </div>
 
                         <label class="control-row" for="option-go-eval-stable">
