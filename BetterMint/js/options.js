@@ -236,6 +236,88 @@ function formatBadgeValue(key, value) {
   return value;
 }
 
+const editableBadgesBound = new WeakSet();
+
+function normalizeRangeInput(rangeInput, rawText, key = null) {
+  const trimmed = String(rawText ?? "").trim().replace(/,/g, "");
+  if (!trimmed) return null;
+
+  let parsed;
+  if (key && ZERO_OFF_SLIDER_KEYS.has(key) && trimmed.toLowerCase() === "off") {
+    parsed = 0;
+  } else {
+    parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) return null;
+  }
+
+  const rawMin = parseFloat(rangeInput.min);
+  const rawMax = parseFloat(rangeInput.max);
+  const rawStep = parseFloat(rangeInput.step);
+  const min = Number.isNaN(rawMin) ? 0 : rawMin;
+  const max = Number.isNaN(rawMax) ? 100 : rawMax;
+  const step = Number.isNaN(rawStep) || rawStep <= 0 ? 1 : rawStep;
+
+  const clamped = Math.min(max, Math.max(min, parsed));
+  const stepStr = String(rangeInput.step || "");
+  const dotIdx = stepStr.indexOf(".");
+  const decimals = dotIdx === -1 ? 0 : stepStr.length - dotIdx - 1;
+  const snapped = Math.min(max, Math.max(min, min + Math.round((clamped - min) / step) * step));
+  return decimals > 0 ? Number(snapped.toFixed(decimals)) : Math.round(snapped);
+}
+
+function bindEditableBadge(badge, rangeInput, { key = null, onCommit } = {}) {
+  if (!badge || !rangeInput || editableBadgesBound.has(badge)) return;
+  editableBadgesBound.add(badge);
+  badge.title = "Click to edit";
+
+  badge.addEventListener("click", (event) => {
+    event?.stopPropagation?.();
+    const parent = badge.parentNode;
+    if (!parent || badge.classList?.contains("hidden")) return;
+
+    const editor = createEl("input", {
+      type: "text",
+      className: "badge-input",
+      value: String(rangeInput.value ?? "0"),
+      spellcheck: false,
+      autocomplete: "off"
+    });
+    editor.setAttribute?.("inputmode", "decimal");
+
+    badge.classList?.add("hidden");
+    parent.appendChild(editor);
+    editor.focus?.();
+    editor.select?.();
+
+    let finished = false;
+    const finish = (shouldCommit) => {
+      if (finished) return;
+      finished = true;
+      if (shouldCommit) {
+        const nextVal = normalizeRangeInput(rangeInput, editor.value, key);
+        if (nextVal !== null) {
+          rangeInput.value = String(nextVal);
+          badge.textContent = key ? formatBadgeValue(key, rangeInput.value) : String(rangeInput.value);
+          onCommit?.(nextVal);
+        }
+      }
+      editor.remove?.();
+      badge.classList?.remove("hidden");
+    };
+
+    editor.addEventListener("keydown", (e) => {
+      if (e?.key === "Enter") {
+        e.preventDefault?.();
+        finish(true);
+      } else if (e?.key === "Escape") {
+        e.preventDefault?.();
+        finish(false);
+      }
+    });
+    editor.addEventListener("blur", () => finish(true));
+  });
+}
+
 function parseSearchMovesTokens(raw) {
   const seen = new Set();
   const out = [];
@@ -481,6 +563,9 @@ const uciRenderers = {
     input.addEventListener("input", () => {
       badge.textContent = input.value;
       onOptionChange?.(opt.name, parseInt(input.value, 10), false);
+    });
+    bindEditableBadge(badge, input, {
+      onCommit: (val) => onOptionChange?.(opt.name, parseInt(val, 10), false)
     });
     return createEl("div", { className: "control-col options-slider" }, [
       createEl("div", { className: "slider-header" }, [
@@ -1335,6 +1420,12 @@ function InitOptions() {
           updateGoPreview();
         }
       });
+      if (badge) {
+        bindEditableBadge(badge, field, {
+          key,
+          onCommit: () => OnOptionsChange(key)
+        });
+      }
     } else if (key === "option-go-searchmoves") {
       field.addEventListener("input", () => updateGoPreview());
     }
@@ -1376,6 +1467,8 @@ if (typeof module !== "undefined" && module.exports) {
     DEFAULT_PRESETS,
     ZERO_OFF_SLIDER_KEYS,
     formatBadgeValue,
+    normalizeRangeInput,
+    bindEditableBadge,
     buildGoPreviewCommand,
     applyTheme,
     getCurrentThemeColors,

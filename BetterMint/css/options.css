@@ -669,6 +669,31 @@ details.collapse-group > summary.collapse-summary:hover::after {
     border: 1px solid var(--divider-color);
 }
 
+.slider-header .badge {
+    cursor: text;
+    transition: border-color 0.15s ease;
+}
+
+.slider-header .badge:hover {
+    border-color: var(--border-color);
+}
+
+.badge-input {
+    width: 72px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    border: 1px solid var(--accent);
+    border-radius: 9999px;
+    padding: 1px 7px;
+    outline: none;
+    user-select: text;
+}
+
 .range-slider {
     -webkit-appearance: none;
     appearance: none;
