@@ -60,7 +60,7 @@ const THEMES = {
   },
   black: {
     label: "Black",
-    next: "dark",
+    next: "chesscom",
     icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>',
     colors: {
       "--bg-primary": "#000000",
@@ -73,6 +73,25 @@ const THEMES = {
       "--badge-bg": "#18181d",
       "--badge-text": "#e4e4f7",
       "--track-bg": "#27272c",
+      "--thumb-bg": "#ffffff",
+      "--error-text": "#f87171"
+    }
+  },
+  chesscom: {
+    label: "Chess.com",
+    next: "dark",
+    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>',
+    colors: {
+      "--bg-primary": "#302e2b",
+      "--bg-card": "#272522",
+      "--border-color": "#45423e",
+      "--divider-color": "rgba(255, 255, 255, 0.08)",
+      "--text-primary": "#f5f5f5",
+      "--text-muted": "#a6a39e",
+      "--accent": "#81b64c",
+      "--badge-bg": "#383531",
+      "--badge-text": "#f5f5f5",
+      "--track-bg": "#383531",
       "--thumb-bg": "#ffffff",
       "--error-text": "#f87171"
     }

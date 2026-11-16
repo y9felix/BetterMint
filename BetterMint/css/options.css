@@ -44,6 +44,23 @@
     --error-text: #f87171;
 }
 
+:root[data-theme="chesscom"] {
+    --bg-primary: #302e2b;
+    --bg-card: #272522;
+    --bg-rail: #262421;
+    --bg-input: #1a1917;
+    --border-color: #45423e;
+    --divider-color: rgba(255, 255, 255, 0.08);
+    --text-primary: #f5f5f5;
+    --text-muted: #a6a39e;
+    --accent: #81b64c;
+    --badge-bg: #383531;
+    --badge-text: #f5f5f5;
+    --track-bg: #383531;
+    --thumb-bg: #ffffff;
+    --error-text: #f87171;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -147,7 +164,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     justify-content: space-between;
     gap: 8px;
     padding: 6px 8px;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-input, var(--bg-primary));
     border: 1px solid var(--border-color);
     border-radius: 6px;
 }
@@ -171,7 +188,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
 
 .select-input {
     width: 100%;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-input, var(--bg-primary));
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 6px 10px;
@@ -197,7 +214,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     justify-content: space-between;
     padding: 12px;
     border-bottom: 1px solid var(--border-color);
-    background-color: var(--bg-card);
+    background-color: var(--bg-rail, var(--bg-card));
 }
 
 .brand {
@@ -266,7 +283,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     justify-content: space-between;
     padding: 10px;
     border-top: 1px solid var(--border-color);
-    background-color: var(--bg-card);
+    background-color: var(--bg-rail, var(--bg-card));
 }
 
 .footer-meta {
@@ -527,6 +544,12 @@ details.collapse-group > summary.collapse-summary:hover::after {
     opacity: 0.9;
 }
 
+:root[data-theme="chesscom"] .btn-primary:hover {
+    background-color: #95cc5e;
+    border-color: #95cc5e;
+    opacity: 1;
+}
+
 .action-btn,
 .btn-secondary {
     background-color: var(--track-bg);
@@ -671,7 +694,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     font-variant-numeric: tabular-nums;
     text-align: right;
     color: var(--text-primary);
-    background-color: var(--bg-primary);
+    background-color: var(--bg-input, var(--bg-primary));
     border: 1px solid var(--accent);
     border-radius: 9999px;
     padding: 1px 7px;
@@ -709,7 +732,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
 
 .text-input {
     width: 100%;
-    background-color: var(--bg-primary);
+    background-color: var(--bg-input, var(--bg-primary));
     border: 1px solid var(--border-color);
     border-radius: 6px;
     color: var(--text-primary);
@@ -723,4 +746,8 @@ details.collapse-group > summary.collapse-summary:hover::after {
 .text-input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+:root[data-theme="chesscom"] .text-input:focus {
+    box-shadow: 0 0 0 2px rgba(129, 182, 76, 0.28);
 }
