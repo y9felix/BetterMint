@@ -93,23 +93,14 @@ const DEFAULT_PRESETS = [
     summary: "D8 · 1.25s · 200ms",
     settings: buildPresetSettings({
       "option-depth": 8,
-      "option-evaluation-bar": true,
-      "option-show-hints": true,
-      "option-move-analysis": true,
-      "option-auto-queue": false,
       "option-legit-auto-move": true,
-      "option-human-like-moves": true,
       "option-move-pace": 1.25,
       "option-physical-floor": 200,
       "option-timing-spread": 0.45,
-      "option-fast-recaptures": true,
       "option-recapture-multiplier": 0.50,
-      "option-fast-forced-moves": true,
       "option-forced-multiplier": 0.35,
-      "option-fast-opening": true,
       "option-opening-moves-threshold": 7,
       "option-opening-multiplier": 0.65,
-      "option-clock-scaling": true,
       "option-clock-threshold": 20,
       "option-clock-min-multiplier": 0.40
     }),
@@ -121,23 +112,14 @@ const DEFAULT_PRESETS = [
     summary: "D12 · 3.8s · 350ms",
     settings: buildPresetSettings({
       "option-depth": 12,
-      "option-evaluation-bar": true,
-      "option-show-hints": true,
-      "option-move-analysis": true,
-      "option-auto-queue": false,
       "option-legit-auto-move": true,
-      "option-human-like-moves": true,
       "option-move-pace": 3.8,
       "option-physical-floor": 350,
       "option-timing-spread": 0.65,
-      "option-fast-recaptures": true,
       "option-recapture-multiplier": 0.35,
-      "option-fast-forced-moves": true,
       "option-forced-multiplier": 0.25,
-      "option-fast-opening": true,
       "option-opening-moves-threshold": 8,
       "option-opening-multiplier": 0.50,
-      "option-clock-scaling": true,
       "option-clock-threshold": 45,
       "option-clock-min-multiplier": 0.28
     }),
@@ -149,25 +131,7 @@ const DEFAULT_PRESETS = [
     summary: "D16 · 12.5s · 600ms",
     settings: buildPresetSettings({
       "option-depth": 16,
-      "option-evaluation-bar": true,
-      "option-show-hints": true,
-      "option-move-analysis": true,
-      "option-auto-queue": false,
-      "option-legit-auto-move": true,
-      "option-human-like-moves": true,
-      "option-move-pace": 12.5,
-      "option-physical-floor": 600,
-      "option-timing-spread": 0.80,
-      "option-fast-recaptures": true,
-      "option-recapture-multiplier": 0.25,
-      "option-fast-forced-moves": true,
-      "option-forced-multiplier": 0.15,
-      "option-fast-opening": true,
-      "option-opening-moves-threshold": 10,
-      "option-opening-multiplier": 0.40,
-      "option-clock-scaling": true,
-      "option-clock-threshold": 180,
-      "option-clock-min-multiplier": 0.20
+      "option-legit-auto-move": true
     }),
     customEngineOptions: {}
   },
@@ -192,10 +156,8 @@ const DEFAULT_PRESETS = [
     summary: "D14 · Auto · Eval",
     settings: buildPresetSettings({
       "option-depth": 14,
-      "option-evaluation-bar": true,
       "option-show-hints": false,
       "option-move-analysis": false,
-      "option-auto-queue": false,
       "option-legit-auto-move": true,
       "option-human-like-moves": false
     }),
@@ -255,10 +217,6 @@ function normalizeRangeInput(rangeInput, rawText, key = null) {
   const min = Number.isNaN(rawMin) ? 0 : rawMin;
   const max = Number.isNaN(rawMax) ? 100 : rawMax;
   const clamped = Math.min(max, Math.max(min, parsed));
-
-  if (String(rangeInput.step || "").toLowerCase() === "any") {
-    return clamped;
-  }
 
   const rawStep = parseFloat(rangeInput.step);
   const step = Number.isNaN(rawStep) || rawStep <= 0 ? 1 : rawStep;
@@ -463,35 +421,21 @@ function InitTheme() {
   });
 }
 
+const VISIBILITY_GROUPS = [
+  ["option-go-clock-sync", "go-clock-group"],
+  ["option-go-infinite", "go-infinite-group"],
+  ["option-auto-queue", "auto-queue-group"],
+  ["option-legit-auto-move", "pacing-group"],
+  ["option-human-like-moves", "human-pace-group"]
+];
+
 function UpdateVisibility() {
-  const goClockSync = document.getElementById("option-go-clock-sync");
-  const goClockGroup = document.getElementById("go-clock-group");
-  if (goClockSync && goClockGroup) {
-    goClockGroup.classList.toggle("hidden", !goClockSync.checked);
-  }
-
-  const goInfinite = document.getElementById("option-go-infinite");
-  const goInfiniteGroup = document.getElementById("go-infinite-group");
-  if (goInfinite && goInfiniteGroup) {
-    goInfiniteGroup.classList.toggle("hidden", !goInfinite.checked);
-  }
-
-  const autoQueue = document.getElementById("option-auto-queue");
-  const autoQueueGroup = document.getElementById("auto-queue-group");
-  if (autoQueue && autoQueueGroup) {
-    autoQueueGroup.classList.toggle("hidden", !autoQueue.checked);
-  }
-
-  const legitAutoMove = document.getElementById("option-legit-auto-move");
-  const pacingGroup = document.getElementById("pacing-group");
-  if (legitAutoMove && pacingGroup) {
-    pacingGroup.classList.toggle("hidden", !legitAutoMove.checked);
-  }
-
-  const humanLike = document.getElementById("option-human-like-moves");
-  const humanPaceGroup = document.getElementById("human-pace-group");
-  if (humanLike && humanPaceGroup) {
-    humanPaceGroup.classList.toggle("hidden", !humanLike.checked);
+  for (const [toggleId, groupId] of VISIBILITY_GROUPS) {
+    const toggle = document.getElementById(toggleId);
+    const group = document.getElementById(groupId);
+    if (toggle && group) {
+      group.classList.toggle("hidden", !toggle.checked);
+    }
   }
 }
 
@@ -571,7 +515,7 @@ const uciRenderers = {
     bindEditableBadge(badge, input, {
       onCommit: (val) => onOptionChange?.(opt.name, parseInt(val, 10), false)
     });
-    return createEl("div", { className: "control-col options-slider" }, [
+    return createEl("div", { className: "control-col" }, [
       createEl("div", { className: "slider-header" }, [
         createEl("span", { className: "title", textContent: opt.name }),
         badge
@@ -588,7 +532,7 @@ const uciRenderers = {
     input.addEventListener("change", () => {
       onOptionChange?.(opt.name, input.checked, false);
     });
-    return createEl("label", { className: "control-row options-checkbox" }, [
+    return createEl("label", { className: "control-row" }, [
       createEl("span", { className: "control-label-text", textContent: opt.name }),
       input,
       createEl("span", { className: "toggle-slider" })
@@ -621,7 +565,7 @@ const uciRenderers = {
     input.addEventListener("change", () => {
       onOptionChange?.(opt.name, input.value.trim(), false);
     });
-    return createEl("div", { className: "control-col options-text" }, [
+    return createEl("div", { className: "control-col" }, [
       createEl("label", { className: "control-label-text", textContent: opt.name }),
       input
     ]);
@@ -655,8 +599,7 @@ function renderDynamicUciOptions(optionsList, savedValues, container, onOptionCh
     const renderer = uciRenderers[opt.type];
     if (!renderer) return;
     const currentVal = savedValues?.[opt.name] ?? opt.default;
-    const el = renderer(opt, currentVal, onOptionChange);
-    if (el) target.appendChild(el);
+    target.appendChild(renderer(opt, currentVal, onOptionChange));
   });
 
   if (target !== container) {
@@ -692,14 +635,13 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
   const container = document.getElementById("engine-options-container");
   if (!container) return;
   resetProbe();
-  const setStatus = setEngineOptionsStatus;
 
   if (!url || typeof WebSocket === "undefined") {
-    setStatus("Invalid WebSocket URL.");
+    setEngineOptionsStatus("Invalid WebSocket URL.");
     return;
   }
 
-  setStatus("Connecting to engine...");
+  setEngineOptionsStatus("Connecting to engine...");
   const discovered = [];
   let lastErrorLine = "";
   try {
@@ -708,7 +650,7 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
     probeTimeout = setTimeout(() => {
       if (activeProbeWs !== ws) return;
       resetProbe();
-      setStatus("Connection timed out.");
+      setEngineOptionsStatus("Connection timed out.");
     }, PROBE_TIMEOUT_MS);
 
     ws.addEventListener("open", () => {
@@ -717,7 +659,7 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
       probeTimeout = setTimeout(() => {
         if (activeProbeWs !== ws) return;
         resetProbe();
-        setStatus("Engine handshake timed out.");
+        setEngineOptionsStatus("Engine handshake timed out.");
       }, PROBE_TIMEOUT_MS);
       ws.send("uci\n");
     });
@@ -747,17 +689,28 @@ function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
     ws.addEventListener("close", () => {
       if (activeProbeWs !== ws) return;
       resetProbe();
-      setStatus(lastErrorLine || "Engine connection closed before handshake.");
+      setEngineOptionsStatus(lastErrorLine || "Engine connection closed before handshake.");
     });
 
     ws.addEventListener("error", () => {
       if (activeProbeWs !== ws) return;
       resetProbe();
-      setStatus("Unable to connect to engine.");
+      setEngineOptionsStatus("Unable to connect to engine.");
     });
   } catch {
     resetProbe();
-    setStatus("Failed to initialize engine socket.");
+    setEngineOptionsStatus("Failed to initialize engine socket.");
+  }
+}
+
+function invalidateEngineProbe(url) {
+  probedUrl = null;
+  lastProbedOptions = [];
+  resetProbe();
+  if (document.getElementById("engine-options-details")?.open) {
+    if (url) probeEngine(url);
+  } else {
+    setEngineOptionsStatus("Expand to load engine options.");
   }
 }
 
@@ -957,14 +910,7 @@ function applyConfigProfile(rawSettings, customEngineOptions = {}, { name = null
   chrome.storage?.sync?.set(nextSettings);
 
   if (prevUrl !== nextUrl) {
-    probedUrl = null;
-    lastProbedOptions = [];
-    resetProbe();
-    if (document.getElementById("engine-options-details")?.open) {
-      if (nextUrl) probeEngine(nextUrl);
-    } else {
-      setEngineOptionsStatus("Expand to load engine options.");
-    }
+    invalidateEngineProbe(nextUrl);
   } else if (document.getElementById("engine-options-details")?.open && probedUrl === nextUrl) {
     const container = document.getElementById("engine-options-container");
     if (container && lastProbedOptions.length > 0) {
@@ -1331,27 +1277,18 @@ function InitConfigSystem() {
   importInput?.addEventListener("change", () => {
     const file = importInput.files?.[0];
     if (!file) return;
-    const handleText = (text) => {
-      const result = importMintText(text, file.name);
-      if (result.ok) {
-        setConfigStatus(`Imported ${result.name}`);
-      } else {
-        setConfigStatus(result.error, true);
-      }
-    };
-    if (typeof file.text === "function") {
-      file.text().then(handleText).catch(() => setConfigStatus("Failed to read .mint file.", true));
-    } else if (typeof FileReader !== "undefined") {
-      const reader = new FileReader();
-      reader.onload = () => handleText(String(reader.result || ""));
-      reader.onerror = () => setConfigStatus("Failed to read .mint file.", true);
-      reader.readAsText(file);
-    }
+    file.text().then(
+      (text) => {
+        const result = importMintText(text, file.name);
+        setConfigStatus(result.ok ? `Imported ${result.name}` : result.error, !result.ok);
+      },
+      () => setConfigStatus("Failed to read .mint file.", true)
+    );
   });
 
-  document.getElementById("config-load-close")?.addEventListener("click", () => setConfigPopoverMode(null));
-  document.getElementById("config-save-close")?.addEventListener("click", () => setConfigPopoverMode(null));
-  document.getElementById("config-save-cancel")?.addEventListener("click", () => setConfigPopoverMode(null));
+  for (const closeId of ["config-load-close", "config-save-close", "config-save-cancel"]) {
+    document.getElementById(closeId)?.addEventListener("click", () => setConfigPopoverMode(null));
+  }
   document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveSubmit);
 
   document.getElementById("config-save-name")?.addEventListener("keydown", (event) => {
@@ -1396,14 +1333,7 @@ function OnOptionsChange(changedKey) {
   setActiveConfigName(null);
 
   if (changedKey === "option-url-api-stockfish") {
-    probedUrl = null;
-    lastProbedOptions = [];
-    resetProbe();
-    if (document.getElementById("engine-options-details")?.open) {
-      if (options["option-url-api-stockfish"]) probeEngine(options["option-url-api-stockfish"]);
-    } else {
-      setEngineOptionsStatus("Expand to load engine options.");
-    }
+    invalidateEngineProbe(options["option-url-api-stockfish"]);
   }
 
   chrome.storage?.sync?.set(options);
@@ -1454,9 +1384,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPendingEngineOpts);
 
   window.addEventListener("DOMContentLoaded", () => {
-    const githubLink = document.getElementById("github-link");
-    githubLink?.addEventListener("click", (event) => {
-      event.preventDefault();
+    document.getElementById("github-link")?.addEventListener("click", () => {
       chrome.tabs?.create({ url: "https://github.com/y9felix/BetterMint" });
     });
 
@@ -1467,30 +1395,21 @@ if (typeof window !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     THEMES,
-    THEME_COLOR_VARS,
     DEFAULT_PRESETS,
-    ZERO_OFF_SLIDER_KEYS,
     formatBadgeValue,
-    normalizeRangeInput,
-    bindEditableBadge,
     buildGoPreviewCommand,
     applyTheme,
     getCurrentThemeColors,
     getExportFilename,
-    getEffectivePresets,
     applyConfigProfile,
     buildExportSnapshot,
-    exportCurrentConfig,
     importMintText,
     saveCustomConfigEntry,
     deleteCustomConfigEntry,
     setConfigPopoverMode,
     parseUciOptionLine,
-    uciRenderers,
     renderDynamicUciOptions,
     probeEngine,
-    resetProbe,
-    loadAndRenderEngineOptions,
     InitOptions,
     OnOptionsChange,
     resetProbedUrlForTesting: () => {

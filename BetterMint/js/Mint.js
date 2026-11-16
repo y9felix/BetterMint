@@ -218,10 +218,7 @@ class GameController {
     this.lastAutoQueueClick = 0;
 
     this.controller.on("Move", () => {
-      if (this.autoMoveTimer !== null) {
-        clearTimeout(this.autoMoveTimer);
-        this.autoMoveTimer = null;
-      }
+      this.clearAutoMoveTimer();
       this.RemoveCurrentMarkings();
       if (this.controller.getPlayingAs() === this.controller.getTurn()) {
         this.turnStartTime = performance.now();
@@ -239,10 +236,7 @@ class GameController {
           this.ResetGame();
         }, 100);
       } else if (event.data === "gameOver") {
-        if (this.autoMoveTimer !== null) {
-          clearTimeout(this.autoMoveTimer);
-          this.autoMoveTimer = null;
-        }
+        this.clearAutoMoveTimer();
         this.RemoveCurrentMarkings();
         this.handleGameOver();
       }
@@ -268,6 +262,20 @@ class GameController {
     });
 
     this.setupAutoQueueObserver();
+  }
+
+  clearAutoMoveTimer() {
+    if (this.autoMoveTimer !== null) {
+      clearTimeout(this.autoMoveTimer);
+      this.autoMoveTimer = null;
+    }
+  }
+
+  clearGameOverInterval() {
+    if (this.gameOverInterval !== null) {
+      clearInterval(this.gameOverInterval);
+      this.gameOverInterval = null;
+    }
   }
 
   dispatchButtonClick(element) {
@@ -353,15 +361,12 @@ class GameController {
   handleGameOver() {
     if (!getValueConfig(enumOptions.AutoQueue)) return;
     this.setupAutoQueueObserver();
-    if (this.gameOverInterval !== null) {
-      clearInterval(this.gameOverInterval);
-    }
+    this.clearGameOverInterval();
     let attempts = 0;
     this.gameOverInterval = setInterval(() => {
       attempts++;
       if (attempts > AUTO_QUEUE_MAX_ATTEMPTS || this.triggerAutoQueue()) {
-        clearInterval(this.gameOverInterval);
-        this.gameOverInterval = null;
+        this.clearGameOverInterval();
       }
     }, AUTO_QUEUE_RETRY_MS);
   }
@@ -443,9 +448,8 @@ class GameController {
     if (!getValueConfig(enumOptions.MoveAnalysis)) {
       this.RemoveLastAnalysisMarkings();
     }
-    if (!getValueConfig(enumOptions.LegitAutoMove) && this.autoMoveTimer !== null) {
-      clearTimeout(this.autoMoveTimer);
-      this.autoMoveTimer = null;
+    if (!getValueConfig(enumOptions.LegitAutoMove)) {
+      this.clearAutoMoveTimer();
     }
   }
 
@@ -455,14 +459,8 @@ class GameController {
       this.RemoveCurrentMarkings();
       this.RemoveLastAnalysisMarkings();
     }
-    if (this.autoMoveTimer !== null) {
-      clearTimeout(this.autoMoveTimer);
-      this.autoMoveTimer = null;
-    }
-    if (this.gameOverInterval !== null) {
-      clearInterval(this.gameOverInterval);
-      this.gameOverInterval = null;
-    }
+    this.clearAutoMoveTimer();
+    this.clearGameOverInterval();
     if (this.autoQueueObserver) {
       this.autoQueueObserver.disconnect();
       this.autoQueueObserver = null;
@@ -581,14 +579,8 @@ class GameController {
 
   ResetGame() {
     this.lastAutoQueueClick = 0;
-    if (this.autoMoveTimer !== null) {
-      clearTimeout(this.autoMoveTimer);
-      this.autoMoveTimer = null;
-    }
-    if (this.gameOverInterval !== null) {
-      clearInterval(this.gameOverInterval);
-      this.gameOverInterval = null;
-    }
+    this.clearAutoMoveTimer();
+    this.clearGameOverInterval();
     this.RemoveCurrentMarkings();
     this.RemoveLastAnalysisMarkings();
     this.boardOptions = this.controller.getOptions();
@@ -713,6 +705,8 @@ class GameController {
 }
 
 class StockfishEngine {
+  static NON_PLAYING_MODES = new Set(["gameOver", "analysis", "review"]);
+
   static EP_THRESHOLDS = Object.freeze([
     [0, "BestMove"],
     [0.02, "Excellent"],
@@ -1123,9 +1117,6 @@ class StockfishEngine {
       if (!alreadySentStop) {
         this.send("stop");
       }
-      if (this.stopTimeout !== null) {
-        clearTimeout(this.stopTimeout);
-      }
       this.stopTimeout = setTimeout(() => {
         this.stopTimeout = null;
         if (this.isRequestedStop) {
@@ -1435,7 +1426,7 @@ class StockfishEngine {
 
   ensureTopMovesSorted() {
     if (this.topMovesDirty) {
-      this.SortTopMoves();
+      this.topMoves.sort(StockfishEngine.compareMoves);
       this.topMovesDirty = false;
     }
     return this.topMoves;
@@ -1460,7 +1451,7 @@ class StockfishEngine {
     const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"], 10) || 1);
 
     if (!bestMoveSelected && move !== null) {
-      if (this.topMoves.length > 0 && this.BetterMintmaster?.game?.HintMoves) {
+      if (this.BetterMintmaster?.game?.HintMoves) {
         const liveTopMoves = [...this.topMoves].sort(StockfishEngine.compareMoves).slice(0, multipvCount);
         this.BetterMintmaster.game.HintMoves(liveTopMoves);
       }
@@ -1493,16 +1484,12 @@ class StockfishEngine {
   maybeAutoMove(bestMove) {
     const game = this.BetterMintmaster.game;
     const controller = game.controller;
-    if (
-      !getValueConfig(enumOptions.LegitAutoMove) ||
-      controller.getPlayingAs() !== controller.getTurn()
-    ) {
-      return;
-    }
-    const mode = controller.getMode?.();
-    if (mode === "gameOver" || mode === "analysis" || mode === "review") {
-      return;
-    }
+    const canAutoMove = () =>
+      getValueConfig(enumOptions.LegitAutoMove) &&
+      controller.getPlayingAs() === controller.getTurn() &&
+      !StockfishEngine.NON_PLAYING_MODES.has(controller.getMode?.());
+
+    if (!canAutoMove()) return;
 
     const activeFen = controller.getFEN();
     if (this.currentPositionFen && this.currentPositionFen !== activeFen) {
@@ -1521,15 +1508,7 @@ class StockfishEngine {
     }
 
     const executeAutoMove = () => {
-      const currentMode = controller.getMode?.();
-      if (
-        !getValueConfig(enumOptions.LegitAutoMove) ||
-        controller.getPlayingAs() !== controller.getTurn() ||
-        controller.getFEN() !== activeFen ||
-        currentMode === "gameOver" ||
-        currentMode === "analysis" ||
-        currentMode === "review"
-      ) {
+      if (!canAutoMove() || controller.getFEN() !== activeFen) {
         return;
       }
       try {
@@ -1554,10 +1533,6 @@ class StockfishEngine {
         executeAutoMove();
       }, remainingDelay);
     }
-  }
-
-  SortTopMoves() {
-    this.topMoves.sort(StockfishEngine.compareMoves);
   }
 }
 
@@ -1664,7 +1639,6 @@ if (typeof module !== "undefined" && module.exports) {
     GameController,
     TopMove,
     enumOptions,
-    getValueConfig,
     resolveLegalMove,
     setOptionsForTesting: (opts) => { tempOptions = opts; }
   };

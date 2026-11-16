@@ -19,20 +19,20 @@
         <section class="card">
             <h2 class="card-title">Engine Server</h2>
 
-            <div class="control-col options-text">
+            <div class="control-col">
                 <label class="control-label-text" for="option-url-api-stockfish">WebSocket API URL</label>
                 <input id="option-url-api-stockfish" type="text" class="text-input" spellcheck="false" autocomplete="off" />
             </div>
 
             <details id="go-command-details" class="collapse-group">
                 <summary class="collapse-summary">Search Options</summary>
-                <div id="go-command-container" class="collapse-content">
+                <div class="collapse-content">
                     <div class="go-preview-row">
                         <span class="go-preview-label">Preview</span>
                         <code id="go-command-preview" class="go-preview-code">go depth 3</code>
                     </div>
 
-                    <div class="control-col options-slider">
+                    <div class="control-col">
                         <div class="slider-header">
                             <span class="title">Search Depth</span>
                             <span class="badge" id="badge-option-depth">3</span>
@@ -40,7 +40,7 @@
                         <input id="option-depth" type="range" min="0" max="50" value="3" class="range-slider" />
                     </div>
 
-                    <div class="control-col options-slider">
+                    <div class="control-col">
                         <div class="slider-header">
                             <span class="title">Move Time (ms)</span>
                             <span class="badge" id="badge-option-go-movetime">Off</span>
@@ -48,7 +48,7 @@
                         <input id="option-go-movetime" type="range" min="0" max="5000" value="0" class="range-slider" />
                     </div>
 
-                    <div class="control-col options-slider">
+                    <div class="control-col">
                         <div class="slider-header">
                             <span class="title">Node Limit</span>
                             <span class="badge" id="badge-option-go-nodes">Off</span>
@@ -56,7 +56,7 @@
                         <input id="option-go-nodes" type="range" min="0" max="5000000" value="0" class="range-slider" />
                     </div>
 
-                    <div class="control-col options-slider">
+                    <div class="control-col">
                         <div class="slider-header">
                             <span class="title">Mate in N</span>
                             <span class="badge" id="badge-option-go-mate">Off</span>
@@ -64,19 +64,19 @@
                         <input id="option-go-mate" type="range" min="0" max="20" value="0" class="range-slider" />
                     </div>
 
-                    <div class="control-col options-text">
+                    <div class="control-col">
                         <label class="control-label-text" for="option-go-searchmoves">Search Moves</label>
                         <input id="option-go-searchmoves" type="text" class="text-input" placeholder="e.g. e2e4 d2d4" spellcheck="false" autocomplete="off" />
                     </div>
 
-                    <label class="control-row options-checkbox" for="option-go-clock-sync">
+                    <label class="control-row" for="option-go-clock-sync">
                         <span class="control-label-text">Clock Sync</span>
                         <input id="option-go-clock-sync" type="checkbox" class="toggle-input" />
                         <span class="toggle-slider"></span>
                     </label>
 
                     <div id="go-clock-group" class="sub-panel hidden">
-                        <div class="control-col options-slider">
+                        <div class="control-col">
                             <div class="slider-header">
                                 <span class="title">Clock Increment (ms)</span>
                                 <span class="badge" id="badge-option-go-clock-inc">0</span>
@@ -84,7 +84,7 @@
                             <input id="option-go-clock-inc" type="range" min="0" max="10000" value="0" class="range-slider" />
                         </div>
 
-                        <div class="control-col options-slider">
+                        <div class="control-col">
                             <div class="slider-header">
                                 <span class="title">Moves To Go</span>
                                 <span class="badge" id="badge-option-go-movestogo">Off</span>
@@ -93,14 +93,14 @@
                         </div>
                     </div>
 
-                    <label class="control-row options-checkbox" for="option-go-infinite">
+                    <label class="control-row" for="option-go-infinite">
                         <span class="control-label-text">Infinite Mode</span>
                         <input id="option-go-infinite" type="checkbox" class="toggle-input" />
                         <span class="toggle-slider"></span>
                     </label>
 
                     <div id="go-infinite-group" class="sub-panel hidden">
-                        <div class="control-col options-slider">
+                        <div class="control-col">
                             <div class="slider-header">
                                 <span class="title">Infinite Timer (ms)</span>
                                 <span class="badge" id="badge-option-go-infinite-timeout">Off</span>
@@ -108,7 +108,7 @@
                             <input id="option-go-infinite-timeout" type="range" min="0" max="15000" value="0" class="range-slider" />
                         </div>
 
-                        <label class="control-row options-checkbox" for="option-go-eval-stable">
+                        <label class="control-row" for="option-go-eval-stable">
                             <span class="control-label-text">Stop on Stable Eval</span>
                             <input id="option-go-eval-stable" type="checkbox" class="toggle-input" />
                             <span class="toggle-slider"></span>
@@ -133,32 +133,32 @@
         <section class="card">
             <h2 class="card-title">HUD & Display</h2>
 
-            <label class="control-row options-checkbox" for="option-evaluation-bar">
+            <label class="control-row" for="option-evaluation-bar">
                 <span class="control-label-text">Evaluation Bar</span>
                 <input id="option-evaluation-bar" type="checkbox" class="toggle-input" checked />
                 <span class="toggle-slider"></span>
             </label>
 
-            <label class="control-row options-checkbox" for="option-show-hints">
+            <label class="control-row" for="option-show-hints">
                 <span class="control-label-text">Show Hint Arrows</span>
                 <input id="option-show-hints" type="checkbox" class="toggle-input" checked />
                 <span class="toggle-slider"></span>
             </label>
 
-            <label class="control-row options-checkbox" for="option-move-analysis">
+            <label class="control-row" for="option-move-analysis">
                 <span class="control-label-text">Move Analysis</span>
                 <input id="option-move-analysis" type="checkbox" class="toggle-input" checked />
                 <span class="toggle-slider"></span>
             </label>
 
-            <label class="control-row options-checkbox" for="option-auto-queue">
+            <label class="control-row" for="option-auto-queue">
                 <span class="control-label-text">Auto Queue</span>
                 <input id="option-auto-queue" type="checkbox" class="toggle-input" />
                 <span class="toggle-slider"></span>
             </label>
 
             <div id="auto-queue-group" class="sub-panel hidden">
-                <label class="control-row options-checkbox" for="option-rematch-first">
+                <label class="control-row" for="option-rematch-first">
                     <span class="control-label-text">Rematch first</span>
                     <input id="option-rematch-first" type="checkbox" class="toggle-input" />
                     <span class="toggle-slider"></span>
@@ -169,21 +169,21 @@
         <section class="card">
             <h2 class="card-title">Auto Move Pacing</h2>
 
-            <label class="control-row options-checkbox" for="option-legit-auto-move">
+            <label class="control-row" for="option-legit-auto-move">
                 <span class="control-label-text">Enable Auto Move</span>
                 <input id="option-legit-auto-move" type="checkbox" class="toggle-input" />
                 <span class="toggle-slider"></span>
             </label>
 
             <div id="pacing-group" class="sub-panel hidden">
-                <label class="control-row options-checkbox" for="option-human-like-moves">
+                <label class="control-row" for="option-human-like-moves">
                     <span class="control-label-text">Human-like Moves</span>
                     <input id="option-human-like-moves" type="checkbox" class="toggle-input" checked />
                     <span class="toggle-slider"></span>
                 </label>
 
                 <div id="human-pace-group" class="sub-panel">
-                    <div class="control-col options-slider">
+                    <div class="control-col">
                         <div class="slider-header">
                             <span class="title">Move Pace (Seconds)</span>
                             <span class="badge" id="badge-option-move-pace">12.5</span>
@@ -193,8 +193,8 @@
 
                     <details id="advanced-timing-details" class="collapse-group">
                         <summary class="collapse-summary">Advanced Timing Settings</summary>
-                        <div id="advanced-timing-panel" class="collapse-content">
-                            <div class="control-col options-slider">
+                        <div class="collapse-content">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Physical Floor (ms)</span>
                                     <span class="badge" id="badge-option-physical-floor">600</span>
@@ -202,7 +202,7 @@
                                 <input id="option-physical-floor" type="range" min="50" max="1000" step="10" value="600" class="range-slider" />
                             </div>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Timing Spread (σ)</span>
                                     <span class="badge" id="badge-option-timing-spread">0.80</span>
@@ -210,13 +210,13 @@
                                 <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
                             </div>
 
-                            <label class="control-row options-checkbox" for="option-fast-recaptures">
+                            <label class="control-row" for="option-fast-recaptures">
                                 <span class="control-label-text">Fast Recaptures</span>
                                 <input id="option-fast-recaptures" type="checkbox" class="toggle-input" checked />
                                 <span class="toggle-slider"></span>
                             </label>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Recapture Multiplier</span>
                                     <span class="badge" id="badge-option-recapture-multiplier">0.25</span>
@@ -224,13 +224,13 @@
                                 <input id="option-recapture-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.25" class="range-slider" />
                             </div>
 
-                            <label class="control-row options-checkbox" for="option-fast-forced-moves">
+                            <label class="control-row" for="option-fast-forced-moves">
                                 <span class="control-label-text">Fast Forced Moves</span>
                                 <input id="option-fast-forced-moves" type="checkbox" class="toggle-input" checked />
                                 <span class="toggle-slider"></span>
                             </label>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Forced Move Multiplier</span>
                                     <span class="badge" id="badge-option-forced-multiplier">0.15</span>
@@ -238,13 +238,13 @@
                                 <input id="option-forced-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.15" class="range-slider" />
                             </div>
 
-                            <label class="control-row options-checkbox" for="option-fast-opening">
+                            <label class="control-row" for="option-fast-opening">
                                 <span class="control-label-text">Fast Opening</span>
                                 <input id="option-fast-opening" type="checkbox" class="toggle-input" checked />
                                 <span class="toggle-slider"></span>
                             </label>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Opening Moves Threshold</span>
                                     <span class="badge" id="badge-option-opening-moves-threshold">10</span>
@@ -252,7 +252,7 @@
                                 <input id="option-opening-moves-threshold" type="range" min="1" max="15" step="1" value="10" class="range-slider" />
                             </div>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Opening Multiplier</span>
                                     <span class="badge" id="badge-option-opening-multiplier">0.40</span>
@@ -260,13 +260,13 @@
                                 <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.40" class="range-slider" />
                             </div>
 
-                            <label class="control-row options-checkbox" for="option-clock-scaling">
+                            <label class="control-row" for="option-clock-scaling">
                                 <span class="control-label-text">Clock Scaling</span>
                                 <input id="option-clock-scaling" type="checkbox" class="toggle-input" checked />
                                 <span class="toggle-slider"></span>
                             </label>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Clock Threshold (Seconds)</span>
                                     <span class="badge" id="badge-option-clock-threshold">180</span>
@@ -274,7 +274,7 @@
                                 <input id="option-clock-threshold" type="range" min="10" max="300" step="5" value="180" class="range-slider" />
                             </div>
 
-                            <div class="control-col options-slider">
+                            <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Clock Min Multiplier</span>
                                     <span class="badge" id="badge-option-clock-min-multiplier">0.20</span>
