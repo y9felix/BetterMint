@@ -50,6 +50,15 @@
     box-sizing: border-box;
 }
 
+html,
+body {
+    scrollbar-width: none;
+}
+
+::-webkit-scrollbar {
+    display: none;
+}
+
 body {
     width: 380px;
     background-color: var(--bg-primary);
