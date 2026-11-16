@@ -155,6 +155,15 @@ function resolveLegalMove(legalMoves, bestMove) {
   );
 }
 
+function hasAddedElement(mutations) {
+  for (const m of mutations) {
+    for (const node of m.addedNodes) {
+      if (node.nodeType === 1) return true;
+    }
+  }
+  return false;
+}
+
 class TopMove {
   constructor(line, depth, cp, mate) {
     this.line = line.split(" ");
@@ -210,6 +219,7 @@ class GameController {
     this.evalScoreAbbreviated = null;
     this.evalBarResizeObserver = null;
     this.evalBarSyncHandler = null;
+    this.evalBarRafId = null;
     this.currentMarkings = [];
     this.lastHintSignature = "";
     this.lastAnalysisMarkings = [];
@@ -297,6 +307,7 @@ class GameController {
 
   triggerAutoQueue() {
     if (!getValueConfig(enumOptions.AutoQueue)) return false;
+    if (this.controller?.getMode?.() === "playing") return false;
     const now = Date.now();
     if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < AUTO_QUEUE_COOLDOWN_MS) return false;
 
@@ -351,7 +362,9 @@ class GameController {
     if (!observeTarget) return;
 
     let lastCheckTime = 0;
-    this.autoQueueObserver = new MutationObserver(() => {
+    this.autoQueueObserver = new MutationObserver((mutations) => {
+      if (this.controller?.getMode?.() === "playing") return;
+      if (Array.isArray(mutations) && !hasAddedElement(mutations)) return;
       const now = Date.now();
       if (now - lastCheckTime < 250) return;
       lastCheckTime = now;
@@ -419,6 +432,10 @@ class GameController {
   }
 
   removeEvaluationBar() {
+    if (this.evalBarRafId != null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.evalBarRafId);
+      this.evalBarRafId = null;
+    }
     if (this.evalBarResizeObserver) {
       this.evalBarResizeObserver.disconnect();
       this.evalBarResizeObserver = null;
@@ -539,9 +556,21 @@ class GameController {
       this.evalBar.style.pointerEvents = overlapsBoard ? "none" : "";
     };
 
+    const scheduleSyncPosition = () => {
+      if (typeof requestAnimationFrame !== "function") {
+        syncPosition();
+        return;
+      }
+      if (this.evalBarRafId != null) return;
+      this.evalBarRafId = requestAnimationFrame(() => {
+        this.evalBarRafId = null;
+        syncPosition();
+      });
+    };
+
     syncPosition();
     if (typeof ResizeObserver !== "undefined") {
-      this.evalBarResizeObserver = new ResizeObserver(syncPosition);
+      this.evalBarResizeObserver = new ResizeObserver(scheduleSyncPosition);
       this.evalBarResizeObserver.observe(this.chessboard);
       if (this.chessboard.parentElement) {
         this.evalBarResizeObserver.observe(this.chessboard.parentElement);
@@ -550,9 +579,9 @@ class GameController {
         this.evalBarResizeObserver.observe(document.body);
       }
     }
-    this.evalBarSyncHandler = syncPosition;
-    window.addEventListener("scroll", syncPosition, { passive: true, capture: true });
-    window.addEventListener("resize", syncPosition, { passive: true });
+    this.evalBarSyncHandler = scheduleSyncPosition;
+    window.addEventListener("scroll", scheduleSyncPosition, { passive: true, capture: true });
+    window.addEventListener("resize", scheduleSyncPosition, { passive: true });
 
     if (this.boardOptions?.flipped) {
       this.evalBar.classList.add("bettermint-evalbar-flipped");
@@ -1633,12 +1662,27 @@ if (typeof document !== "undefined") {
     }, 50);
   };
 
-  const observer = new MutationObserver(() => {
-    if (activeBoard?.isConnected) return;
-    const board = document.querySelector("wc-chess-board, chess-board");
-    if (board && board !== activeBoard) {
-      watchForGameReady(board);
-    }
+  let boardScanScheduled = false;
+  const scheduleBoardScan = () => {
+    if (boardScanScheduled || activeBoard?.isConnected) return;
+    boardScanScheduled = true;
+    const schedule =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 16);
+    schedule(() => {
+      boardScanScheduled = false;
+      if (activeBoard?.isConnected) return;
+      const board = document.querySelector("wc-chess-board, chess-board");
+      if (board && board !== activeBoard) {
+        watchForGameReady(board);
+      }
+    });
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    if (activeBoard?.isConnected || !hasAddedElement(mutations)) return;
+    scheduleBoardScan();
   });
 
   const existingBoard = document.querySelector("wc-chess-board, chess-board");

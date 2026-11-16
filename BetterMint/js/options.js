@@ -927,7 +927,9 @@ function applySettingsToDom(options) {
 }
 
 function setActiveConfigName(name) {
-  activeConfigName = name || null;
+  const nextName = name || null;
+  if (activeConfigName === nextName) return;
+  activeConfigName = nextName;
   storageSet("local", { activeConfigName });
 }
 
@@ -1439,8 +1441,9 @@ function OnOptionsChange(changedKey) {
     invalidateEngineProbe(options["option-url-api-stockfish"]);
   }
 
-  storageSet("sync", options);
-  notifyTabs(changedKey ? { [changedKey]: options[changedKey] } : options);
+  const payload = changedKey ? { [changedKey]: options[changedKey] } : options;
+  storageSet("sync", payload);
+  notifyTabs(payload);
 }
 
 function InitOptions() {
