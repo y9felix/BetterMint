@@ -11,6 +11,7 @@ const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
 const ENGINE_STOP_TIMEOUT_MS = 1000;
 const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
+const STANDARD_STARTPOS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 let nextOptionsRequestId = 0;
 
@@ -219,6 +220,112 @@ function hasAddedElementMutation(mutationRecords) {
   return false;
 }
 
+function isStandardStartposFen(fen) {
+  if (typeof fen !== "string") return false;
+  const trimmedFen = fen.trim();
+  return trimmedFen === "startpos" || trimmedFen === STANDARD_STARTPOS_FEN;
+}
+
+function formatMoveToUci(moveRecord) {
+  if (typeof moveRecord === "string") {
+    const uciToken = moveRecord.trim().toLowerCase();
+    return /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uciToken) ? uciToken : null;
+  }
+  if (!moveRecord || typeof moveRecord !== "object") return null;
+  const fromSquare =
+    typeof moveRecord.from === "string" ? moveRecord.from.trim().toLowerCase() : "";
+  const toSquare =
+    typeof moveRecord.to === "string" ? moveRecord.to.trim().toLowerCase() : "";
+  if (!/^[a-h][1-8]$/.test(fromSquare) || !/^[a-h][1-8]$/.test(toSquare)) {
+    return null;
+  }
+  let promotionPiece = "";
+  if (typeof moveRecord.promotion === "string") {
+    const trimmedPromotion = moveRecord.promotion.trim().toLowerCase();
+    if (/^[qrbn]$/.test(trimmedPromotion)) {
+      promotionPiece = trimmedPromotion;
+    }
+  }
+  return `${fromSquare}${toSquare}${promotionPiece}`;
+}
+
+function getFenPlyIndex(fen) {
+  if (typeof fen !== "string") return null;
+  const trimmedFen = fen.trim();
+  if (trimmedFen === "startpos") return 0;
+  const fenFields = trimmedFen.split(/\s+/);
+  if (fenFields.length < 6) return null;
+  const activeColor = fenFields[1];
+  const fullMoveNumber = parseInt(fenFields[5], 10);
+  if (
+    (activeColor !== "w" && activeColor !== "b") ||
+    !Number.isInteger(fullMoveNumber) ||
+    fullMoveNumber < 1
+  ) {
+    return null;
+  }
+  return (fullMoveNumber - 1) * 2 + (activeColor === "b" ? 1 : 0);
+}
+
+function getFenPlyDelta(fromFen, toFen) {
+  const fromPly = getFenPlyIndex(fromFen);
+  const toPly = getFenPlyIndex(toFen);
+  if (fromPly === null || toPly === null) return null;
+  return toPly - fromPly;
+}
+
+function extractBoardMoveHistory(chessComGame, currentFen) {
+  if (!chessComGame || typeof currentFen !== "string") return null;
+  let rawMoves = null;
+  if (typeof chessComGame.getHistory === "function") {
+    rawMoves = chessComGame.getHistory();
+  }
+  if (!Array.isArray(rawMoves) && typeof chessComGame.getMoves === "function") {
+    rawMoves = chessComGame.getMoves();
+  }
+  if (!Array.isArray(rawMoves)) return null;
+
+  const startingFen =
+    (typeof chessComGame.getStartingFEN === "function" && chessComGame.getStartingFEN()) ||
+    (typeof chessComGame.getInitialFEN === "function" && chessComGame.getInitialFEN()) ||
+    STANDARD_STARTPOS_FEN;
+
+  if (rawMoves.length === 0) {
+    return currentFen === startingFen || isStandardStartposFen(currentFen)
+      ? { anchorFen: startingFen, uciMoves: [] }
+      : null;
+  }
+
+  const uciMoves = [];
+  for (const moveEntry of rawMoves) {
+    const uciMove = formatMoveToUci(moveEntry);
+    if (!uciMove) return null;
+    uciMoves.push(uciMove);
+  }
+  const lastEntry = rawMoves[rawMoves.length - 1];
+  if (
+    lastEntry &&
+    typeof lastEntry === "object" &&
+    typeof lastEntry.fen === "string" &&
+    lastEntry.fen !== currentFen
+  ) {
+    return null;
+  }
+  const expectedPlyDelta = getFenPlyDelta(startingFen, currentFen);
+  if (expectedPlyDelta !== uciMoves.length) return null;
+  return { anchorFen: startingFen, uciMoves };
+}
+
+function buildUciPositionCommand(anchorFen, uciMoves = []) {
+  if (typeof anchorFen !== "string" || !anchorFen.trim()) return null;
+  const basePosition = isStandardStartposFen(anchorFen)
+    ? "position startpos"
+    : `position fen ${anchorFen.trim()}`;
+  return Array.isArray(uciMoves) && uciMoves.length > 0
+    ? `${basePosition} moves ${uciMoves.join(" ")}`
+    : basePosition;
+}
+
 class CandidateMove {
   constructor(principalVariationLine, searchDepth, centipawns, mateInMoves) {
     this.principalVariation = principalVariationLine.split(" ");
@@ -290,6 +397,9 @@ class GameController {
     this.autoMoveTimeoutId = null;
     this.gameOverRetryIntervalId = null;
     this.lastAutoQueueClickMs = 0;
+    this.anchorPositionFen = null;
+    this.recordedUciMoves = [];
+    this.lastObservedFen = null;
 
     this.chessComGame.on("Move", () => {
       if (this.isDestroyed) return;
@@ -350,6 +460,7 @@ class GameController {
     });
 
     this.setupAutoQueueObserver();
+    this.syncPositionHistory(true);
   }
 
   clearAutoMoveTimer() {
@@ -726,10 +837,57 @@ class GameController {
     }
   }
 
+  syncPositionHistory(isNewGame = false) {
+    const currentFen = this.chessComGame?.getFEN?.() ?? null;
+    if (typeof currentFen !== "string" || !currentFen) {
+      return { fen: currentFen, positionCommand: null };
+    }
+
+    const boardHistory = extractBoardMoveHistory(this.chessComGame, currentFen);
+    if (boardHistory) {
+      this.anchorPositionFen = boardHistory.anchorFen;
+      this.recordedUciMoves = boardHistory.uciMoves;
+      this.lastObservedFen = currentFen;
+      return {
+        fen: currentFen,
+        positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+      };
+    }
+
+    if (!isNewGame && this.anchorPositionFen !== null && currentFen === this.lastObservedFen) {
+      return {
+        fen: currentFen,
+        positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+      };
+    }
+
+    if (!isNewGame && this.anchorPositionFen !== null && this.lastObservedFen !== null) {
+      const plyDelta = getFenPlyDelta(this.lastObservedFen, currentFen);
+      const lastPlayedUciMove = formatMoveToUci(this.chessComGame?.getLastMove?.());
+      if (plyDelta === 1 && lastPlayedUciMove) {
+        this.recordedUciMoves.push(lastPlayedUciMove);
+        this.lastObservedFen = currentFen;
+        return {
+          fen: currentFen,
+          positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+        };
+      }
+    }
+
+    this.anchorPositionFen = currentFen;
+    this.recordedUciMoves = [];
+    this.lastObservedFen = currentFen;
+    return {
+      fen: currentFen,
+      positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+    };
+  }
+
   updateEnginePosition(isNewGame) {
+    if (this.isDestroyed) return;
+    const positionState = this.syncPositionHistory(Boolean(isNewGame));
     if (!this.extension?.engineClient) return;
-    const fen = this.chessComGame.getFEN();
-    this.extension.engineClient.updatePosition(fen, isNewGame);
+    this.extension.engineClient.updatePosition(positionState, isNewGame);
   }
 
   resetGame() {
@@ -1511,19 +1669,29 @@ class UciEngineClient {
     return Math.round(physicalFloorMs + Math.exp(logMedianDelayMs + timingSpread * standardNormalSample));
   }
 
-  updatePosition(fen = null, isNewGame = true) {
+  updatePosition(positionInput = null, isNewGame = true) {
     if (this.isSwitchingEngine) return;
     if (!this.isWebSocketOpen() || !this.isEngineLoaded) {
       this.reconnectNow();
       return;
     }
+    const isStructuredState = Boolean(positionInput && typeof positionInput === "object");
+    const fen = isStructuredState ? (positionInput.fen ?? null) : positionInput;
+    const positionCommand =
+      isStructuredState && typeof positionInput.positionCommand === "string"
+        ? positionInput.positionCommand
+        : null;
     const hadPendingPosition = this.pendingPositionUpdate !== null;
-    this.pendingPositionUpdate = {
+    const nextPendingUpdate = {
       fen,
       isNewGame: hadPendingPosition
         ? this.pendingPositionUpdate.isNewGame || isNewGame
         : isNewGame
     };
+    if (positionCommand !== null) {
+      nextPendingUpdate.positionCommand = positionCommand;
+    }
+    this.pendingPositionUpdate = nextPendingUpdate;
     if (hadPendingPosition) return;
 
     this.onReady(() => {
@@ -1533,7 +1701,11 @@ class UciEngineClient {
         const queuedPosition = this.pendingPositionUpdate;
         this.pendingPositionUpdate = null;
         if (!queuedPosition) return;
-        this.setPositionAndSearch(queuedPosition.fen, queuedPosition.isNewGame);
+        this.setPositionAndSearch(
+          queuedPosition.fen,
+          queuedPosition.isNewGame,
+          queuedPosition.positionCommand ?? null
+        );
       });
     });
   }
@@ -1780,7 +1952,7 @@ class UciEngineClient {
     }
   }
 
-  setPositionAndSearch(fen = null, isNewGame = true) {
+  setPositionAndSearch(fen = null, isNewGame = true, positionCommand = null) {
     const startSearchForPosition = () => {
       const isSamePosition = !isNewGame && fen !== null && fen === this.currentPositionFen;
       if (isNewGame) {
@@ -1794,7 +1966,9 @@ class UciEngineClient {
       this.currentPositionFen = fen;
       this.candidateMoves = [];
       this.hasUnsortedCandidateMoves = false;
-      if (fen !== null) this.sendUciCommand(`position fen ${fen}`);
+      const resolvedPositionCommand =
+        positionCommand || (fen !== null ? `position fen ${fen}` : null);
+      if (resolvedPositionCommand !== null) this.sendUciCommand(resolvedPositionCommand);
       this.startSearch();
     };
     this.onReady(() => {
@@ -2094,6 +2268,9 @@ if (typeof module !== "undefined" && module.exports) {
     CandidateMove,
     EXTENSION_OPTION_KEY,
     resolveLegalMove,
+    formatMoveToUci,
+    buildUciPositionCommand,
+    STANDARD_STARTPOS_FEN,
     formatEvaluationDisplay,
     getEvalBarOffsetPx,
     setExtensionOptionsForTesting: (extensionOptions) => {
