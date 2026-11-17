@@ -1,7 +1,7 @@
 (() => {
 "use strict";
 
-const TURN_BLACK = 2;
+const CHESSCOM_BLACK_TURN = 2;
 const EVAL_BAR_DESKTOP_MIN_WIDTH_PX = 960;
 const EVAL_BAR_DESKTOP_WIDTH_PX = 30;
 const EVAL_BAR_COMPACT_WIDTH_PX = 20;
@@ -9,36 +9,36 @@ const EVAL_BAR_GUTTER_PX = 10;
 const AUTO_QUEUE_COOLDOWN_MS = 4000;
 const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
-const STOP_TIMEOUT_MS = 1000;
+const ENGINE_STOP_TIMEOUT_MS = 1000;
 const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
 
-let requestId = 0;
+let nextOptionsRequestId = 0;
 
-function requestOptions() {
-  const id = requestId++;
+function requestExtensionOptions() {
+  const pendingRequestId = nextOptionsRequestId++;
   return new Promise((resolve) => {
-    let timer = null;
-    const listener = (evt) => {
-      if (evt.detail?.requestId === id) {
-        if (timer !== null) clearTimeout(timer);
-        window.removeEventListener("BetterMintSendOptions", listener);
-        resolve(evt.detail.data);
+    let responseTimeoutId = null;
+    const onOptionsResponse = (optionsEvent) => {
+      if (optionsEvent.detail?.requestId === pendingRequestId) {
+        if (responseTimeoutId !== null) clearTimeout(responseTimeoutId);
+        window.removeEventListener("BetterMintSendOptions", onOptionsResponse);
+        resolve(optionsEvent.detail.extensionOptions);
       }
     };
-    timer = setTimeout(() => {
-      window.removeEventListener("BetterMintSendOptions", listener);
+    responseTimeoutId = setTimeout(() => {
+      window.removeEventListener("BetterMintSendOptions", onOptionsResponse);
       console.warn("[BetterMint] Timed out waiting for extension options; using fallback.");
       resolve({});
     }, OPTIONS_REQUEST_TIMEOUT_MS);
-    window.addEventListener("BetterMintSendOptions", listener);
+    window.addEventListener("BetterMintSendOptions", onOptionsResponse);
     window.dispatchEvent(
-      new CustomEvent("BetterMintGetOptions", { detail: { id } })
+      new CustomEvent("BetterMintGetOptions", { detail: { requestId: pendingRequestId } })
     );
   });
 }
 
-const enumOptions = {
-  UrlApiStockfish: "option-url-api-stockfish",
+const EXTENSION_OPTION_KEY = {
+  EngineWebSocketUrl: "option-url-api-stockfish",
   Depth: "option-depth",
   GoMovetime: "option-go-movetime",
   GoNodes: "option-go-nodes",
@@ -72,147 +72,163 @@ const enumOptions = {
   ClockMinMultiplier: "option-clock-min-multiplier"
 };
 
-const GO_OPTION_KEYS = new Set([
-  enumOptions.Depth,
-  enumOptions.GoMovetime,
-  enumOptions.GoNodes,
-  enumOptions.GoMate,
-  enumOptions.GoSearchmoves,
-  enumOptions.GoClockSync,
-  enumOptions.GoClockInc,
-  enumOptions.GoMovestogo,
-  enumOptions.GoInfinite,
-  enumOptions.GoInfiniteTimeout,
-  enumOptions.GoEvalStable
+const SEARCH_GO_OPTION_KEYS = new Set([
+  EXTENSION_OPTION_KEY.Depth,
+  EXTENSION_OPTION_KEY.GoMovetime,
+  EXTENSION_OPTION_KEY.GoNodes,
+  EXTENSION_OPTION_KEY.GoMate,
+  EXTENSION_OPTION_KEY.GoSearchmoves,
+  EXTENSION_OPTION_KEY.GoClockSync,
+  EXTENSION_OPTION_KEY.GoClockInc,
+  EXTENSION_OPTION_KEY.GoMovestogo,
+  EXTENSION_OPTION_KEY.GoInfinite,
+  EXTENSION_OPTION_KEY.GoInfiniteTimeout,
+  EXTENSION_OPTION_KEY.GoEvalStable
 ]);
 
-const CLOCK_BOTTOM_SELECTOR = ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
-const CLOCK_TOP_SELECTOR = ".clock-component.clock-top, .clock-button-component.clock-top, .clock.clock-top, .clock-top";
+const CLOCK_BOTTOM_SELECTOR =
+  ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
+const CLOCK_TOP_SELECTOR =
+  ".clock-component.clock-top, .clock-button-component.clock-top, .clock.clock-top, .clock-top";
 
-function cpToWinProbability(cp) {
-  return 1 / (1 + Math.exp(-0.00368208 * cp));
+function centipawnsToWinProbability(centipawns) {
+  return 1 / (1 + Math.exp(-0.00368208 * centipawns));
 }
 
 function getEvalBarOffsetPx(viewportWidth) {
-  const width = Number.isFinite(viewportWidth) ? viewportWidth : EVAL_BAR_DESKTOP_MIN_WIDTH_PX;
-  const barWidth = width >= EVAL_BAR_DESKTOP_MIN_WIDTH_PX ? EVAL_BAR_DESKTOP_WIDTH_PX : EVAL_BAR_COMPACT_WIDTH_PX;
+  const effectiveWidth = Number.isFinite(viewportWidth)
+    ? viewportWidth
+    : EVAL_BAR_DESKTOP_MIN_WIDTH_PX;
+  const barWidth =
+    effectiveWidth >= EVAL_BAR_DESKTOP_MIN_WIDTH_PX
+      ? EVAL_BAR_DESKTOP_WIDTH_PX
+      : EVAL_BAR_COMPACT_WIDTH_PX;
   return barWidth + EVAL_BAR_GUTTER_PX;
 }
 
-function formatEvaluation(score, isMate) {
-  if (isMate) {
-    const shortText = "M" + String(Math.abs(score));
+function formatEvaluationDisplay(scoreValue, isMateScore) {
+  if (isMateScore) {
+    const shortText = "M" + String(Math.abs(scoreValue));
     return {
-      percentage: score < 0 ? 100 : 0,
+      percentage: scoreValue < 0 ? 100 : 0,
       abbreviated: shortText,
-      full: (score < 0 ? "-" : "+") + shortText,
-      isDark: score >= 0
+      full: (scoreValue < 0 ? "-" : "+") + shortText,
+      isDark: scoreValue >= 0
     };
   }
-  const smallScore = score / 100;
-  const absScore = Math.abs(smallScore);
-  const percentage = Math.max(5, Math.min(95, (1 - cpToWinProbability(score)) * 100));
-  const full = absScore < 0.005 ? "0.00" : (smallScore > 0 ? "+" : "") + smallScore.toFixed(2);
+  const pawnAdvantage = scoreValue / 100;
+  const absPawnAdvantage = Math.abs(pawnAdvantage);
+  const percentage = Math.max(
+    5,
+    Math.min(95, (1 - centipawnsToWinProbability(scoreValue)) * 100)
+  );
+  const full =
+    absPawnAdvantage < 0.005
+      ? "0.00"
+      : (pawnAdvantage > 0 ? "+" : "") + pawnAdvantage.toFixed(2);
   let abbreviated;
-  if (absScore < 0.05) {
+  if (absPawnAdvantage < 0.05) {
     abbreviated = "0.0";
-  } else if (absScore >= 9.95) {
-    abbreviated = String(Math.round(absScore));
+  } else if (absPawnAdvantage >= 9.95) {
+    abbreviated = String(Math.round(absPawnAdvantage));
   } else {
-    abbreviated = absScore.toFixed(1);
+    abbreviated = absPawnAdvantage.toFixed(1);
   }
   return {
     percentage,
     abbreviated,
     full,
-    isDark: score >= 0
+    isDark: scoreValue >= 0
   };
 }
 
-function parseClockElementSeconds(selector) {
-  const el = typeof document !== "undefined" ? document.querySelector(selector) : null;
-  const text = el?.textContent?.trim();
-  if (!text) return null;
-  const colonMatch = text.match(/(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
+function parseClockElementSeconds(clockSelector) {
+  const clockElement =
+    typeof document !== "undefined" ? document.querySelector(clockSelector) : null;
+  const clockText = clockElement?.textContent?.trim();
+  if (!clockText) return null;
+  const colonMatch = clockText.match(/(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
   if (colonMatch) {
-    const [, a, b, c, frac] = colonMatch;
-    const base =
-      c !== undefined
-        ? Number(a) * 3600 + Number(b) * 60 + Number(c)
-        : Number(a) * 60 + Number(b);
-    return base + (frac ? Number(`0.${frac}`) : 0);
+    const [, firstUnit, secondUnit, thirdUnit, fractionDigits] = colonMatch;
+    const baseSeconds =
+      thirdUnit !== undefined
+        ? Number(firstUnit) * 3600 + Number(secondUnit) * 60 + Number(thirdUnit)
+        : Number(firstUnit) * 60 + Number(secondUnit);
+    return baseSeconds + (fractionDigits ? Number(`0.${fractionDigits}`) : 0);
   }
-  const secMatch = text.match(/^(\d+(?:\.\d+)?)$/);
-  return secMatch ? Number(secMatch[1]) : null;
+  const secondsMatch = clockText.match(/^(\d+(?:\.\d+)?)$/);
+  return secondsMatch ? Number(secondsMatch[1]) : null;
 }
 
 function getRemainingPlayerTimeSeconds() {
   return parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
 }
 
-function getClockSyncTimesMs(controller) {
-  const bottomSec = parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
-  const topSec = parseClockElementSeconds(CLOCK_TOP_SELECTOR);
-  if (bottomSec === null || topSec === null) return null;
-  const playingAsBlack = controller?.getPlayingAs?.() === TURN_BLACK;
-  const wSec = playingAsBlack ? topSec : bottomSec;
-  const bSec = playingAsBlack ? bottomSec : topSec;
+function getClockSyncTimesMs(chessComGame) {
+  const bottomClockSeconds = parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
+  const topClockSeconds = parseClockElementSeconds(CLOCK_TOP_SELECTOR);
+  if (bottomClockSeconds === null || topClockSeconds === null) return null;
+  const isPlayingAsBlack = chessComGame?.getPlayingAs?.() === CHESSCOM_BLACK_TURN;
+  const whiteSeconds = isPlayingAsBlack ? topClockSeconds : bottomClockSeconds;
+  const blackSeconds = isPlayingAsBlack ? bottomClockSeconds : topClockSeconds;
   return {
-    wtime: Math.max(100, Math.round(wSec * 1000)),
-    btime: Math.max(100, Math.round(bSec * 1000))
+    wtime: Math.max(100, Math.round(whiteSeconds * 1000)),
+    btime: Math.max(100, Math.round(blackSeconds * 1000))
   };
 }
 
-let BetterMintmaster;
-let tempOptions = {};
+let activeExtension;
+let fallbackExtensionOptions = {};
 
-function getValueConfig(key) {
-  return (BetterMintmaster ? BetterMintmaster.options : tempOptions)[key];
+function getExtensionOption(optionKey) {
+  return (activeExtension ? activeExtension.extensionOptions : fallbackExtensionOptions)[optionKey];
 }
 
-function numConfig(key, fallback) {
-  const n = parseFloat(getValueConfig(key));
-  return n > 0 ? n : fallback;
+function getPositiveFloatOption(optionKey, fallbackValue) {
+  const parsedValue = parseFloat(getExtensionOption(optionKey));
+  return parsedValue > 0 ? parsedValue : fallbackValue;
 }
 
-function nonNegIntConfig(key, fallback = 0) {
-  const raw = getValueConfig(key);
-  if (raw === undefined || raw === null || raw === "") return fallback;
-  const n = parseInt(raw, 10);
-  return Number.isNaN(n) || n < 0 ? fallback : n;
+function getNonNegativeIntOption(optionKey, fallbackValue = 0) {
+  const rawValue = getExtensionOption(optionKey);
+  if (rawValue === undefined || rawValue === null || rawValue === "") return fallbackValue;
+  const parsedInt = parseInt(rawValue, 10);
+  return Number.isNaN(parsedInt) || parsedInt < 0 ? fallbackValue : parsedInt;
 }
 
-function resolveLegalMove(legalMoves, bestMove) {
-  if (!Array.isArray(legalMoves) || !bestMove) return null;
+function resolveLegalMove(legalMoves, candidateMove) {
+  if (!Array.isArray(legalMoves) || !candidateMove) return null;
   return (
     legalMoves.find(
-      (m) =>
-        m.from === bestMove.from &&
-        m.to === bestMove.to &&
-        (!bestMove.promotion || !m.promotion || m.promotion === bestMove.promotion)
+      (legalMove) =>
+        legalMove.from === candidateMove.from &&
+        legalMove.to === candidateMove.to &&
+        (!candidateMove.promotion ||
+          !legalMove.promotion ||
+          legalMove.promotion === candidateMove.promotion)
     ) || null
   );
 }
 
-function hasAddedElement(mutations) {
-  for (const m of mutations) {
-    for (const node of m.addedNodes) {
-      if (node.nodeType === 1) return true;
+function hasAddedElementMutation(mutationRecords) {
+  for (const mutation of mutationRecords) {
+    for (const addedNode of mutation.addedNodes) {
+      if (addedNode.nodeType === 1) return true;
     }
   }
   return false;
 }
 
-class TopMove {
-  constructor(line, depth, cp, mate) {
-    this.line = line.split(" ");
-    this.move = this.line[0];
-    this.promotion = this.move.length > 4 ? this.move[4] : null;
-    this.from = this.move.slice(0, 2);
-    this.to = this.move.slice(2, 4);
-    this.cp = cp;
-    this.mate = mate;
-    this.depth = depth;
+class CandidateMove {
+  constructor(principalVariationLine, searchDepth, centipawns, mateInMoves) {
+    this.principalVariation = principalVariationLine.split(" ");
+    this.uciMove = this.principalVariation[0];
+    this.promotion = this.uciMove.length > 4 ? this.uciMove[4] : null;
+    this.from = this.uciMove.slice(0, 2);
+    this.to = this.uciMove.slice(2, 4);
+    this.centipawns = centipawns;
+    this.mateInMoves = mateInMoves;
+    this.searchDepth = searchDepth;
   }
 }
 
@@ -234,7 +250,12 @@ class GameController {
   ].join(", ");
 
   static AUTO_QUEUE_KEYWORDS = [
-    "play again", "new opponent", "next game", "new game", "rematch", "new"
+    "play again",
+    "new opponent",
+    "next game",
+    "new game",
+    "rematch",
+    "new"
   ];
 
   static HIGHLIGHT_COLORS = Object.freeze({
@@ -247,66 +268,83 @@ class GameController {
     MissedWin: "#dbac16"
   });
 
-  constructor(BetterMintmaster, chessboard) {
-    this.BetterMintmaster = BetterMintmaster;
-    this.chessboard = chessboard;
-    this.controller = chessboard.game;
-    this.boardOptions = this.controller.getOptions();
-    this.evalBar = null;
-    this.evalBarFill = null;
-    this.evalScore = null;
-    this.evalScoreAbbreviated = null;
+  constructor(extension, chessboardElement) {
+    this.extension = extension;
+    this.chessboardElement = chessboardElement;
+    this.chessComGame = chessboardElement.game;
+    this.boardOptions = this.chessComGame.getOptions();
+    this.evalBarElement = null;
+    this.evalBarWhiteFill = null;
+    this.evalScoreElement = null;
+    this.evalScoreAbbreviatedElement = null;
     this.evalBarResizeObserver = null;
     this.evalBarSyncHandler = null;
-    this.evalBarRafId = null;
-    this.currentMarkings = [];
+    this.evalBarAnimationFrameId = null;
+    this.activeHintMarkings = [];
     this.lastHintSignature = "";
     this.lastAnalysisMarkings = [];
-    this.turnStartTime = performance.now();
-    this.autoMoveTimer = null;
-    this.gameOverInterval = null;
-    this.lastAutoQueueClick = 0;
+    this.turnStartTimestampMs = performance.now();
+    this.isDestroyed = false;
+    this.modeResetTimeoutId = null;
+    this.resetGameTimeoutId = null;
+    this.autoMoveTimeoutId = null;
+    this.gameOverRetryIntervalId = null;
+    this.lastAutoQueueClickMs = 0;
 
-    this.controller.on("Move", () => {
+    this.chessComGame.on("Move", () => {
+      if (this.isDestroyed) return;
       this.clearAutoMoveTimer();
-      this.RemoveCurrentMarkings();
-      if (this.controller.getPlayingAs() === this.controller.getTurn()) {
-        this.turnStartTime = performance.now();
+      this.removeCurrentHintMarkings();
+      if (this.chessComGame.getPlayingAs() === this.chessComGame.getTurn()) {
+        this.turnStartTimestampMs = performance.now();
       }
-      this.UpdateEngine(false);
+      this.updateEnginePosition(false);
     });
 
-    if (this.evalBar == null && getValueConfig(enumOptions.EvaluationBar)) {
-      this.CreateAnalysisTools();
+    if (this.evalBarElement == null && getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) {
+      this.createAnalysisTools();
     }
 
-    this.controller.on("ModeChanged", (event) => {
-      if (event.data === "playing") {
-        setTimeout(() => {
-          this.ResetGame();
+    this.chessComGame.on("ModeChanged", (modeEvent) => {
+      if (this.isDestroyed) return;
+      if (modeEvent?.data === "playing") {
+        if (this.modeResetTimeoutId !== null) clearTimeout(this.modeResetTimeoutId);
+        this.modeResetTimeoutId = setTimeout(() => {
+          this.modeResetTimeoutId = null;
+          if (this.isDestroyed) return;
+          this.resetGame();
         }, 100);
-      } else if (event.data === "gameOver") {
+      } else if (modeEvent?.data === "gameOver") {
         this.clearAutoMoveTimer();
-        this.RemoveCurrentMarkings();
+        this.removeCurrentHintMarkings();
         this.handleGameOver();
       }
     });
 
-    this.controller.on("RendererSet", () => {
-      this.ResetGame();
+    this.chessComGame.on("RendererSet", () => {
+      if (this.isDestroyed) return;
+      this.resetGame();
     });
 
-    this.controller.on("ResetGame", () => {
-      setTimeout(() => {
-        this.UpdateEngine(true);
-        this.RefreshEvaluationBar();
+    this.chessComGame.on("ResetGame", () => {
+      if (this.isDestroyed) return;
+      if (this.resetGameTimeoutId !== null) clearTimeout(this.resetGameTimeoutId);
+      this.resetGameTimeoutId = setTimeout(() => {
+        this.resetGameTimeoutId = null;
+        if (this.isDestroyed) return;
+        this.updateEnginePosition(true);
+        this.refreshEvaluationBar();
       }, 50);
     });
 
-    this.controller.on("UpdateOptions", (event) => {
-      this.boardOptions = this.controller.getOptions();
-      if (event.data.flipped !== undefined && this.evalBar != null) {
-        this.evalBar.classList.toggle("bettermint-evalbar-flipped", Boolean(this.boardOptions?.flipped));
+    this.chessComGame.on("UpdateOptions", (optionsEvent) => {
+      if (this.isDestroyed) return;
+      this.boardOptions = this.chessComGame.getOptions();
+      if (optionsEvent?.data?.flipped !== undefined && this.evalBarElement != null) {
+        this.evalBarElement.classList.toggle(
+          "bettermint-evalbar-flipped",
+          Boolean(this.boardOptions?.flipped)
+        );
       }
       this.setupAutoQueueObserver();
     });
@@ -315,165 +353,177 @@ class GameController {
   }
 
   clearAutoMoveTimer() {
-    if (this.autoMoveTimer !== null) {
-      clearTimeout(this.autoMoveTimer);
-      this.autoMoveTimer = null;
+    if (this.autoMoveTimeoutId !== null) {
+      clearTimeout(this.autoMoveTimeoutId);
+      this.autoMoveTimeoutId = null;
     }
   }
 
-  clearGameOverInterval() {
-    if (this.gameOverInterval !== null) {
-      clearInterval(this.gameOverInterval);
-      this.gameOverInterval = null;
+  clearGameOverRetryInterval() {
+    if (this.gameOverRetryIntervalId !== null) {
+      clearInterval(this.gameOverRetryIntervalId);
+      this.gameOverRetryIntervalId = null;
     }
   }
 
-  dispatchButtonClick(element) {
-    const rect = element.getBoundingClientRect();
-    const opts = {
+  dispatchSimulatedClick(targetElement) {
+    const boundingRect = targetElement.getBoundingClientRect();
+    const pointerEventOptions = {
       bubbles: true,
       cancelable: true,
       view: window,
-      clientX: rect.left + rect.width / 2,
-      clientY: rect.top + rect.height / 2
+      clientX: boundingRect.left + boundingRect.width / 2,
+      clientY: boundingRect.top + boundingRect.height / 2
     };
-    element.dispatchEvent(new PointerEvent("pointerdown", opts));
-    element.dispatchEvent(new MouseEvent("mousedown", opts));
-    element.dispatchEvent(new PointerEvent("pointerup", opts));
-    element.dispatchEvent(new MouseEvent("mouseup", opts));
-    element.click();
+    targetElement.dispatchEvent(new PointerEvent("pointerdown", pointerEventOptions));
+    targetElement.dispatchEvent(new MouseEvent("mousedown", pointerEventOptions));
+    targetElement.dispatchEvent(new PointerEvent("pointerup", pointerEventOptions));
+    targetElement.dispatchEvent(new MouseEvent("mouseup", pointerEventOptions));
+    targetElement.click();
   }
 
   triggerAutoQueue() {
-    if (!getValueConfig(enumOptions.AutoQueue)) return false;
-    if (this.controller?.getMode?.() === "playing") return false;
-    const now = Date.now();
-    if (this.lastAutoQueueClick && now - this.lastAutoQueueClick < AUTO_QUEUE_COOLDOWN_MS) return false;
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return false;
+    if (this.chessComGame?.getMode?.() === "playing") return false;
+    const nowMs = Date.now();
+    if (this.lastAutoQueueClickMs && nowMs - this.lastAutoQueueClickMs < AUTO_QUEUE_COOLDOWN_MS) {
+      return false;
+    }
 
-    const matchesKeywords = (text, strictNew) =>
-      GameController.AUTO_QUEUE_KEYWORDS.some((kw) => {
-        if (kw === "new") {
-          return strictNew ? /^new\b/.test(text) : /\bnew\b/.test(text);
+    const matchesQueueKeyword = (buttonText, shouldMatchLeadingNew) =>
+      GameController.AUTO_QUEUE_KEYWORDS.some((keyword) => {
+        if (keyword === "new") {
+          return shouldMatchLeadingNew ? /^new\b/.test(buttonText) : /\bnew\b/.test(buttonText);
         }
-        return text.includes(kw);
+        return buttonText.includes(keyword);
       });
 
-    const findAndClick = (selector, matcher) => {
-      const elements = document.querySelectorAll(selector);
-      for (const el of elements) {
-        if (el.disabled) continue;
-        const text = el.textContent?.trim().toLowerCase();
-        if (!text || !matcher(text)) {
+    const findAndClickMatchingButton = (buttonSelector, labelPredicate) => {
+      const candidateButtons = document.querySelectorAll(buttonSelector);
+      for (const candidateButton of candidateButtons) {
+        if (candidateButton.disabled) continue;
+        const buttonText = candidateButton.textContent?.trim().toLowerCase();
+        if (!buttonText || !labelPredicate(buttonText)) {
           continue;
         }
-        if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-          this.lastAutoQueueClick = now;
-          this.dispatchButtonClick(el);
+        if (candidateButton.offsetWidth > 0 && candidateButton.offsetHeight > 0) {
+          this.lastAutoQueueClickMs = nowMs;
+          this.dispatchSimulatedClick(candidateButton);
           return true;
         }
       }
       return false;
     };
 
-    const genericSelector = "button:not([disabled]), [role='button']:not([disabled])";
-    if (getValueConfig(enumOptions.RematchFirst)) {
-      const isRematch = (text) => text.includes("rematch");
-      if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, isRematch)) return true;
-      if (findAndClick(genericSelector, isRematch)) return true;
+    const genericButtonSelector = "button:not([disabled]), [role='button']:not([disabled])";
+    if (getExtensionOption(EXTENSION_OPTION_KEY.RematchFirst)) {
+      const isRematchButton = (buttonText) => buttonText.includes("rematch");
+      if (findAndClickMatchingButton(GameController.AUTO_QUEUE_SELECTORS, isRematchButton)) {
+        return true;
+      }
+      if (findAndClickMatchingButton(genericButtonSelector, isRematchButton)) return true;
     }
 
-    if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, (t) => matchesKeywords(t, false))) return true;
-    return findAndClick(genericSelector, (t) => matchesKeywords(t, true));
+    if (
+      findAndClickMatchingButton(GameController.AUTO_QUEUE_SELECTORS, (buttonText) =>
+        matchesQueueKeyword(buttonText, false)
+      )
+    ) {
+      return true;
+    }
+    return findAndClickMatchingButton(genericButtonSelector, (buttonText) =>
+      matchesQueueKeyword(buttonText, true)
+    );
   }
 
   setupAutoQueueObserver() {
-    if (this.autoQueueObserver) {
-      if (!getValueConfig(enumOptions.AutoQueue)) {
-        this.autoQueueObserver.disconnect();
-        this.autoQueueObserver = null;
+    if (this.autoQueueMutationObserver) {
+      if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) {
+        this.autoQueueMutationObserver.disconnect();
+        this.autoQueueMutationObserver = null;
       }
       return;
     }
 
-    if (!getValueConfig(enumOptions.AutoQueue)) return;
-    const observeTarget =
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return;
+    const observeRoot =
       typeof document !== "undefined" ? document.body || document.documentElement : null;
-    if (!observeTarget) return;
+    if (!observeRoot) return;
 
-    let lastCheckTime = 0;
-    this.autoQueueObserver = new MutationObserver((mutations) => {
-      if (this.controller?.getMode?.() === "playing") return;
-      if (Array.isArray(mutations) && !hasAddedElement(mutations)) return;
-      const now = Date.now();
-      if (now - lastCheckTime < 250) return;
-      lastCheckTime = now;
+    let lastScanTimestampMs = 0;
+    this.autoQueueMutationObserver = new MutationObserver((mutationRecords) => {
+      if (this.chessComGame?.getMode?.() === "playing") return;
+      if (Array.isArray(mutationRecords) && !hasAddedElementMutation(mutationRecords)) return;
+      const nowMs = Date.now();
+      if (nowMs - lastScanTimestampMs < 250) return;
+      lastScanTimestampMs = nowMs;
       this.triggerAutoQueue();
     });
 
-    this.autoQueueObserver.observe(observeTarget, { childList: true, subtree: true });
+    this.autoQueueMutationObserver.observe(observeRoot, { childList: true, subtree: true });
     this.triggerAutoQueue();
   }
 
   handleGameOver() {
-    if (!getValueConfig(enumOptions.AutoQueue)) return;
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return;
     this.setupAutoQueueObserver();
-    this.clearGameOverInterval();
-    let attempts = 0;
-    this.gameOverInterval = setInterval(() => {
-      attempts++;
-      if (attempts > AUTO_QUEUE_MAX_ATTEMPTS || this.triggerAutoQueue()) {
-        this.clearGameOverInterval();
+    this.clearGameOverRetryInterval();
+    let attemptCount = 0;
+    this.gameOverRetryIntervalId = setInterval(() => {
+      attemptCount++;
+      if (attemptCount > AUTO_QUEUE_MAX_ATTEMPTS || this.triggerAutoQueue()) {
+        this.clearGameOverRetryInterval();
       }
     }, AUTO_QUEUE_RETRY_MS);
   }
 
-  RemoveLastAnalysisMarkings() {
+  removeLastAnalysisMarkings() {
     if (this.lastAnalysisMarkings?.length > 0) {
-      this.lastAnalysisMarkings.forEach((key) => {
-        this.controller.markings.removeOne(key);
+      this.lastAnalysisMarkings.forEach((markingKey) => {
+        this.chessComGame.markings.removeOne(markingKey);
       });
       this.lastAnalysisMarkings = [];
     }
-    const lastMove = this.controller.getLastMove();
-    if (lastMove) {
-      this.controller.markings.removeOne(`effect|${lastMove.to}`);
-      this.controller.markings.removeOne(`highlight|${lastMove.to}`);
+    const lastPlayedMove = this.chessComGame.getLastMove();
+    if (lastPlayedMove) {
+      this.chessComGame.markings.removeOne(`effect|${lastPlayedMove.to}`);
+      this.chessComGame.markings.removeOne(`highlight|${lastPlayedMove.to}`);
     }
   }
 
-  ShowMoveAnalysis(square, moveScore) {
-    this.RemoveLastAnalysisMarkings();
-    if (!square || !moveScore) return;
-    const hlColor = GameController.HIGHLIGHT_COLORS[moveScore];
-    if (hlColor) {
-      this.controller.markings.addOne({
+  showMoveAnalysis(targetSquare, moveQuality) {
+    this.removeLastAnalysisMarkings();
+    if (!targetSquare || !moveQuality) return;
+    const highlightColor = GameController.HIGHLIGHT_COLORS[moveQuality];
+    if (highlightColor) {
+      this.chessComGame.markings.addOne({
         data: {
           opacity: 0.5,
-          color: hlColor,
-          square
+          color: highlightColor,
+          square: targetSquare
         },
         node: true,
         persistent: true,
         type: "highlight"
       });
-      this.lastAnalysisMarkings.push(`highlight|${square}`);
+      this.lastAnalysisMarkings.push(`highlight|${targetSquare}`);
     }
-    this.controller.markings.addOne({
+    this.chessComGame.markings.addOne({
       data: {
-        square,
-        type: moveScore
+        square: targetSquare,
+        type: moveQuality
       },
       node: true,
       persistent: true,
       type: "effect"
     });
-    this.lastAnalysisMarkings.push(`effect|${square}`);
+    this.lastAnalysisMarkings.push(`effect|${targetSquare}`);
   }
 
   removeEvaluationBar() {
-    if (this.evalBarRafId != null && typeof cancelAnimationFrame === "function") {
-      cancelAnimationFrame(this.evalBarRafId);
-      this.evalBarRafId = null;
+    if (this.evalBarAnimationFrameId != null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(this.evalBarAnimationFrameId);
+      this.evalBarAnimationFrameId = null;
     }
     if (this.evalBarResizeObserver) {
       this.evalBarResizeObserver.disconnect();
@@ -484,136 +534,165 @@ class GameController {
       window.removeEventListener("resize", this.evalBarSyncHandler);
       this.evalBarSyncHandler = null;
     }
-    if (this.evalBar) {
-      this.evalBar.remove();
-      this.evalBar = null;
+    if (this.evalBarElement) {
+      this.evalBarElement.remove();
+      this.evalBarElement = null;
     }
-    this.evalBarFill = null;
-    this.evalScore = null;
-    this.evalScoreAbbreviated = null;
+    this.evalBarWhiteFill = null;
+    this.evalScoreElement = null;
+    this.evalScoreAbbreviatedElement = null;
   }
 
-  UpdateExtensionOptions() {
-    if (getValueConfig(enumOptions.EvaluationBar) && (!this.evalBar || !this.evalBar.isConnected)) {
-      this.evalBar = null;
-      this.CreateAnalysisTools();
-    } else if (!getValueConfig(enumOptions.EvaluationBar) && this.evalBar != null) {
+  applyExtensionOptions() {
+    if (
+      getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) &&
+      (!this.evalBarElement || !this.evalBarElement.isConnected)
+    ) {
+      this.removeEvaluationBar();
+      this.createAnalysisTools();
+    } else if (
+      !getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) &&
+      this.evalBarElement != null
+    ) {
       this.removeEvaluationBar();
     }
 
     this.setupAutoQueueObserver();
-    if (!getValueConfig(enumOptions.ShowHints)) {
-      this.RemoveCurrentMarkings();
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.ShowHints)) {
+      this.removeCurrentHintMarkings();
     }
-    if (!getValueConfig(enumOptions.MoveAnalysis)) {
-      this.RemoveLastAnalysisMarkings();
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.MoveAnalysis)) {
+      this.removeLastAnalysisMarkings();
     }
-    if (!getValueConfig(enumOptions.LegitAutoMove)) {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove)) {
       this.clearAutoMoveTimer();
     }
   }
 
   destroy() {
+    this.isDestroyed = true;
+    if (this.modeResetTimeoutId !== null) {
+      clearTimeout(this.modeResetTimeoutId);
+      this.modeResetTimeoutId = null;
+    }
+    if (this.resetGameTimeoutId !== null) {
+      clearTimeout(this.resetGameTimeoutId);
+      this.resetGameTimeoutId = null;
+    }
     this.removeEvaluationBar();
-    if (this.controller?.markings) {
-      this.RemoveCurrentMarkings();
-      this.RemoveLastAnalysisMarkings();
+    if (this.chessComGame?.markings) {
+      this.removeCurrentHintMarkings();
+      this.removeLastAnalysisMarkings();
     }
     this.clearAutoMoveTimer();
-    this.clearGameOverInterval();
-    if (this.autoQueueObserver) {
-      this.autoQueueObserver.disconnect();
-      this.autoQueueObserver = null;
+    this.clearGameOverRetryInterval();
+    if (this.autoQueueMutationObserver) {
+      this.autoQueueMutationObserver.disconnect();
+      this.autoQueueMutationObserver = null;
     }
   }
 
-  updateEvaluationFromMove(move) {
-    if (!move || (move.mate === null && move.cp === null)) return;
-    let score = move.mate !== null ? move.mate : move.cp;
-    if (this.controller.getTurn() === TURN_BLACK) score *= -1;
-    this.SetEvaluation(score, move.mate !== null);
+  updateEvaluationFromMove(candidateMove) {
+    if (!candidateMove || (candidateMove.mateInMoves === null && candidateMove.centipawns === null)) {
+      return;
+    }
+    let orientedScore =
+      candidateMove.mateInMoves !== null ? candidateMove.mateInMoves : candidateMove.centipawns;
+    if (this.chessComGame.getTurn() === CHESSCOM_BLACK_TURN) orientedScore *= -1;
+    this.setEvaluationDisplay(orientedScore, candidateMove.mateInMoves !== null);
   }
 
-  CreateAnalysisTools() {
-    if (!getValueConfig(enumOptions.EvaluationBar) || this.evalBar != null) return;
-    const body = document.body || document.documentElement;
-    if (!body) return;
+  createAnalysisTools() {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) || this.evalBarElement != null) {
+      return;
+    }
+    const documentBody = document.body || document.documentElement;
+    if (!documentBody) return;
 
-    const evalBar = document.createElement("div");
-    evalBar.className = "bettermint-evalbar";
-    evalBar.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
-    body.appendChild(evalBar);
+    const evalBarElement = document.createElement("div");
+    evalBarElement.className = "bettermint-evalbar";
+    evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    documentBody.appendChild(evalBarElement);
 
-    this.evalBar = evalBar;
-    this.evalBarFill = evalBar.querySelector(".bettermint-evalbar-white");
-    this.evalScore = evalBar.querySelector(".bettermint-evalbar-score");
-    this.evalScoreAbbreviated = evalBar.querySelector(".bettermint-evalbar-scoreAbbreviated");
+    this.evalBarElement = evalBarElement;
+    this.evalBarWhiteFill = evalBarElement.querySelector(".bettermint-evalbar-white");
+    this.evalScoreElement = evalBarElement.querySelector(".bettermint-evalbar-score");
+    this.evalScoreAbbreviatedElement = evalBarElement.querySelector(
+      ".bettermint-evalbar-scoreAbbreviated"
+    );
 
-    const getBoardRect = () => {
-      const inner =
-        this.chessboard.querySelector?.(".board, chess-board, svg.coordinates") ||
-        this.chessboard.shadowRoot?.querySelector?.(".board, svg.coordinates");
-      const rect = (inner || this.chessboard).getBoundingClientRect();
-      if (rect.width > rect.height + 2 && rect.height >= 50) {
-        const side = rect.height;
-        const insetX = (rect.width - side) / 2;
+    const measureBoardRect = () => {
+      const innerBoardElement =
+        this.chessboardElement.querySelector?.(".board, chess-board, svg.coordinates") ||
+        this.chessboardElement.shadowRoot?.querySelector?.(".board, svg.coordinates");
+      const boundingRect = (innerBoardElement || this.chessboardElement).getBoundingClientRect();
+      if (boundingRect.width > boundingRect.height + 2 && boundingRect.height >= 50) {
+        const boardSideLength = boundingRect.height;
+        const horizontalInset = (boundingRect.width - boardSideLength) / 2;
         return {
-          left: rect.left + insetX,
-          right: rect.right - insetX,
-          top: rect.top,
-          bottom: rect.bottom,
-          width: side,
-          height: side
+          left: boundingRect.left + horizontalInset,
+          right: boundingRect.right - horizontalInset,
+          top: boundingRect.top,
+          bottom: boundingRect.bottom,
+          width: boardSideLength,
+          height: boardSideLength
         };
       }
-      return rect;
+      return boundingRect;
     };
 
-    let lastLayout = "";
-    const syncPosition = () => {
-      if (!this.evalBar || !this.chessboard?.isConnected) return;
-      const rect = getBoardRect();
-      if (rect.width < 50 || rect.height < 50 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
-        if (lastLayout !== "none") {
-          this.evalBar.style.display = "none";
-          lastLayout = "none";
+    let lastLayoutSignature = "";
+    const syncEvalBarPosition = () => {
+      if (!this.evalBarElement || !this.chessboardElement?.isConnected) return;
+      const boardRect = measureBoardRect();
+      if (
+        boardRect.width < 50 ||
+        boardRect.height < 50 ||
+        boardRect.bottom <= 0 ||
+        boardRect.top >= window.innerHeight
+      ) {
+        if (lastLayoutSignature !== "none") {
+          this.evalBarElement.style.display = "none";
+          lastLayoutSignature = "none";
         }
         return;
       }
-      const offsetPx = getEvalBarOffsetPx(typeof window !== "undefined" ? window.innerWidth : undefined);
-      const top = Math.round(rect.top);
-      const height = Math.round(rect.height);
-      const left = Math.max(4, Math.round(rect.left - offsetPx));
-      const overlapsBoard = rect.left < offsetPx;
-      const layoutKey = `${top}:${height}:${left}:${offsetPx}:${overlapsBoard ? 1 : 0}`;
-      if (layoutKey === lastLayout) return;
-      lastLayout = layoutKey;
+      const offsetPx = getEvalBarOffsetPx(
+        typeof window !== "undefined" ? window.innerWidth : undefined
+      );
+      const topPx = Math.round(boardRect.top);
+      const heightPx = Math.round(boardRect.height);
+      const leftPx = Math.max(4, Math.round(boardRect.left - offsetPx));
+      const isOverlappingBoard = boardRect.left < offsetPx;
+      const nextLayoutSignature = `${topPx}:${heightPx}:${leftPx}:${offsetPx}:${isOverlappingBoard ? 1 : 0}`;
+      if (nextLayoutSignature === lastLayoutSignature) return;
+      lastLayoutSignature = nextLayoutSignature;
 
-      this.evalBar.style.display = "block";
-      this.evalBar.style.top = `${top}px`;
-      this.evalBar.style.height = `${height}px`;
-      this.evalBar.style.left = `${left}px`;
-      this.evalBar.style.pointerEvents = overlapsBoard ? "none" : "";
+      this.evalBarElement.style.display = "block";
+      this.evalBarElement.style.top = `${topPx}px`;
+      this.evalBarElement.style.height = `${heightPx}px`;
+      this.evalBarElement.style.left = `${leftPx}px`;
+      this.evalBarElement.style.pointerEvents = isOverlappingBoard ? "none" : "";
     };
 
     const scheduleSyncPosition = () => {
       if (typeof requestAnimationFrame !== "function") {
-        syncPosition();
+        syncEvalBarPosition();
         return;
       }
-      if (this.evalBarRafId != null) return;
-      this.evalBarRafId = requestAnimationFrame(() => {
-        this.evalBarRafId = null;
-        syncPosition();
+      if (this.evalBarAnimationFrameId != null) return;
+      this.evalBarAnimationFrameId = requestAnimationFrame(() => {
+        this.evalBarAnimationFrameId = null;
+        syncEvalBarPosition();
       });
     };
 
-    syncPosition();
+    syncEvalBarPosition();
     if (typeof ResizeObserver !== "undefined") {
       this.evalBarResizeObserver = new ResizeObserver(scheduleSyncPosition);
-      this.evalBarResizeObserver.observe(this.chessboard);
-      if (this.chessboard.parentElement) {
-        this.evalBarResizeObserver.observe(this.chessboard.parentElement);
+      this.evalBarResizeObserver.observe(this.chessboardElement);
+      if (this.chessboardElement.parentElement) {
+        this.evalBarResizeObserver.observe(this.chessboardElement.parentElement);
       }
       if (document.body) {
         this.evalBarResizeObserver.observe(document.body);
@@ -624,109 +703,126 @@ class GameController {
     window.addEventListener("resize", scheduleSyncPosition, { passive: true });
 
     if (this.boardOptions?.flipped) {
-      this.evalBar.classList.add("bettermint-evalbar-flipped");
+      this.evalBarElement.classList.add("bettermint-evalbar-flipped");
     }
-    if (this.BetterMintmaster?.engine?.topMoves?.length > 0) {
-      this.BetterMintmaster.engine.ensureTopMovesSorted?.();
-      this.updateEvaluationFromMove(this.BetterMintmaster.engine.topMoves[0]);
+    if (this.extension?.engineClient?.candidateMoves?.length > 0) {
+      this.extension.engineClient.ensureCandidateMovesSorted?.();
+      this.updateEvaluationFromMove(this.extension.engineClient.candidateMoves[0]);
     }
   }
 
-  RefreshEvaluationBar() {
-    if (!getValueConfig(enumOptions.EvaluationBar)) return;
-    if (this.evalBar?.isConnected) {
-      this.evalBar.classList.toggle("bettermint-evalbar-flipped", Boolean(this.boardOptions?.flipped));
-      this.SetEvaluation(0, false);
+  refreshEvaluationBar() {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) return;
+    if (this.evalBarElement?.isConnected) {
+      this.evalBarElement.classList.toggle(
+        "bettermint-evalbar-flipped",
+        Boolean(this.boardOptions?.flipped)
+      );
+      this.setEvaluationDisplay(0, false);
       this.evalBarSyncHandler?.();
     } else {
       this.removeEvaluationBar();
-      this.CreateAnalysisTools();
+      this.createAnalysisTools();
     }
   }
 
-  UpdateEngine(isNewGame) {
-    if (!this.BetterMintmaster?.engine) return;
-    const FENs = this.controller.getFEN();
-    this.BetterMintmaster.engine.UpdatePosition(FENs, isNewGame);
+  updateEnginePosition(isNewGame) {
+    if (!this.extension?.engineClient) return;
+    const fen = this.chessComGame.getFEN();
+    this.extension.engineClient.updatePosition(fen, isNewGame);
   }
 
-  ResetGame() {
-    this.lastAutoQueueClick = 0;
+  resetGame() {
+    this.lastAutoQueueClickMs = 0;
     this.clearAutoMoveTimer();
-    this.clearGameOverInterval();
-    this.RemoveCurrentMarkings();
-    this.RemoveLastAnalysisMarkings();
-    this.boardOptions = this.controller.getOptions();
-    if (this.controller.getPlayingAs() === this.controller.getTurn()) {
-      this.turnStartTime = performance.now();
+    this.clearGameOverRetryInterval();
+    this.removeCurrentHintMarkings();
+    this.removeLastAnalysisMarkings();
+    this.boardOptions = this.chessComGame.getOptions();
+    if (this.chessComGame.getPlayingAs() === this.chessComGame.getTurn()) {
+      this.turnStartTimestampMs = performance.now();
     }
-    this.UpdateEngine(true);
-    this.RefreshEvaluationBar();
+    this.updateEnginePosition(true);
+    this.refreshEvaluationBar();
   }
 
-  RemoveCurrentMarkings() {
+  removeCurrentHintMarkings() {
     this.lastHintSignature = "";
-    this.currentMarkings.forEach((marking) => {
-      const target = marking.data.square != null ? marking.data.square : `${marking.data.from}${marking.data.to}`;
-      const key = `${marking.type}|${target}`;
-      if (marking.type === "effect" && this.lastAnalysisMarkings?.includes(key)) {
+    this.activeHintMarkings.forEach((marking) => {
+      const targetKey =
+        marking.data.square != null
+          ? marking.data.square
+          : `${marking.data.from}${marking.data.to}`;
+      const markingId = `${marking.type}|${targetKey}`;
+      if (marking.type === "effect" && this.lastAnalysisMarkings?.includes(markingId)) {
         return;
       }
-      this.controller.markings.removeOne(key);
+      this.chessComGame.markings.removeOne(markingId);
     });
-    this.currentMarkings = [];
+    this.activeHintMarkings = [];
   }
 
-  HintMoves(topMoves) {
-    const bestMove = topMoves[0];
-    if (!bestMove) return;
+  renderMoveHints(candidateMoves) {
+    const bestCandidateMove = candidateMoves[0];
+    if (!bestCandidateMove) return;
 
-    if (getValueConfig(enumOptions.ShowHints)) {
-      const legalMoves = this.controller.getLegalMoves?.();
+    if (getExtensionOption(EXTENSION_OPTION_KEY.ShowHints)) {
+      const legalMoves = this.chessComGame.getLegalMoves?.();
       if (Array.isArray(legalMoves) && legalMoves.length === 0) {
-        this.RemoveCurrentMarkings();
+        this.removeCurrentHintMarkings();
       } else {
-        const isSquare = (sq) => typeof sq === "string" && /^[a-h][1-8]$/.test(sq);
+        const isSquareCoordinate = (squareName) =>
+          typeof squareName === "string" && /^[a-h][1-8]$/.test(squareName);
         const arrowColors = this.boardOptions?.arrowColors || {};
-        const seenEffects = new Set();
+        const seenMateEffectSquares = new Set();
         const nextMarkings = [];
-        let signature = "";
+        let hintSignature = "";
 
-        topMoves.forEach((move, idx) => {
-          const resolved = resolveLegalMove(legalMoves, move);
-          const from = resolved ? resolved.from : move.from;
-          const to = resolved ? resolved.to : move.to;
-          if (!isSquare(from) || !isSquare(to) || from === to) return;
+        candidateMoves.forEach((candidateMove, rankIndex) => {
+          const resolvedMove = resolveLegalMove(legalMoves, candidateMove);
+          const fromSquare = resolvedMove ? resolvedMove.from : candidateMove.from;
+          const toSquare = resolvedMove ? resolvedMove.to : candidateMove.to;
+          if (
+            !isSquareCoordinate(fromSquare) ||
+            !isSquareCoordinate(toSquare) ||
+            fromSquare === toSquare
+          ) {
+            return;
+          }
 
-          const color =
-            idx === 0
-              ? (arrowColors.alt || "#15781b")
-              : idx <= 2
-              ? (arrowColors.shift || "#e68f00")
-              : idx <= 5
-              ? (arrowColors.default || "#003088")
-              : (arrowColors.ctrl || "#882020");
+          const arrowColor =
+            rankIndex === 0
+              ? arrowColors.alt || "#15781b"
+              : rankIndex <= 2
+              ? arrowColors.shift || "#e68f00"
+              : rankIndex <= 5
+              ? arrowColors.default || "#003088"
+              : arrowColors.ctrl || "#882020";
 
-          signature += `${from}${to}${color};`;
+          hintSignature += `${fromSquare}${toSquare}${arrowColor};`;
           nextMarkings.push({
             data: {
-              from,
-              color,
+              from: fromSquare,
+              color: arrowColor,
               opacity: 0.8,
-              to
+              to: toSquare
             },
             node: true,
             persistent: true,
             type: "arrow"
           });
 
-          if (move.mate !== null && !seenEffects.has(to) && !this.lastAnalysisMarkings?.includes(`effect|${to}`)) {
-            seenEffects.add(to);
-            signature += `E:${to}:${move.mate < 0 ? 0 : 1};`;
+          if (
+            candidateMove.mateInMoves !== null &&
+            !seenMateEffectSquares.has(toSquare) &&
+            !this.lastAnalysisMarkings?.includes(`effect|${toSquare}`)
+          ) {
+            seenMateEffectSquares.add(toSquare);
+            hintSignature += `E:${toSquare}:${candidateMove.mateInMoves < 0 ? 0 : 1};`;
             nextMarkings.push({
               data: {
-                square: to,
-                type: move.mate < 0 ? "ResignWhite" : "WinnerWhite"
+                square: toSquare,
+                type: candidateMove.mateInMoves < 0 ? "ResignWhite" : "WinnerWhite"
               },
               node: true,
               persistent: true,
@@ -735,39 +831,42 @@ class GameController {
           }
         });
 
-        if (signature !== this.lastHintSignature) {
-          this.RemoveCurrentMarkings();
-          this.lastHintSignature = signature;
-          this.currentMarkings = nextMarkings.reverse();
-          if (this.currentMarkings.length > 0) {
-            this.controller.markings.addMany(this.currentMarkings);
+        if (hintSignature !== this.lastHintSignature) {
+          this.removeCurrentHintMarkings();
+          this.lastHintSignature = hintSignature;
+          this.activeHintMarkings = nextMarkings.reverse();
+          if (this.activeHintMarkings.length > 0) {
+            this.chessComGame.markings.addMany(this.activeHintMarkings);
           }
         }
       }
     }
 
-    if (getValueConfig(enumOptions.EvaluationBar)) {
-      this.updateEvaluationFromMove(bestMove);
+    if (getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) {
+      this.updateEvaluationFromMove(bestCandidateMove);
     }
   }
 
-  SetEvaluation(score, isMate) {
-    if (this.evalBar == null) return;
-    const { percentage, abbreviated, full, isDark } = formatEvaluation(score, isMate);
-    this.evalBarFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
-    this.evalScore.textContent = full;
-    this.evalScoreAbbreviated.textContent = abbreviated;
-    this.evalScore.classList.toggle("bettermint-evalbar-dark", isDark);
-    this.evalScore.classList.toggle("bettermint-evalbar-light", !isDark);
-    this.evalScoreAbbreviated.classList.toggle("bettermint-evalbar-dark", isDark);
-    this.evalScoreAbbreviated.classList.toggle("bettermint-evalbar-light", !isDark);
+  setEvaluationDisplay(scoreValue, isMateScore) {
+    if (this.evalBarElement == null) return;
+    const { percentage, abbreviated, full, isDark } = formatEvaluationDisplay(
+      scoreValue,
+      isMateScore
+    );
+    this.evalBarWhiteFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
+    this.evalScoreElement.textContent = full;
+    this.evalScoreAbbreviatedElement.textContent = abbreviated;
+    this.evalScoreElement.classList.toggle("bettermint-evalbar-dark", isDark);
+    this.evalScoreElement.classList.toggle("bettermint-evalbar-light", !isDark);
+    this.evalScoreAbbreviatedElement.classList.toggle("bettermint-evalbar-dark", isDark);
+    this.evalScoreAbbreviatedElement.classList.toggle("bettermint-evalbar-light", !isDark);
   }
 }
 
-class StockfishEngine {
+class UciEngineClient {
   static NON_PLAYING_MODES = new Set(["gameOver", "analysis", "review"]);
 
-  static EP_THRESHOLDS = Object.freeze([
+  static EXPECTED_POINTS_LOSS_THRESHOLDS = Object.freeze([
     [0, "BestMove"],
     [0.02, "Excellent"],
     [0.05, "Good"],
@@ -775,25 +874,40 @@ class StockfishEngine {
     [0.20, "Mistake"]
   ]);
 
-  static evalToExpectedPoints(move) {
-    if (!move) return null;
-    if (move.mate !== null) return move.mate > 0 ? 1 : 0;
-    if (move.cp !== null) return cpToWinProbability(move.cp);
+  static evalToExpectedPoints(candidateMove) {
+    if (!candidateMove) return null;
+    if (candidateMove.mateInMoves !== null) return candidateMove.mateInMoves > 0 ? 1 : 0;
+    if (candidateMove.centipawns !== null) {
+      return centipawnsToWinProbability(candidateMove.centipawns);
+    }
     return null;
   }
 
-  static compareMoves(a, b) {
-    if (a.mate !== null && b.mate === null) return a.mate < 0 ? 1 : -1;
-    if (a.mate === null && b.mate !== null) return b.mate > 0 ? 1 : -1;
-    if (a.mate === null && b.mate === null) {
-      if (a.depth === b.depth) return (b.cp ?? -Infinity) - (a.cp ?? -Infinity);
-      return b.depth - a.depth;
+  static compareCandidateMoves(firstMove, secondMove) {
+    if (firstMove.mateInMoves !== null && secondMove.mateInMoves === null) {
+      return firstMove.mateInMoves < 0 ? 1 : -1;
     }
-    if ((a.mate < 0 && b.mate < 0) || (a.mate > 0 && b.mate > 0)) {
-      if (a.mate !== b.mate) return a.mate - b.mate;
-      return a.mate > 0 ? a.line.length - b.line.length : b.line.length - a.line.length;
+    if (firstMove.mateInMoves === null && secondMove.mateInMoves !== null) {
+      return secondMove.mateInMoves > 0 ? 1 : -1;
     }
-    return a.mate < b.mate ? 1 : -1;
+    if (firstMove.mateInMoves === null && secondMove.mateInMoves === null) {
+      if (firstMove.searchDepth === secondMove.searchDepth) {
+        return (secondMove.centipawns ?? -Infinity) - (firstMove.centipawns ?? -Infinity);
+      }
+      return secondMove.searchDepth - firstMove.searchDepth;
+    }
+    if (
+      (firstMove.mateInMoves < 0 && secondMove.mateInMoves < 0) ||
+      (firstMove.mateInMoves > 0 && secondMove.mateInMoves > 0)
+    ) {
+      if (firstMove.mateInMoves !== secondMove.mateInMoves) {
+        return firstMove.mateInMoves - secondMove.mateInMoves;
+      }
+      return firstMove.mateInMoves > 0
+        ? firstMove.principalVariation.length - secondMove.principalVariation.length
+        : secondMove.principalVariation.length - firstMove.principalVariation.length;
+    }
+    return firstMove.mateInMoves < secondMove.mateInMoves ? 1 : -1;
   }
 
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
@@ -802,101 +916,109 @@ class StockfishEngine {
   static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
   static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
 
-  static parseUciOptionLine(line) {
-    if (!line || typeof line !== "string" || !line.startsWith("option name ")) return null;
-    const rest = line.slice(12);
-    const typeIndex = rest.indexOf(" type ");
-    if (typeIndex === -1) return null;
-    const name = rest.slice(0, typeIndex).trim();
-    if (!name) return null;
+  static parseUciOptionLine(uciLine) {
+    if (!uciLine || typeof uciLine !== "string" || !uciLine.startsWith("option name ")) return null;
+    const declarationBody = uciLine.slice(12);
+    const typeDelimiterIndex = declarationBody.indexOf(" type ");
+    if (typeDelimiterIndex === -1) return null;
+    const optionName = declarationBody.slice(0, typeDelimiterIndex).trim();
+    if (!optionName) return null;
 
-    const afterType = rest.slice(typeIndex + 6).trim();
-    const tokens = afterType.split(/\s+/);
-    const type = tokens[0];
-    if (!type) return null;
+    const typeAndAttributes = declarationBody.slice(typeDelimiterIndex + 6).trim();
+    const attributeTokens = typeAndAttributes.split(/\s+/);
+    const optionType = attributeTokens[0];
+    if (!optionType) return null;
 
-    if (type === "button") {
-      return { name, type, hasDefault: false, default: null };
+    if (optionType === "button") {
+      return { name: optionName, type: optionType, hasDefault: false, default: null };
     }
 
-    if (type === "string") {
-      const defMatch = afterType.match(/^string\s+default\s*(.*)$/);
-      if (!defMatch) {
-        return { name, type, hasDefault: false, default: null };
+    if (optionType === "string") {
+      const stringDefaultMatch = typeAndAttributes.match(/^string\s+default\s*(.*)$/);
+      if (!stringDefaultMatch) {
+        return { name: optionName, type: optionType, hasDefault: false, default: null };
       }
-      const rawDef = defMatch[1].trim();
+      const rawDefaultText = stringDefaultMatch[1].trim();
       return {
-        name,
-        type,
+        name: optionName,
+        type: optionType,
         hasDefault: true,
-        default: rawDef === "<empty>" ? "" : rawDef
+        default: rawDefaultText === "<empty>" ? "" : rawDefaultText
       };
     }
 
-    const keywords = new Set(["default", "min", "max", "var"]);
-    let currentKey = null;
-    let currentWords = [];
+    const uciKeywords = new Set(["default", "min", "max", "var"]);
+    let activeAttributeKeyword = null;
+    let collectedValueWords = [];
     let hasDefault = false;
-    let defVal = "";
+    let defaultValue = "";
 
-    const flush = () => {
-      if (currentKey === "default") {
+    const commitActiveAttribute = () => {
+      if (activeAttributeKeyword === "default") {
         hasDefault = true;
-        defVal = currentWords.join(" ").trim();
+        defaultValue = collectedValueWords.join(" ").trim();
       }
-      currentWords = [];
+      collectedValueWords = [];
     };
 
-    for (let i = 1; i < tokens.length; i++) {
-      const token = tokens[i];
-      if (keywords.has(token)) {
-        flush();
-        currentKey = token;
-      } else if (currentKey) {
-        currentWords.push(token);
+    for (let tokenIndex = 1; tokenIndex < attributeTokens.length; tokenIndex++) {
+      const token = attributeTokens[tokenIndex];
+      if (uciKeywords.has(token)) {
+        commitActiveAttribute();
+        activeAttributeKeyword = token;
+      } else if (activeAttributeKeyword) {
+        collectedValueWords.push(token);
       }
     }
-    flush();
+    commitActiveAttribute();
 
-    return { name, type, hasDefault, default: hasDefault ? defVal : null };
+    return {
+      name: optionName,
+      type: optionType,
+      hasDefault,
+      default: hasDefault ? defaultValue : null
+    };
   }
 
-  constructor(BetterMintmaster) {
-    this.BetterMintmaster = BetterMintmaster;
-    this.loaded = false;
-    this.ready = false;
+  constructor(extension) {
+    this.extension = extension;
+    this.isEngineLoaded = false;
+    this.isEngineReady = false;
     this.isEvaluating = false;
-    this.isRequestedStop = false;
+    this.hasRequestedStop = false;
     this.isFinishingSearch = false;
-    this.infiniteTimer = null;
-    this.activeSearchInfinite = false;
+    this.infiniteSearchTimeoutId = null;
+    this.isInfiniteSearchActive = false;
     this.evalStabilityHistory = [];
     this.readyCallbacks = [];
-    this.goDoneCallbacks = [];
-    this.stopTimeout = null;
-    this.topMoves = [];
-    this.topMovesDirty = false;
-    this.lastTopMoves = [];
+    this.stopCompletionCallbacks = [];
+    this.stopFallbackTimeoutId = null;
+    this.candidateMoves = [];
+    this.hasUnsortedCandidateMoves = false;
+    this.previousPositionCandidateMoves = [];
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
-    this.depth = nonNegIntConfig(enumOptions.Depth, 15);
-    this.currentUrl = getValueConfig(enumOptions.UrlApiStockfish);
-    this.targetUrl = this.currentUrl;
-    this.isSwitching = false;
+    this.searchDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
+    this.currentEngineUrl = getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl);
+    this.targetEngineUrl = this.currentEngineUrl;
+    this.isSwitchingEngine = false;
     this.onEngineSwitchedCallback = null;
-    this.engineUciOptions = new Set();
-    this.engineUciDefaults = new Map();
-    this.appliedEngineOptions = {};
+    this.supportedUciOptions = new Set();
+    this.uciOptionDefaults = new Map();
+    this.appliedUciOptions = {};
     this.pendingReadyCount = 0;
-    this.isReadySentForCurrentState = false;
-    this.customEngineOptions = Object.assign({}, BetterMintmaster?.options?.customEngineOptions);
-    this.reconnectDelay = 500;
-    this.maxReconnectDelay = 30000;
+    this.hasSentIsReady = false;
+    this.uciOptionOverrides = Object.assign(
+      {},
+      extension?.extensionOptions?.customEngineOptions
+    );
+    this.initialReconnectDelayMs = 500;
+    this.maxReconnectDelayMs = 30000;
     this.reconnectAttempts = 0;
-    this.reconnectTimer = null;
-    this.fatalError = null;
+    this.reconnectTimerId = null;
+    this.fatalErrorMessage = null;
     this.staleBestMovesToIgnore = 0;
-    this.pendingPosition = null;
+    this.pendingPositionUpdate = null;
 
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("focus", () => this.reconnectNow());
@@ -909,238 +1031,272 @@ class StockfishEngine {
       });
     }
 
-    this.initializeWebSocket(this.currentUrl);
+    this.initializeWebSocket(this.currentEngineUrl);
   }
 
-  initializeWebSocket(url) {
+  initializeWebSocket(engineUrl) {
     try {
-      this.stockfish = new WebSocket(url);
-    } catch (e) {
-      console.error("Failed to initialize WebSocket:", e);
+      this.websocket = new WebSocket(engineUrl);
+    } catch (socketError) {
+      console.error("Failed to initialize WebSocket:", socketError);
       this.handleDisconnect();
       return;
     }
 
-    const ws = this.stockfish;
-    ws.addEventListener("open", () => {
-      if (this.stockfish !== ws) return;
-      this.loaded = false;
-      this.ready = false;
+    const activeSocket = this.websocket;
+    activeSocket.addEventListener("open", () => {
+      if (this.websocket !== activeSocket) return;
+      this.isEngineLoaded = false;
+      this.isEngineReady = false;
       this.pendingReadyCount = 0;
-      this.isReadySentForCurrentState = false;
-      this.appliedEngineOptions = {};
+      this.hasSentIsReady = false;
+      this.appliedUciOptions = {};
       this.staleBestMovesToIgnore = 0;
-      this.send("uci");
+      this.sendUciCommand("uci");
       this.onReady(() => {
-        this.ready = false;
-        this.isReadySentForCurrentState = false;
-        this.send("ucinewgame");
+        this.isEngineReady = false;
+        this.hasSentIsReady = false;
+        this.sendUciCommand("ucinewgame");
         this.onReady(() => {
           if (this.onEngineSwitchedCallback) {
-            const cb = this.onEngineSwitchedCallback;
+            const onSwitchedCallback = this.onEngineSwitchedCallback;
             this.onEngineSwitchedCallback = null;
-            cb();
+            onSwitchedCallback();
           } else {
-            const controller = this.BetterMintmaster?.game?.controller;
-            if (controller && controller.getMode?.() !== "gameOver" && typeof controller.getFEN === "function") {
-              this.BetterMintmaster.game.UpdateEngine(false);
+            const chessComGame = this.extension?.gameController?.chessComGame;
+            if (
+              chessComGame &&
+              chessComGame.getMode?.() !== "gameOver" &&
+              typeof chessComGame.getFEN === "function"
+            ) {
+              this.extension.gameController.updateEnginePosition(false);
             }
           }
         });
       });
     });
 
-    ws.addEventListener("message", (event) => {
-      if (this.stockfish !== ws) return;
-      this.ProcessMessage(event.data);
+    activeSocket.addEventListener("message", (messageEvent) => {
+      if (this.websocket !== activeSocket) return;
+      this.processEngineMessage(messageEvent.data);
     });
 
-    ws.addEventListener("close", () => {
-      if (this.stockfish !== ws || this.isSwitching) return;
+    activeSocket.addEventListener("close", () => {
+      if (this.websocket !== activeSocket || this.isSwitchingEngine) return;
       if (this.reconnectAttempts === 0) {
         console.error("WebSocket connection closed.");
       }
       this.handleDisconnect();
     });
 
-    ws.addEventListener("error", (error) => {
-      if (this.stockfish !== ws) return;
+    activeSocket.addEventListener("error", (socketError) => {
+      if (this.websocket !== activeSocket) return;
       if (this.reconnectAttempts === 0) {
-        console.error("WebSocket error:", error);
+        console.error("WebSocket error:", socketError);
       }
     });
   }
 
-  switchEngine(newUrl) {
-    if (!newUrl || newUrl === this.targetUrl) return;
-    this.targetUrl = newUrl;
-    this.isSwitching = true;
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+  switchEngine(nextEngineUrl) {
+    if (!nextEngineUrl || nextEngineUrl === this.targetEngineUrl) return;
+    this.targetEngineUrl = nextEngineUrl;
+    this.isSwitchingEngine = true;
+    if (this.reconnectTimerId !== null) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
     }
     this.reconnectAttempts = 0;
     this.stopEvaluation(() => {
-      if (this.stockfish) {
-        const oldWs = this.stockfish;
-        this.stockfish = null;
+      if (this.targetEngineUrl !== nextEngineUrl) return;
+      if (this.stopFallbackTimeoutId !== null) {
+        clearTimeout(this.stopFallbackTimeoutId);
+        this.stopFallbackTimeoutId = null;
+      }
+      if (this.websocket) {
+        const previousSocket = this.websocket;
+        this.websocket = null;
         try {
-          oldWs.close();
-        } catch (e) {
-          console.warn("[BetterMint] Failed to close previous engine WebSocket:", e);
+          previousSocket.close();
+        } catch (closeError) {
+          console.warn("[BetterMint] Failed to close previous engine WebSocket:", closeError);
         }
       }
-      this.currentUrl = newUrl;
-      this.ready = false;
-      this.loaded = false;
+      this.clearInfiniteSearchGuards();
+      this.currentEngineUrl = nextEngineUrl;
+      this.isEvaluating = false;
+      this.hasRequestedStop = false;
+      this.isFinishingSearch = false;
+      this.isEngineReady = false;
+      this.isEngineLoaded = false;
       this.pendingReadyCount = 0;
-      this.isReadySentForCurrentState = false;
-      this.fatalError = null;
+      this.hasSentIsReady = false;
+      this.fatalErrorMessage = null;
       this.staleBestMovesToIgnore = 0;
-      this.pendingPosition = null;
-      this.isSwitching = false;
-      this.engineUciOptions = new Set();
-      this.engineUciDefaults = new Map();
-      this.appliedEngineOptions = {};
+      this.pendingPositionUpdate = null;
+      this.readyCallbacks = [];
+      this.stopCompletionCallbacks = [];
+      this.isSwitchingEngine = false;
+      this.supportedUciOptions = new Set();
+      this.uciOptionDefaults = new Map();
+      this.appliedUciOptions = {};
       this.onEngineSwitchedCallback = () => {
-        if (this.BetterMintmaster && this.BetterMintmaster.game) {
-          this.BetterMintmaster.game.UpdateEngine(false);
+        const gameController = this.extension?.gameController;
+        if (gameController && gameController.chessComGame?.getMode?.() !== "gameOver") {
+          gameController.updateEnginePosition(false);
         }
       };
-      this.initializeWebSocket(newUrl);
+      this.initializeWebSocket(nextEngineUrl);
     });
   }
 
-  send(cmd) {
-    const clean = typeof cmd === "string" ? cmd.replace(/[\r\n]+/g, " ").trim() : "";
-    if (!clean) return;
+  sendUciCommand(uciCommand) {
+    const sanitizedCommand =
+      typeof uciCommand === "string" ? uciCommand.replace(/[\r\n]+/g, " ").trim() : "";
+    if (!sanitizedCommand) return;
     if (this.isWebSocketOpen()) {
-      this.stockfish.send(clean);
+      this.websocket.send(sanitizedCommand);
     } else {
       console.warn("Attempted to send command while WebSocket is not open.");
     }
   }
 
   isWebSocketOpen() {
-    return Boolean(this.stockfish && this.stockfish.readyState === WebSocket.OPEN);
+    return Boolean(this.websocket && this.websocket.readyState === WebSocket.OPEN);
   }
 
-  clearInfiniteGuards() {
-    if (this.infiniteTimer != null) {
-      clearTimeout(this.infiniteTimer);
-      this.infiniteTimer = null;
+  clearInfiniteSearchGuards() {
+    if (this.infiniteSearchTimeoutId != null) {
+      clearTimeout(this.infiniteSearchTimeoutId);
+      this.infiniteSearchTimeoutId = null;
     }
-    this.activeSearchInfinite = false;
+    this.isInfiniteSearchActive = false;
     this.evalStabilityHistory = [];
   }
 
   buildGoCommand() {
-    const rawSearchmoves = String(getValueConfig(enumOptions.GoSearchmoves) || "").trim();
-    const validSearchmoves = [];
-    if (rawSearchmoves) {
-      const seen = new Set();
-      const legalMoves = this.BetterMintmaster?.game?.controller?.getLegalMoves?.();
-      for (const token of rawSearchmoves.toLowerCase().split(/\s+/)) {
-        if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(token) || seen.has(token)) continue;
-        if (Array.isArray(legalMoves)) {
-          const matched = resolveLegalMove(legalMoves, {
-            from: token.slice(0, 2),
-            to: token.slice(2, 4),
-            promotion: token.length > 4 ? token[4] : null
-          });
-          if (!matched) continue;
+    const rawSearchMovesText = String(
+      getExtensionOption(EXTENSION_OPTION_KEY.GoSearchmoves) || ""
+    ).trim();
+    const validSearchMoves = [];
+    if (rawSearchMovesText) {
+      const seenMoves = new Set();
+      const legalMoves = this.extension?.gameController?.chessComGame?.getLegalMoves?.();
+      for (const moveToken of rawSearchMovesText.toLowerCase().split(/\s+/)) {
+        if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(moveToken) || seenMoves.has(moveToken)) {
+          continue;
         }
-        seen.add(token);
-        validSearchmoves.push(token);
+        if (Array.isArray(legalMoves)) {
+          const matchedLegalMove = resolveLegalMove(legalMoves, {
+            from: moveToken.slice(0, 2),
+            to: moveToken.slice(2, 4),
+            promotion: moveToken.length > 4 ? moveToken[4] : null
+          });
+          if (!matchedLegalMove) continue;
+        }
+        seenMoves.add(moveToken);
+        validSearchMoves.push(moveToken);
       }
     }
 
-    if (getValueConfig(enumOptions.GoInfinite)) {
-      const parts = ["go", "infinite"];
-      if (validSearchmoves.length > 0) {
-        parts.push("searchmoves", ...validSearchmoves);
+    if (getExtensionOption(EXTENSION_OPTION_KEY.GoInfinite)) {
+      const commandParts = ["go", "infinite"];
+      if (validSearchMoves.length > 0) {
+        commandParts.push("searchmoves", ...validSearchMoves);
       }
-      return { command: parts.join(" "), isInfinite: true };
+      return { command: commandParts.join(" "), isInfinite: true };
     }
 
-    const parts = ["go"];
-    const depth = this.depth !== undefined ? this.depth : nonNegIntConfig(enumOptions.Depth, 15);
-    const movetime = nonNegIntConfig(enumOptions.GoMovetime, 0);
-    const nodes = nonNegIntConfig(enumOptions.GoNodes, 0);
-    const mate = nonNegIntConfig(enumOptions.GoMate, 0);
-    const clockSync = Boolean(getValueConfig(enumOptions.GoClockSync));
-    const clockInc = nonNegIntConfig(enumOptions.GoClockInc, 0);
-    const movestogo = nonNegIntConfig(enumOptions.GoMovestogo, 0);
-    let hasBound = false;
+    const commandParts = ["go"];
+    const depth =
+      this.searchDepth !== undefined
+        ? this.searchDepth
+        : getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
+    const movetimeMs = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMovetime, 0);
+    const nodeLimit = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoNodes, 0);
+    const mateDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMate, 0);
+    const isClockSyncEnabled = Boolean(getExtensionOption(EXTENSION_OPTION_KEY.GoClockSync));
+    const clockIncrementMs = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoClockInc, 0);
+    const movesToGo = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMovestogo, 0);
+    let hasSearchBound = false;
 
     if (depth > 0) {
-      parts.push("depth", String(depth));
-      hasBound = true;
+      commandParts.push("depth", String(depth));
+      hasSearchBound = true;
     }
-    if (movetime > 0) {
-      parts.push("movetime", String(movetime));
-      hasBound = true;
+    if (movetimeMs > 0) {
+      commandParts.push("movetime", String(movetimeMs));
+      hasSearchBound = true;
     }
-    if (nodes > 0) {
-      parts.push("nodes", String(nodes));
-      hasBound = true;
+    if (nodeLimit > 0) {
+      commandParts.push("nodes", String(nodeLimit));
+      hasSearchBound = true;
     }
-    if (mate > 0) {
-      parts.push("mate", String(mate));
-      hasBound = true;
+    if (mateDepth > 0) {
+      commandParts.push("mate", String(mateDepth));
+      hasSearchBound = true;
     }
-    if (clockSync) {
-      const times = getClockSyncTimesMs(this.BetterMintmaster?.game?.controller);
-      if (times) {
-        parts.push("wtime", String(times.wtime), "btime", String(times.btime));
-        if (clockInc > 0) {
-          parts.push("winc", String(clockInc), "binc", String(clockInc));
+    if (isClockSyncEnabled) {
+      const clockTimesMs = getClockSyncTimesMs(this.extension?.gameController?.chessComGame);
+      if (clockTimesMs) {
+        commandParts.push("wtime", String(clockTimesMs.wtime), "btime", String(clockTimesMs.btime));
+        if (clockIncrementMs > 0) {
+          commandParts.push("winc", String(clockIncrementMs), "binc", String(clockIncrementMs));
         }
-        if (movestogo > 0) {
-          parts.push("movestogo", String(movestogo));
+        if (movesToGo > 0) {
+          commandParts.push("movestogo", String(movesToGo));
         }
-        hasBound = true;
+        hasSearchBound = true;
       }
     }
-    if (!hasBound) {
-      parts.push("depth", "1");
+    if (!hasSearchBound) {
+      commandParts.push("depth", "1");
     }
-    if (validSearchmoves.length > 0) {
-      parts.push("searchmoves", ...validSearchmoves);
+    if (validSearchMoves.length > 0) {
+      commandParts.push("searchmoves", ...validSearchMoves);
     }
 
-    return { command: parts.join(" "), isInfinite: false };
+    return { command: commandParts.join(" "), isInfinite: false };
   }
 
   finishSearch() {
-    this.clearInfiniteGuards();
-    if (!this.isEvaluating || this.isRequestedStop || this.isFinishingSearch) return;
+    this.clearInfiniteSearchGuards();
+    if (!this.isEvaluating || this.hasRequestedStop || this.isFinishingSearch) return;
     this.isFinishingSearch = true;
-    this.send("stop");
+    this.sendUciCommand("stop");
   }
 
-  trackEvalStability(topMove, cpScore, mateScore) {
-    if (!this.activeSearchInfinite || !getValueConfig(enumOptions.GoEvalStable)) return;
-    if (this.isRequestedStop || this.isFinishingSearch || !topMove || topMove.depth < 10) return;
+  trackEvalStability(primaryCandidateMove, centipawns, mateInMoves) {
+    if (!this.isInfiniteSearchActive || !getExtensionOption(EXTENSION_OPTION_KEY.GoEvalStable)) {
+      return;
+    }
+    if (
+      this.hasRequestedStop ||
+      this.isFinishingSearch ||
+      !primaryCandidateMove ||
+      primaryCandidateMove.searchDepth < 10
+    ) {
+      return;
+    }
 
-    const scoreCp = mateScore !== null ? (mateScore > 0 ? 10000 : -10000) : cpScore;
-    if (scoreCp === null || scoreCp === undefined) return;
+    const boundedScoreCp =
+      mateInMoves !== null ? (mateInMoves > 0 ? 10000 : -10000) : centipawns;
+    if (boundedScoreCp === null || boundedScoreCp === undefined) return;
 
     if (!Array.isArray(this.evalStabilityHistory)) {
       this.evalStabilityHistory = [];
     }
-    const last = this.evalStabilityHistory[this.evalStabilityHistory.length - 1];
-    if (last && last.depth === topMove.depth) {
+    const latestEntry = this.evalStabilityHistory[this.evalStabilityHistory.length - 1];
+    if (latestEntry && latestEntry.depth === primaryCandidateMove.searchDepth) {
       this.evalStabilityHistory[this.evalStabilityHistory.length - 1] = {
-        depth: topMove.depth,
-        move: topMove.move,
-        scoreCp
+        depth: primaryCandidateMove.searchDepth,
+        uciMove: primaryCandidateMove.uciMove,
+        scoreCp: boundedScoreCp
       };
-    } else if (!last || topMove.depth > last.depth) {
+    } else if (!latestEntry || primaryCandidateMove.searchDepth > latestEntry.depth) {
       this.evalStabilityHistory.push({
-        depth: topMove.depth,
-        move: topMove.move,
-        scoreCp
+        depth: primaryCandidateMove.searchDepth,
+        uciMove: primaryCandidateMove.uciMove,
+        scoreCp: boundedScoreCp
       });
       if (this.evalStabilityHistory.length > 3) {
         this.evalStabilityHistory.shift();
@@ -1148,33 +1304,38 @@ class StockfishEngine {
     }
 
     if (this.evalStabilityHistory.length === 3) {
-      const firstMove = this.evalStabilityHistory[0].move;
-      const sameMove = this.evalStabilityHistory.every((entry) => entry.move === firstMove);
-      const scores = this.evalStabilityHistory.map((entry) => entry.scoreCp);
-      const spread = Math.max(...scores) - Math.min(...scores);
-      if (sameMove && spread <= 15) {
+      const firstDepthMove = this.evalStabilityHistory[0].uciMove;
+      const isSameBestMove = this.evalStabilityHistory.every(
+        (depthSample) => depthSample.uciMove === firstDepthMove
+      );
+      const recentScoresCp = this.evalStabilityHistory.map((depthSample) => depthSample.scoreCp);
+      const scoreSpreadCp = Math.max(...recentScoresCp) - Math.min(...recentScoresCp);
+      if (isSameBestMove && scoreSpreadCp <= 15) {
         this.finishSearch();
       }
     }
   }
 
-  go() {
+  startSearch() {
     this.onReady(() => {
       this.stopEvaluation(() => {
         if (this.isEvaluating) return;
-        this.clearInfiniteGuards();
+        this.clearInfiniteSearchGuards();
         this.isFinishingSearch = false;
         this.isEvaluating = true;
         const { command, isInfinite } = this.buildGoCommand();
-        this.activeSearchInfinite = isInfinite;
-        this.send(command);
+        this.isInfiniteSearchActive = isInfinite;
+        this.sendUciCommand(command);
         if (isInfinite) {
-          const timeoutMs = nonNegIntConfig(enumOptions.GoInfiniteTimeout, 0);
-          if (timeoutMs > 0) {
-            this.infiniteTimer = setTimeout(() => {
-              this.infiniteTimer = null;
+          const infiniteTimeoutMs = getNonNegativeIntOption(
+            EXTENSION_OPTION_KEY.GoInfiniteTimeout,
+            0
+          );
+          if (infiniteTimeoutMs > 0) {
+            this.infiniteSearchTimeoutId = setTimeout(() => {
+              this.infiniteSearchTimeoutId = null;
               this.finishSearch();
-            }, timeoutMs);
+            }, infiniteTimeoutMs);
           }
         }
       });
@@ -1182,63 +1343,76 @@ class StockfishEngine {
   }
 
   handleDisconnect() {
-    this.clearInfiniteGuards();
-    this.ready = false;
-    this.loaded = false;
+    this.clearInfiniteSearchGuards();
+    this.isEngineReady = false;
+    this.isEngineLoaded = false;
     this.pendingReadyCount = 0;
-    this.isReadySentForCurrentState = false;
-    this.appliedEngineOptions = {};
+    this.hasSentIsReady = false;
+    this.appliedUciOptions = {};
     this.isEvaluating = false;
-    this.isRequestedStop = false;
+    this.hasRequestedStop = false;
     this.isFinishingSearch = false;
     this.staleBestMovesToIgnore = 0;
-    this.pendingPosition = null;
+    this.pendingPositionUpdate = null;
     this.readyCallbacks = [];
-    this.goDoneCallbacks = [];
-    if (this.stopTimeout !== null) {
-      clearTimeout(this.stopTimeout);
-      this.stopTimeout = null;
+    this.stopCompletionCallbacks = [];
+    if (this.stopFallbackTimeoutId !== null) {
+      clearTimeout(this.stopFallbackTimeoutId);
+      this.stopFallbackTimeoutId = null;
     }
     this.attemptReconnect();
   }
 
   reconnectNow() {
-    if (this.isSwitching || this.isWebSocketOpen()) return;
-    if (this.stockfish && this.stockfish.readyState === WebSocket.CONNECTING) return;
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+    if (this.isSwitchingEngine || this.isWebSocketOpen()) return;
+    if (this.websocket && this.websocket.readyState === WebSocket.CONNECTING) return;
+    if (this.reconnectTimerId !== null) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
     }
     this.reconnectAttempts = 0;
-    this.fatalError = null;
-    this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
+    this.fatalErrorMessage = null;
+    this.initializeWebSocket(
+      this.targetEngineUrl ||
+        this.currentEngineUrl ||
+        getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl)
+    );
   }
 
   attemptReconnect() {
-    if (this.isSwitching || this.reconnectTimer !== null || this.fatalError) return;
+    if (this.isSwitchingEngine || this.reconnectTimerId !== null || this.fatalErrorMessage) {
+      return;
+    }
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     this.reconnectAttempts++;
-    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), this.maxReconnectDelay);
+    const reconnectDelayMs = Math.min(
+      this.initialReconnectDelayMs * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxReconnectDelayMs
+    );
     if (this.reconnectAttempts === 1) {
-      console.log(`Attempting to reconnect in ${delay / 1000} seconds...`);
+      console.log(`Attempting to reconnect in ${reconnectDelayMs / 1000} seconds...`);
     }
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      if (!this.isSwitching && !this.fatalError) {
-        this.initializeWebSocket(this.targetUrl || this.currentUrl || getValueConfig(enumOptions.UrlApiStockfish));
+    this.reconnectTimerId = setTimeout(() => {
+      this.reconnectTimerId = null;
+      if (!this.isSwitchingEngine && !this.fatalErrorMessage) {
+        this.initializeWebSocket(
+          this.targetEngineUrl ||
+            this.currentEngineUrl ||
+            getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl)
+        );
       }
-    }, delay);
+    }, reconnectDelayMs);
   }
 
   sendIsReady() {
-    if (!this.loaded || !this.isWebSocketOpen() || this.isReadySentForCurrentState) return;
-    this.isReadySentForCurrentState = true;
+    if (!this.isEngineLoaded || !this.isWebSocketOpen() || this.hasSentIsReady) return;
+    this.hasSentIsReady = true;
     this.pendingReadyCount = (this.pendingReadyCount || 0) + 1;
-    this.send("isready");
+    this.sendUciCommand("isready");
   }
 
   onReady(callback) {
-    if (this.ready) {
+    if (this.isEngineReady) {
       callback();
     } else {
       this.readyCallbacks.push(callback);
@@ -1247,601 +1421,667 @@ class StockfishEngine {
   }
 
   stopEvaluation(callback) {
-    this.clearInfiniteGuards();
+    this.clearInfiniteSearchGuards();
     if (!this.isEvaluating) {
       this.isFinishingSearch = false;
       if (typeof callback === "function") callback();
       return;
     }
     if (typeof callback === "function") {
-      this.goDoneCallbacks.push(callback);
+      this.stopCompletionCallbacks.push(callback);
     }
-    const alreadySentStop = Boolean(this.isFinishingSearch);
+    const hadAlreadySentStop = Boolean(this.isFinishingSearch);
     this.isFinishingSearch = false;
-    if (!this.isRequestedStop) {
-      this.isRequestedStop = true;
-      if (!alreadySentStop) {
-        this.send("stop");
+    if (!this.hasRequestedStop) {
+      this.hasRequestedStop = true;
+      if (!hadAlreadySentStop) {
+        this.sendUciCommand("stop");
       }
-      this.stopTimeout = setTimeout(() => {
-        this.stopTimeout = null;
-        if (this.isRequestedStop) {
+      this.stopFallbackTimeoutId = setTimeout(() => {
+        this.stopFallbackTimeoutId = null;
+        if (this.hasRequestedStop) {
           this.staleBestMovesToIgnore = (this.staleBestMovesToIgnore || 0) + 1;
-          this.isRequestedStop = false;
+          this.hasRequestedStop = false;
           this.isEvaluating = false;
-          const callbacks = this.goDoneCallbacks;
-          this.goDoneCallbacks = [];
-          callbacks.forEach((cb) => cb());
+          const pendingCallbacks = this.stopCompletionCallbacks;
+          this.stopCompletionCallbacks = [];
+          pendingCallbacks.forEach((completionCallback) => completionCallback());
         }
-      }, STOP_TIMEOUT_MS);
+      }, ENGINE_STOP_TIMEOUT_MS);
     }
   }
 
-  calculateTargetDelay(bestMove) {
-    if (!getValueConfig(enumOptions.HumanLikeMoves)) {
+  calculateAutoMoveDelayMs(bestCandidateMove) {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.HumanLikeMoves)) {
       return 0;
     }
-    const movePace = numConfig(enumOptions.MovePace, 12.5);
-    const physicalFloor = numConfig(enumOptions.PhysicalFloor, 600);
-    const timingSpread = numConfig(enumOptions.TimingSpread, 0.80);
+    const movePaceSeconds = getPositiveFloatOption(EXTENSION_OPTION_KEY.MovePace, 12.5);
+    const physicalFloorMs = getPositiveFloatOption(EXTENSION_OPTION_KEY.PhysicalFloor, 600);
+    const timingSpread = getPositiveFloatOption(EXTENSION_OPTION_KEY.TimingSpread, 0.80);
 
-    let median = movePace * 1000;
+    let medianThinkMs = movePaceSeconds * 1000;
 
-    const controller = this.BetterMintmaster.game.controller;
-    const legalMoves = controller.getLegalMoves();
-    const lastMove = controller.getLastMove();
+    const chessComGame = this.extension.gameController.chessComGame;
+    const legalMoves = chessComGame.getLegalMoves();
+    const lastPlayedMove = chessComGame.getLastMove();
 
-    if (getValueConfig(enumOptions.FastForcedMoves) && legalMoves?.length === 1) {
-      median *= numConfig(enumOptions.ForcedMultiplier, 0.15);
-    } else if (getValueConfig(enumOptions.FastRecaptures) && lastMove && bestMove && bestMove.to === lastMove.to) {
-      median *= numConfig(enumOptions.RecaptureMultiplier, 0.25);
-    } else if (getValueConfig(enumOptions.FastOpening)) {
-      const openingThreshold = numConfig(enumOptions.OpeningMovesThreshold, 10);
-      const fullMoveNumber = parseInt((controller.getFEN() || "").split(" ")[5], 10) || 1;
-      if (fullMoveNumber <= openingThreshold) {
-        median *= numConfig(enumOptions.OpeningMultiplier, 0.40);
+    if (getExtensionOption(EXTENSION_OPTION_KEY.FastForcedMoves) && legalMoves?.length === 1) {
+      medianThinkMs *= getPositiveFloatOption(EXTENSION_OPTION_KEY.ForcedMultiplier, 0.15);
+    } else if (
+      getExtensionOption(EXTENSION_OPTION_KEY.FastRecaptures) &&
+      lastPlayedMove &&
+      bestCandidateMove &&
+      bestCandidateMove.to === lastPlayedMove.to
+    ) {
+      medianThinkMs *= getPositiveFloatOption(EXTENSION_OPTION_KEY.RecaptureMultiplier, 0.25);
+    } else if (getExtensionOption(EXTENSION_OPTION_KEY.FastOpening)) {
+      const openingMoveThreshold = getPositiveFloatOption(
+        EXTENSION_OPTION_KEY.OpeningMovesThreshold,
+        10
+      );
+      const fullMoveNumber = parseInt((chessComGame.getFEN() || "").split(" ")[5], 10) || 1;
+      if (fullMoveNumber <= openingMoveThreshold) {
+        medianThinkMs *= getPositiveFloatOption(EXTENSION_OPTION_KEY.OpeningMultiplier, 0.40);
       }
     }
 
-    if (getValueConfig(enumOptions.ClockScaling)) {
-      const remainingSeconds = getRemainingPlayerTimeSeconds();
-      const clockThreshold = numConfig(enumOptions.ClockThreshold, 180);
-      if (remainingSeconds != null && remainingSeconds < clockThreshold) {
-        const minMult = numConfig(enumOptions.ClockMinMultiplier, 0.20);
-        median *= Math.max(minMult, remainingSeconds / clockThreshold);
+    if (getExtensionOption(EXTENSION_OPTION_KEY.ClockScaling)) {
+      const remainingClockSeconds = getRemainingPlayerTimeSeconds();
+      const clockThresholdSeconds = getPositiveFloatOption(
+        EXTENSION_OPTION_KEY.ClockThreshold,
+        180
+      );
+      if (remainingClockSeconds != null && remainingClockSeconds < clockThresholdSeconds) {
+        const minClockMultiplier = getPositiveFloatOption(
+          EXTENSION_OPTION_KEY.ClockMinMultiplier,
+          0.20
+        );
+        medianThinkMs *= Math.max(
+          minClockMultiplier,
+          remainingClockSeconds / clockThresholdSeconds
+        );
       }
     }
 
-    const u1 = Math.max(1e-7, Math.random());
-    const u2 = Math.random();
-    const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-    const mu = Math.log(Math.max(50, median - physicalFloor));
-    return Math.round(physicalFloor + Math.exp(mu + timingSpread * z));
+    const uniformSampleOne = Math.max(1e-7, Math.random());
+    const uniformSampleTwo = Math.random();
+    const standardNormalSample =
+      Math.sqrt(-2.0 * Math.log(uniformSampleOne)) * Math.cos(2.0 * Math.PI * uniformSampleTwo);
+    const logMedianDelayMs = Math.log(Math.max(50, medianThinkMs - physicalFloorMs));
+    return Math.round(physicalFloorMs + Math.exp(logMedianDelayMs + timingSpread * standardNormalSample));
   }
 
-  UpdatePosition(FENs = null, isNewGame = true) {
-    if (!this.isWebSocketOpen() || !this.loaded) {
+  updatePosition(fen = null, isNewGame = true) {
+    if (this.isSwitchingEngine) return;
+    if (!this.isWebSocketOpen() || !this.isEngineLoaded) {
       this.reconnectNow();
       return;
     }
-    const wasPending = this.pendingPosition !== null;
-    this.pendingPosition = {
-      FENs,
-      isNewGame: wasPending ? (this.pendingPosition.isNewGame || isNewGame) : isNewGame
+    const hadPendingPosition = this.pendingPositionUpdate !== null;
+    this.pendingPositionUpdate = {
+      fen,
+      isNewGame: hadPendingPosition
+        ? this.pendingPositionUpdate.isNewGame || isNewGame
+        : isNewGame
     };
-    if (wasPending) return;
+    if (hadPendingPosition) return;
 
     this.onReady(() => {
+      if (this.isSwitchingEngine) return;
       this.stopEvaluation(() => {
-        const next = this.pendingPosition;
-        this.pendingPosition = null;
-        if (!next) return;
-        this.MoveAndGo(next.FENs, next.isNewGame);
+        if (this.isSwitchingEngine) return;
+        const queuedPosition = this.pendingPositionUpdate;
+        this.pendingPositionUpdate = null;
+        if (!queuedPosition) return;
+        this.setPositionAndSearch(queuedPosition.fen, queuedPosition.isNewGame);
       });
     });
   }
 
-  UpdateExtensionOptions(options = {}) {
-    if (Object.prototype.hasOwnProperty.call(options, enumOptions.Depth)) {
-      this.depth = nonNegIntConfig(enumOptions.Depth, 15);
+  applyExtensionOptions(optionUpdates = {}) {
+    if (Object.prototype.hasOwnProperty.call(optionUpdates, EXTENSION_OPTION_KEY.Depth)) {
+      this.searchDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
     }
 
-    const newUrl = options[enumOptions.UrlApiStockfish];
-    if (newUrl && newUrl !== (this.targetUrl || this.currentUrl)) {
-      this.customEngineOptions =
-        options.customEngineOptions && typeof options.customEngineOptions === "object"
-          ? Object.assign({}, options.customEngineOptions)
+    const nextEngineUrl = optionUpdates[EXTENSION_OPTION_KEY.EngineWebSocketUrl];
+    if (nextEngineUrl && nextEngineUrl !== (this.targetEngineUrl || this.currentEngineUrl)) {
+      this.uciOptionOverrides =
+        optionUpdates.customEngineOptions && typeof optionUpdates.customEngineOptions === "object"
+          ? Object.assign({}, optionUpdates.customEngineOptions)
           : {};
-      this.switchEngine(newUrl);
+      this.switchEngine(nextEngineUrl);
       return;
     }
 
-    if (typeof options.uciButton === "string" && options.uciButton.length > 0) {
-      const buttonName = options.uciButton;
+    if (typeof optionUpdates.uciButton === "string" && optionUpdates.uciButton.length > 0) {
+      const buttonOptionName = optionUpdates.uciButton;
       this.stopEvaluation(() => {
-        if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(buttonName)) {
-          this.send(`setoption name ${buttonName}`);
-          this.ready = false;
-          this.isReadySentForCurrentState = false;
+        if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(buttonOptionName)) {
+          this.sendUciCommand(`setoption name ${buttonOptionName}`);
+          this.isEngineReady = false;
+          this.hasSentIsReady = false;
         }
-        if (this.BetterMintmaster && this.BetterMintmaster.game) {
-          this.BetterMintmaster.game.UpdateEngine(false);
+        if (this.extension && this.extension.gameController) {
+          this.extension.gameController.updateEnginePosition(false);
         }
       });
       return;
     }
 
-    const custom = options.customEngineOptions;
-    if (custom && typeof custom === "object") {
-      this.customEngineOptions = Object.assign({}, custom);
+    const incomingUciOverrides = optionUpdates.customEngineOptions;
+    if (incomingUciOverrides && typeof incomingUciOverrides === "object") {
+      this.uciOptionOverrides = Object.assign({}, incomingUciOverrides);
       this.stopEvaluation(() => {
-        this.UpdateOptions(this.customEngineOptions);
-        if (this.BetterMintmaster && this.BetterMintmaster.game) {
-          this.BetterMintmaster.game.UpdateEngine(false);
+        this.applyUciOptions(this.uciOptionOverrides);
+        if (this.extension && this.extension.gameController) {
+          this.extension.gameController.updateEnginePosition(false);
         }
       });
       return;
     }
 
-    if (options.stopSearch) {
+    if (optionUpdates.shouldStopSearch) {
       this.finishSearch();
       return;
     }
 
-    const nextDepth = nonNegIntConfig(enumOptions.Depth, 15);
-    const goSettingsChanged = Object.keys(options).some((key) => GO_OPTION_KEYS.has(key));
-    const depthChanged = nextDepth !== this.depth;
-    this.depth = nextDepth;
+    const hasGoSettingsChanged = Object.keys(optionUpdates).some((optionKey) =>
+      SEARCH_GO_OPTION_KEYS.has(optionKey)
+    );
 
-    if ((depthChanged || goSettingsChanged) && this.BetterMintmaster && this.BetterMintmaster.game) {
-      this.BetterMintmaster.game.UpdateEngine(false);
+    if (hasGoSettingsChanged && this.extension && this.extension.gameController) {
+      this.extension.gameController.updateEnginePosition(false);
       return;
     }
 
-    if (this.topMoves.length > 0) {
-      this.onTopMoves(null, !this.isEvaluating);
+    if (this.candidateMoves.length > 0) {
+      this.handleCandidateMoveUpdate(null, !this.isEvaluating);
     } else if (
-      getValueConfig(enumOptions.LegitAutoMove) &&
+      getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
       !this.isEvaluating &&
       this.isWebSocketOpen() &&
-      this.BetterMintmaster &&
-      this.BetterMintmaster.game
+      this.extension &&
+      this.extension.gameController
     ) {
-      this.BetterMintmaster.game.UpdateEngine(false);
+      this.extension.gameController.updateEnginePosition(false);
     }
   }
 
-  UpdateOptions(options = null) {
-    const opts = options || this.customEngineOptions;
-    if (!opts || typeof opts !== "object") return;
-    if (!this.appliedEngineOptions || typeof this.appliedEngineOptions !== "object") {
-      this.appliedEngineOptions = {};
+  applyUciOptions(uciOptionsMap = null) {
+    const targetUciOptions = uciOptionsMap || this.uciOptionOverrides;
+    if (!targetUciOptions || typeof targetUciOptions !== "object") return;
+    if (!this.appliedUciOptions || typeof this.appliedUciOptions !== "object") {
+      this.appliedUciOptions = {};
     }
-    let sentAny = false;
+    let hasSentAnyUciOption = false;
 
-    for (const [prevKey, prevVal] of Object.entries(this.appliedEngineOptions)) {
-      const incoming = Object.prototype.hasOwnProperty.call(opts, prevKey) ? opts[prevKey] : undefined;
-      const isActiveInNext = incoming !== "" && incoming !== undefined && incoming !== null;
-      if (isActiveInNext) continue;
+    for (const [previousOptionName, previousOptionValue] of Object.entries(this.appliedUciOptions)) {
+      const nextOptionValue = Object.prototype.hasOwnProperty.call(
+        targetUciOptions,
+        previousOptionName
+      )
+        ? targetUciOptions[previousOptionName]
+        : undefined;
+      const isOptionActive =
+        nextOptionValue !== "" && nextOptionValue !== undefined && nextOptionValue !== null;
+      if (isOptionActive) continue;
 
-      if (this.engineUciDefaults?.has(prevKey)) {
-        const defVal = this.engineUciDefaults.get(prevKey);
-        if (String(prevVal) !== String(defVal)) {
-          this.send(
-            defVal === "" ? `setoption name ${prevKey} value` : `setoption name ${prevKey} value ${defVal}`
+      if (this.uciOptionDefaults?.has(previousOptionName)) {
+        const defaultValue = this.uciOptionDefaults.get(previousOptionName);
+        if (String(previousOptionValue) !== String(defaultValue)) {
+          this.sendUciCommand(
+            defaultValue === ""
+              ? `setoption name ${previousOptionName} value`
+              : `setoption name ${previousOptionName} value ${defaultValue}`
           );
-          sentAny = true;
+          hasSentAnyUciOption = true;
         }
       }
-      delete this.appliedEngineOptions[prevKey];
+      delete this.appliedUciOptions[previousOptionName];
     }
 
-    for (const [key, value] of Object.entries(opts)) {
-      if (value === "" || value === undefined || value === null) continue;
-      if (this.engineUciOptions.size === 0 || this.engineUciOptions.has(key)) {
-        this.send(`setoption name ${key} value ${value}`);
-        this.appliedEngineOptions[key] = value;
-        sentAny = true;
+    for (const [optionName, optionValue] of Object.entries(targetUciOptions)) {
+      if (optionValue === "" || optionValue === undefined || optionValue === null) continue;
+      if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(optionName)) {
+        this.sendUciCommand(`setoption name ${optionName} value ${optionValue}`);
+        this.appliedUciOptions[optionName] = optionValue;
+        hasSentAnyUciOption = true;
       }
     }
-    if (sentAny) {
-      this.ready = false;
-      this.isReadySentForCurrentState = false;
+    if (hasSentAnyUciOption) {
+      this.isEngineReady = false;
+      this.hasSentIsReady = false;
     }
   }
 
-  ProcessMessage(event) {
-    const line = event && typeof event === "object" ? event.data : event;
+  processEngineMessage(messageEvent) {
+    const rawMessage =
+      messageEvent && typeof messageEvent === "object" ? messageEvent.data : messageEvent;
+    if (typeof rawMessage !== "string" || !rawMessage) return;
 
-    if (line && typeof line === "string" && line.startsWith("option name ")) {
-      const parsedOpt = StockfishEngine.parseUciOptionLine(line);
-      if (parsedOpt) {
-        this.engineUciOptions.add(parsedOpt.name);
-        if (parsedOpt.hasDefault && this.engineUciDefaults) {
-          this.engineUciDefaults.set(parsedOpt.name, parsedOpt.default);
+    for (const rawLine of rawMessage.split(/\r?\n/)) {
+      const uciLine = rawLine.trim();
+      if (uciLine) {
+        this.processEngineLine(uciLine);
+      }
+    }
+  }
+
+  processEngineLine(uciLine) {
+    if (uciLine.startsWith("option name ")) {
+      const parsedUciOption = UciEngineClient.parseUciOptionLine(uciLine);
+      if (parsedUciOption) {
+        this.supportedUciOptions.add(parsedUciOption.name);
+        if (parsedUciOption.hasDefault && this.uciOptionDefaults) {
+          this.uciOptionDefaults.set(parsedUciOption.name, parsedUciOption.default);
         }
       }
       return;
     }
 
-    if (line === "uciok") {
-      this.loaded = true;
+    if (uciLine === "uciok") {
+      this.isEngineLoaded = true;
       this.reconnectAttempts = 0;
-      this.fatalError = null;
-      this.UpdateOptions();
+      this.fatalErrorMessage = null;
+      this.applyUciOptions();
       if (this.readyCallbacks.length > 0) {
         this.sendIsReady();
       }
-    } else if (typeof line === "string" && line.startsWith("info string Error:")) {
-      this.fatalError = line.slice("info string ".length);
-      console.error(`[BetterMint] ${this.fatalError}`);
-    } else if (line === "readyok") {
+    } else if (typeof uciLine === "string" && uciLine.startsWith("info string Error:")) {
+      this.fatalErrorMessage = uciLine.slice("info string ".length);
+      console.error(`[BetterMint] ${this.fatalErrorMessage}`);
+    } else if (uciLine === "readyok") {
       if (this.pendingReadyCount > 0) {
         this.pendingReadyCount--;
       }
-      this.isReadySentForCurrentState = false;
       if (this.pendingReadyCount > 0) {
-        if (this.readyCallbacks.length > 0) {
-          this.sendIsReady();
-        }
         return;
       }
-      this.ready = true;
-      while (this.ready && this.readyCallbacks.length > 0) {
-        const cb = this.readyCallbacks.shift();
-        cb();
+      this.hasSentIsReady = false;
+      this.isEngineReady = true;
+      while (this.isEngineReady && this.readyCallbacks.length > 0) {
+        const readyCallback = this.readyCallbacks.shift();
+        readyCallback();
       }
-      if (!this.ready && this.readyCallbacks.length > 0) {
+      if (!this.isEngineReady && this.readyCallbacks.length > 0) {
         this.sendIsReady();
       }
-    } else if (typeof line === "string" && line.startsWith("info ")) {
-      if (this.isRequestedStop || !line.includes(" pv ") || /\b(?:upperbound|lowerbound)\b/.test(line)) return;
+    } else if (typeof uciLine === "string" && uciLine.startsWith("info ")) {
+      if (
+        this.hasRequestedStop ||
+        !uciLine.includes(" pv ") ||
+        /\b(?:upperbound|lowerbound)\b/.test(uciLine)
+      ) {
+        return;
+      }
 
-      const pvMatch = line.match(StockfishEngine.INFO_PV_RE);
+      const pvMatch = uciLine.match(UciEngineClient.INFO_PV_RE);
       if (!pvMatch) return;
-      const depthMatch = line.match(StockfishEngine.INFO_DEPTH_RE);
-      const scoreMatch = line.match(StockfishEngine.INFO_SCORE_RE);
+      const depthMatch = uciLine.match(UciEngineClient.INFO_DEPTH_RE);
+      const scoreMatch = uciLine.match(UciEngineClient.INFO_SCORE_RE);
       if (!depthMatch || !scoreMatch) return;
 
-      const depth = parseInt(depthMatch[1], 10);
-      const scoreType = scoreMatch[1];
-      const score = parseInt(scoreMatch[2], 10);
-      const cpScore = scoreType === "cp" ? score : null;
-      const mateScore = scoreType === "mate" ? score : null;
-      const multipvMatch = line.match(StockfishEngine.INFO_MULTIPV_RE);
-      const isPrimaryPv = !multipvMatch || parseInt(multipvMatch[1], 10) === 1;
+      const searchDepth = parseInt(depthMatch[1], 10);
+      const scoreUnit = scoreMatch[1];
+      const numericScore = parseInt(scoreMatch[2], 10);
+      const centipawns = scoreUnit === "cp" ? numericScore : null;
+      const mateInMoves = scoreUnit === "mate" ? numericScore : null;
+      const multiPvMatch = uciLine.match(UciEngineClient.INFO_MULTIPV_RE);
+      const isPrimaryPv = !multiPvMatch || parseInt(multiPvMatch[1], 10) === 1;
 
-      const parsedMove = new TopMove(pvMatch[1], depth, cpScore, mateScore);
-      this.onTopMoves(parsedMove, false);
+      const candidateMove = new CandidateMove(pvMatch[1], searchDepth, centipawns, mateInMoves);
+      this.handleCandidateMoveUpdate(candidateMove, false);
       if (isPrimaryPv) {
-        this.trackEvalStability(parsedMove, cpScore, mateScore);
+        this.trackEvalStability(candidateMove, centipawns, mateInMoves);
       }
-    } else if (typeof line === "string" && line.startsWith("bestmove ")) {
-      const bestMoveMatch = line.match(StockfishEngine.BESTMOVE_RE);
+    } else if (typeof uciLine === "string" && uciLine.startsWith("bestmove ")) {
+      const bestMoveMatch = uciLine.match(UciEngineClient.BESTMOVE_RE);
       if (bestMoveMatch) {
         if (this.staleBestMovesToIgnore > 0) {
           this.staleBestMovesToIgnore--;
           return;
         }
-        if (this.stopTimeout !== null) {
-          clearTimeout(this.stopTimeout);
-          this.stopTimeout = null;
+        if (this.stopFallbackTimeoutId !== null) {
+          clearTimeout(this.stopFallbackTimeoutId);
+          this.stopFallbackTimeoutId = null;
         }
-        this.clearInfiniteGuards();
+        this.clearInfiniteSearchGuards();
         this.isEvaluating = false;
         this.isFinishingSearch = false;
-        const wasRequestedStop = this.isRequestedStop;
-        this.isRequestedStop = false;
+        const hadRequestedStop = this.hasRequestedStop;
+        this.hasRequestedStop = false;
 
-        const callbacks = this.goDoneCallbacks;
-        this.goDoneCallbacks = [];
-        callbacks.forEach((cb) => cb());
+        const completionCallbacks = this.stopCompletionCallbacks;
+        this.stopCompletionCallbacks = [];
+        completionCallbacks.forEach((completionCallback) => completionCallback());
 
-        const bestMove = bestMoveMatch[1];
-        if (!wasRequestedStop && bestMove !== "(none)") {
-          const index = this.topMoves.findIndex((object) => object.move === bestMove);
+        const bestUciMove = bestMoveMatch[1];
+        if (!hadRequestedStop && bestUciMove !== "(none)") {
+          const existingIndex = this.candidateMoves.findIndex(
+            (candidate) => candidate.uciMove === bestUciMove
+          );
 
-          if (index < 0) {
-            console.warn(`The engine returned the best move "${bestMove}" but it's not in the top move list.`);
-            const bestMoveOnTop = new TopMove(
-              bestMove,
-              nonNegIntConfig(enumOptions.Depth, 1) || 1,
+          if (existingIndex < 0) {
+            console.warn(
+              `The engine returned the best move "${bestUciMove}" but it's not in the top move list.`
+            );
+            const fallbackBestCandidate = new CandidateMove(
+              bestUciMove,
+              getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 1) || 1,
               null,
               null
             );
-            this.onTopMoves(bestMoveOnTop, true);
+            this.handleCandidateMoveUpdate(fallbackBestCandidate, true);
           } else {
-            this.onTopMoves(this.topMoves[index], true);
+            this.handleCandidateMoveUpdate(this.candidateMoves[existingIndex], true);
           }
         }
       }
     }
   }
 
-  MoveAndGo(FENs = null, isNewGame = true) {
-    const go = () => {
-      const isSamePosition = !isNewGame && FENs !== null && FENs === this.currentPositionFen;
+  setPositionAndSearch(fen = null, isNewGame = true) {
+    const startSearchForPosition = () => {
+      const isSamePosition = !isNewGame && fen !== null && fen === this.currentPositionFen;
       if (isNewGame) {
-        this.lastTopMoves = [];
+        this.previousPositionCandidateMoves = [];
         this.lastAutoMovedFen = null;
       } else if (!isSamePosition) {
-        this.ensureTopMovesSorted();
-        this.lastTopMoves = this.topMoves;
+        this.ensureCandidateMovesSorted();
+        this.previousPositionCandidateMoves = this.candidateMoves;
         this.lastAutoMovedFen = null;
       }
-      this.currentPositionFen = FENs;
-      this.topMoves = [];
-      this.topMovesDirty = false;
-      if (FENs !== null) this.send(`position fen ${FENs}`);
-      this.go();
+      this.currentPositionFen = fen;
+      this.candidateMoves = [];
+      this.hasUnsortedCandidateMoves = false;
+      if (fen !== null) this.sendUciCommand(`position fen ${fen}`);
+      this.startSearch();
     };
     this.onReady(() => {
       if (isNewGame) {
-        this.ready = false;
-        this.isReadySentForCurrentState = false;
-        this.send("ucinewgame");
-        this.onReady(go);
+        this.isEngineReady = false;
+        this.hasSentIsReady = false;
+        this.sendUciCommand("ucinewgame");
+        this.onReady(startSearchForPosition);
       } else {
-        go();
+        startSearchForPosition();
       }
     });
   }
 
-  AnalyzeLastMove() {
-    const game = this.BetterMintmaster.game;
-    const lastMove = game.controller.getLastMove();
-    if (!lastMove) return;
+  analyzeLastMove() {
+    const gameController = this.extension.gameController;
+    const lastPlayedMove = gameController.chessComGame.getLastMove();
+    if (!lastPlayedMove) return;
 
-    let moveScore = null;
-    if (this.lastTopMoves.length > 0 && this.topMoves.length > 0) {
-      const lastBestMove = this.lastTopMoves[0];
-      if (resolveLegalMove([lastMove], lastBestMove)) {
-        moveScore = "BestMove";
+    let moveQuality = null;
+    if (this.previousPositionCandidateMoves.length > 0 && this.candidateMoves.length > 0) {
+      const previousBestMove = this.previousPositionCandidateMoves[0];
+      if (resolveLegalMove([lastPlayedMove], previousBestMove)) {
+        moveQuality = "BestMove";
       } else {
-        const epBefore = StockfishEngine.evalToExpectedPoints(lastBestMove);
-        const epOpponent = StockfishEngine.evalToExpectedPoints(this.topMoves[0]);
-        if (epBefore !== null && epOpponent !== null) {
-          const epAfter = 1 - epOpponent;
-          const epLoss = epBefore - epAfter;
-          if (epBefore >= 0.90 && epAfter >= 0.40 && epAfter <= 0.65) {
-            moveScore = "MissedWin";
+        const expectedPointsBefore = UciEngineClient.evalToExpectedPoints(previousBestMove);
+        const expectedPointsOpponent = UciEngineClient.evalToExpectedPoints(this.candidateMoves[0]);
+        if (expectedPointsBefore !== null && expectedPointsOpponent !== null) {
+          const expectedPointsAfter = 1 - expectedPointsOpponent;
+          const expectedPointsLoss = expectedPointsBefore - expectedPointsAfter;
+          if (
+            expectedPointsBefore >= 0.90 &&
+            expectedPointsAfter >= 0.40 &&
+            expectedPointsAfter <= 0.65
+          ) {
+            moveQuality = "MissedWin";
           } else {
-            const match = StockfishEngine.EP_THRESHOLDS.find(([maxLoss]) => epLoss <= maxLoss);
-            moveScore = match ? match[1] : "Blunder";
+            const matchedThreshold = UciEngineClient.EXPECTED_POINTS_LOSS_THRESHOLDS.find(
+              ([maxExpectedPointsLoss]) => expectedPointsLoss <= maxExpectedPointsLoss
+            );
+            moveQuality = matchedThreshold ? matchedThreshold[1] : "Blunder";
           }
         }
       }
     }
-    game.ShowMoveAnalysis(lastMove.to, moveScore);
+    gameController.showMoveAnalysis(lastPlayedMove.to, moveQuality);
   }
 
-  ensureTopMovesSorted() {
-    if (this.topMovesDirty) {
-      this.topMoves.sort(StockfishEngine.compareMoves);
-      this.topMovesDirty = false;
+  ensureCandidateMovesSorted() {
+    if (this.hasUnsortedCandidateMoves) {
+      this.candidateMoves.sort(UciEngineClient.compareCandidateMoves);
+      this.hasUnsortedCandidateMoves = false;
     }
-    return this.topMoves;
+    return this.candidateMoves;
   }
 
-  onTopMoves(move = null, isBestMove = false) {
-    let bestMoveSelected = false;
-    if (move !== null) {
-      const index = this.topMoves.findIndex((object) => object.move === move.move);
-      if (index === -1) {
-        this.topMoves.push(move);
-        this.topMovesDirty = true;
-      } else if (!isBestMove && move.depth >= this.topMoves[index].depth) {
-        this.topMoves[index] = move;
-        this.topMovesDirty = true;
+  handleCandidateMoveUpdate(candidateMove = null, isBestMove = false) {
+    let hasSelectedBestMove = false;
+    if (candidateMove !== null) {
+      const existingIndex = this.candidateMoves.findIndex(
+        (existingMove) => existingMove.uciMove === candidateMove.uciMove
+      );
+      if (existingIndex === -1) {
+        this.candidateMoves.push(candidateMove);
+        this.hasUnsortedCandidateMoves = true;
+      } else if (
+        !isBestMove &&
+        candidateMove.searchDepth >= this.candidateMoves[existingIndex].searchDepth
+      ) {
+        this.candidateMoves[existingIndex] = candidateMove;
+        this.hasUnsortedCandidateMoves = true;
       }
-      if (isBestMove) bestMoveSelected = true;
-    } else if (isBestMove && this.topMoves.length > 0) {
-      bestMoveSelected = true;
+      if (isBestMove) hasSelectedBestMove = true;
+    } else if (isBestMove && this.candidateMoves.length > 0) {
+      hasSelectedBestMove = true;
     }
 
-    const multipvCount = Math.max(1, parseInt(this.customEngineOptions?.["MultiPV"], 10) || 1);
+    const multiPvCount = Math.max(1, parseInt(this.uciOptionOverrides?.["MultiPV"], 10) || 1);
 
-    if (!bestMoveSelected && move !== null) {
-      if (this.BetterMintmaster?.game?.HintMoves) {
-        const liveTopMoves = [...this.topMoves].sort(StockfishEngine.compareMoves).slice(0, multipvCount);
-        this.BetterMintmaster.game.HintMoves(liveTopMoves);
+    if (!hasSelectedBestMove && candidateMove !== null) {
+      if (this.extension?.gameController?.renderMoveHints) {
+        const liveTopCandidates = [...this.candidateMoves]
+          .sort(UciEngineClient.compareCandidateMoves)
+          .slice(0, multiPvCount);
+        this.extension.gameController.renderMoveHints(liveTopCandidates);
       }
       return;
     }
 
-    this.ensureTopMovesSorted();
-    if (bestMoveSelected && move !== null) {
-      const bestIdx = this.topMoves.indexOf(move);
-      if (bestIdx > 0) {
-        this.topMoves.splice(bestIdx, 1);
-        this.topMoves.unshift(move);
+    this.ensureCandidateMovesSorted();
+    if (hasSelectedBestMove && candidateMove !== null) {
+      const bestMoveIndex = this.candidateMoves.indexOf(candidateMove);
+      if (bestMoveIndex > 0) {
+        this.candidateMoves.splice(bestMoveIndex, 1);
+        this.candidateMoves.unshift(candidateMove);
       }
     }
-    const topPvMoves = this.topMoves.slice(0, multipvCount);
+    const topCandidateMoves = this.candidateMoves.slice(0, multiPvCount);
 
-    if (topPvMoves.length > 0) {
-      this.BetterMintmaster.game.HintMoves(topPvMoves);
+    if (topCandidateMoves.length > 0) {
+      this.extension.gameController.renderMoveHints(topCandidateMoves);
 
-      if (bestMoveSelected && getValueConfig(enumOptions.MoveAnalysis)) {
-        this.AnalyzeLastMove();
+      if (hasSelectedBestMove && getExtensionOption(EXTENSION_OPTION_KEY.MoveAnalysis)) {
+        this.analyzeLastMove();
       }
     }
 
-    if (bestMoveSelected && topPvMoves[0]) {
-      this.maybeAutoMove(topPvMoves[0]);
+    if (hasSelectedBestMove && topCandidateMoves[0]) {
+      this.scheduleAutoMove(topCandidateMoves[0]);
     }
   }
 
-  maybeAutoMove(bestMove) {
-    const game = this.BetterMintmaster.game;
-    const controller = game.controller;
-    const canAutoMove = () =>
-      getValueConfig(enumOptions.LegitAutoMove) &&
-      controller.getPlayingAs() === controller.getTurn() &&
-      !StockfishEngine.NON_PLAYING_MODES.has(controller.getMode?.());
+  scheduleAutoMove(bestCandidateMove) {
+    const gameController = this.extension.gameController;
+    const chessComGame = gameController.chessComGame;
+    const canExecuteAutoMove = () =>
+      getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
+      chessComGame.getPlayingAs() === chessComGame.getTurn() &&
+      !UciEngineClient.NON_PLAYING_MODES.has(chessComGame.getMode?.());
 
-    if (!canAutoMove()) return;
+    if (!canExecuteAutoMove()) return;
 
-    const activeFen = controller.getFEN();
-    if (this.currentPositionFen && this.currentPositionFen !== activeFen) {
+    const activeBoardFen = chessComGame.getFEN();
+    if (this.currentPositionFen && this.currentPositionFen !== activeBoardFen) {
       return;
     }
-    if (game.autoMoveTimer !== null || this.lastAutoMovedFen === activeFen) {
+    if (gameController.autoMoveTimeoutId !== null || this.lastAutoMovedFen === activeBoardFen) {
       return;
     }
 
-    const matchedMove = resolveLegalMove(controller.getLegalMoves(), bestMove);
-    if (!matchedMove) return;
+    const matchedLegalMove = resolveLegalMove(chessComGame.getLegalMoves(), bestCandidateMove);
+    if (!matchedLegalMove) return;
 
-    const moveData = Object.assign({}, matchedMove, { userGenerated: true });
-    if (bestMove.promotion) {
-      moveData.promotion = bestMove.promotion;
+    const movePayload = Object.assign({}, matchedLegalMove, { userGenerated: true });
+    if (bestCandidateMove.promotion) {
+      movePayload.promotion = bestCandidateMove.promotion;
     }
 
     const executeAutoMove = () => {
-      if (!canAutoMove() || controller.getFEN() !== activeFen) {
+      if (!canExecuteAutoMove() || chessComGame.getFEN() !== activeBoardFen) {
         return;
       }
       try {
-        const result = controller.move(moveData);
-        if (result !== false && controller.getFEN() === activeFen) {
-          this.lastAutoMovedFen = activeFen;
+        const moveOutcome = chessComGame.move(movePayload);
+        if (moveOutcome !== false && chessComGame.getFEN() === activeBoardFen) {
+          this.lastAutoMovedFen = activeBoardFen;
         }
-      } catch (e) {
-        console.error("Failed to execute auto move:", e);
+      } catch (moveError) {
+        console.error("Failed to execute auto move:", moveError);
       }
     };
 
-    const targetDelay = this.calculateTargetDelay(bestMove);
-    const elapsed = game.turnStartTime != null ? performance.now() - game.turnStartTime : 0;
-    const remainingDelay = Math.max(0, targetDelay - elapsed);
+    const targetDelayMs = this.calculateAutoMoveDelayMs(bestCandidateMove);
+    const elapsedTurnMs =
+      gameController.turnStartTimestampMs != null
+        ? performance.now() - gameController.turnStartTimestampMs
+        : 0;
+    const remainingDelayMs = Math.max(0, targetDelayMs - elapsedTurnMs);
 
-    if (remainingDelay <= 0) {
+    if (remainingDelayMs <= 0) {
       executeAutoMove();
     } else {
-      game.autoMoveTimer = setTimeout(() => {
-        game.autoMoveTimer = null;
+      gameController.autoMoveTimeoutId = setTimeout(() => {
+        gameController.autoMoveTimeoutId = null;
         executeAutoMove();
-      }, remainingDelay);
+      }, remainingDelayMs);
     }
   }
 }
 
-class BetterMint {
-  constructor(chessboard, options) {
-    this.options = Object.assign({}, options);
-    this.game = new GameController(this, chessboard);
-    this.engine = new StockfishEngine(this);
+class BetterMintExtension {
+  constructor(chessboardElement, initialExtensionOptions) {
+    this.extensionOptions = Object.assign({}, initialExtensionOptions);
+    this.gameController = new GameController(this, chessboardElement);
+    this.engineClient = new UciEngineClient(this);
     window.addEventListener(
       "BetterMintUpdateOptions",
-      (event) => {
-        if (!event?.detail || typeof event.detail !== "object") return;
-        this.options = Object.assign({}, this.options, event.detail);
-        this.game.UpdateExtensionOptions();
-        this.engine.UpdateExtensionOptions(event.detail);
+      (optionsEvent) => {
+        if (!optionsEvent?.detail || typeof optionsEvent.detail !== "object") return;
+        this.extensionOptions = Object.assign({}, this.extensionOptions, optionsEvent.detail);
+        this.gameController.applyExtensionOptions();
+        this.engineClient.applyExtensionOptions(optionsEvent.detail);
       },
       false
     );
   }
 }
 
-function attachGame(chessboard) {
-  BetterMintmaster.game?.destroy?.();
-  BetterMintmaster.game = new GameController(BetterMintmaster, chessboard);
-  BetterMintmaster.game.UpdateEngine(true);
+function attachBoardController(chessboardElement) {
+  activeExtension.gameController?.destroy?.();
+  activeExtension.gameController = new GameController(activeExtension, chessboardElement);
+  activeExtension.gameController.updateEnginePosition(true);
 }
 
-let pendingInitBoard = null;
+let pendingBoardElement = null;
 let pendingOptionsPromise = null;
 
-function InitBetterMint(chessboard) {
-  pendingInitBoard = chessboard;
-  if (BetterMintmaster) {
+function initializeBetterMintExtension(chessboardElement) {
+  pendingBoardElement = chessboardElement;
+  if (activeExtension) {
     try {
-      attachGame(chessboard);
-    } catch (e) {
-      console.error("Oh noes! BetterMintmaster didn't load", e);
+      attachBoardController(chessboardElement);
+    } catch (initError) {
+      console.error("Failed to attach BetterMint to board:", initError);
     }
     return;
   }
 
   if (!pendingOptionsPromise) {
-    pendingOptionsPromise = requestOptions().then((options) => {
+    pendingOptionsPromise = requestExtensionOptions().then((loadedOptions) => {
       pendingOptionsPromise = null;
-      const targetBoard = pendingInitBoard || chessboard;
+      const targetBoardElement = pendingBoardElement || chessboardElement;
       try {
-        tempOptions = options;
-        if (BetterMintmaster) {
-          attachGame(targetBoard);
+        fallbackExtensionOptions = loadedOptions;
+        if (activeExtension) {
+          attachBoardController(targetBoardElement);
         } else {
-          BetterMintmaster = new BetterMint(targetBoard, options);
+          activeExtension = new BetterMintExtension(targetBoardElement, loadedOptions);
         }
-      } catch (e) {
-        console.error("Oh noes! BetterMintmaster didn't load", e);
+      } catch (initError) {
+        console.error("Failed to initialize BetterMint:", initError);
       }
     });
   }
 }
 
 if (typeof document !== "undefined") {
-  let activeBoard = null;
-  let attachTimer = null;
+  let activeBoardElement = null;
+  let boardReadyIntervalId = null;
 
-  const tryAttachBoard = (board) => {
-    if (!board || board === activeBoard) return false;
-    if (board.game) {
-      activeBoard = board;
-      if (attachTimer !== null) {
-        clearInterval(attachTimer);
-        attachTimer = null;
+  const tryAttachBoard = (candidateBoard) => {
+    if (!candidateBoard || candidateBoard === activeBoardElement) return false;
+    if (candidateBoard.game) {
+      activeBoardElement = candidateBoard;
+      if (boardReadyIntervalId !== null) {
+        clearInterval(boardReadyIntervalId);
+        boardReadyIntervalId = null;
       }
-      InitBetterMint(board);
+      initializeBetterMintExtension(candidateBoard);
       return true;
     }
     return false;
   };
 
-  const watchForGameReady = (board) => {
-    if (tryAttachBoard(board) || attachTimer !== null) return;
-    let checks = 0;
-    attachTimer = setInterval(() => {
-      checks++;
-      const target = board.isConnected ? board : document.querySelector("wc-chess-board, chess-board");
-      if (tryAttachBoard(target) || checks >= 200) {
-        clearInterval(attachTimer);
-        attachTimer = null;
+  const watchForBoardGameReady = (candidateBoard) => {
+    if (tryAttachBoard(candidateBoard) || boardReadyIntervalId !== null) return;
+    let pollAttempts = 0;
+    boardReadyIntervalId = setInterval(() => {
+      pollAttempts++;
+      const currentBoard = candidateBoard.isConnected
+        ? candidateBoard
+        : document.querySelector("wc-chess-board, chess-board");
+      if (tryAttachBoard(currentBoard) || pollAttempts >= 200) {
+        clearInterval(boardReadyIntervalId);
+        boardReadyIntervalId = null;
       }
     }, 50);
   };
 
-  let boardScanScheduled = false;
+  let isBoardScanScheduled = false;
   const scheduleBoardScan = () => {
-    if (boardScanScheduled || activeBoard?.isConnected) return;
-    boardScanScheduled = true;
-    const schedule =
+    if (isBoardScanScheduled || activeBoardElement?.isConnected) return;
+    isBoardScanScheduled = true;
+    const scheduleScan =
       typeof requestAnimationFrame === "function"
         ? requestAnimationFrame
-        : (fn) => setTimeout(fn, 16);
-    schedule(() => {
-      boardScanScheduled = false;
-      if (activeBoard?.isConnected) return;
-      const board = document.querySelector("wc-chess-board, chess-board");
-      if (board && board !== activeBoard) {
-        watchForGameReady(board);
+        : (callback) => setTimeout(callback, 16);
+    scheduleScan(() => {
+      isBoardScanScheduled = false;
+      if (activeBoardElement?.isConnected) return;
+      const detectedBoard = document.querySelector("wc-chess-board, chess-board");
+      if (detectedBoard && detectedBoard !== activeBoardElement) {
+        watchForBoardGameReady(detectedBoard);
       }
     });
   };
 
-  const observer = new MutationObserver((mutations) => {
-    if (activeBoard?.isConnected || !hasAddedElement(mutations)) return;
+  const boardObserver = new MutationObserver((mutationRecords) => {
+    if (activeBoardElement?.isConnected || !hasAddedElementMutation(mutationRecords)) return;
     scheduleBoardScan();
   });
 
-  const existingBoard = document.querySelector("wc-chess-board, chess-board");
-  if (existingBoard) {
-    watchForGameReady(existingBoard);
+  const existingBoardElement = document.querySelector("wc-chess-board, chess-board");
+  if (existingBoardElement) {
+    watchForBoardGameReady(existingBoardElement);
   }
-  observer.observe(document, {
+  boardObserver.observe(document, {
     childList: true,
     subtree: true
   });
@@ -1849,14 +2089,16 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    StockfishEngine,
+    UciEngineClient,
     GameController,
-    TopMove,
-    enumOptions,
+    CandidateMove,
+    EXTENSION_OPTION_KEY,
     resolveLegalMove,
-    formatEvaluation,
+    formatEvaluationDisplay,
     getEvalBarOffsetPx,
-    setOptionsForTesting: (opts) => { tempOptions = opts; }
+    setExtensionOptionsForTesting: (extensionOptions) => {
+      fallbackExtensionOptions = extensionOptions;
+    }
   };
 }
 })();

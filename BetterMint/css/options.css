@@ -271,7 +271,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
     display: block;
     width: 14px;
     height: 14px;
-    pointer-events: none;
 }
 
 .app-footer {

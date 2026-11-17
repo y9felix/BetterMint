@@ -1,10 +1,10 @@
 "use strict";
 
 const PROBE_TIMEOUT_MS = 4000;
-const ENGINE_OPTS_DEBOUNCE_MS = 150;
+const UCI_OPTIONS_SYNC_DEBOUNCE_MS = 150;
 const CONFIG_STATUS_DURATION_MS = 2600;
 
-const THEME_COLOR_VARS = [
+const THEME_COLOR_CSS_VARS = [
   "--bg-primary",
   "--bg-card",
   "--border-color",
@@ -22,8 +22,8 @@ const THEME_COLOR_VARS = [
 const THEMES = {
   dark: {
     label: "Dark",
-    next: "light",
-    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>',
+    nextThemeId: "light",
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>',
     colors: {
       "--bg-primary": "#18181b",
       "--bg-card": "#27272a",
@@ -41,8 +41,8 @@ const THEMES = {
   },
   light: {
     label: "Light",
-    next: "black",
-    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>',
+    nextThemeId: "black",
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>',
     colors: {
       "--bg-primary": "#f4f4f5",
       "--bg-card": "#ffffff",
@@ -60,8 +60,8 @@ const THEMES = {
   },
   black: {
     label: "Black",
-    next: "chesscom",
-    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>',
+    nextThemeId: "chesscom",
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>',
     colors: {
       "--bg-primary": "#000000",
       "--bg-card": "#0a0a0c",
@@ -79,8 +79,8 @@ const THEMES = {
   },
   chesscom: {
     label: "Chess.com",
-    next: "dark",
-    icon: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>',
+    nextThemeId: "dark",
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>',
     colors: {
       "--bg-primary": "#302e2b",
       "--bg-card": "#272522",
@@ -98,19 +98,19 @@ const THEMES = {
   }
 };
 
-const baseDefaults =
-  typeof DefaultExtensionOptions !== "undefined" ? DefaultExtensionOptions : {};
+const DEFAULT_EXTENSION_OPTION_VALUES =
+  typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? DEFAULT_EXTENSION_OPTIONS : {};
 
-function buildPresetSettings(overrides) {
-  return Object.assign({}, baseDefaults, overrides);
+function buildPresetExtensionOptions(optionOverrides) {
+  return Object.assign({}, DEFAULT_EXTENSION_OPTION_VALUES, optionOverrides);
 }
 
-const DEFAULT_PRESETS = [
+const DEFAULT_CONFIG_PRESETS = [
   {
     id: "bullet",
     name: "Bullet",
     summary: "D8 · 1.25s · 200ms",
-    settings: buildPresetSettings({
+    settings: buildPresetExtensionOptions({
       "option-depth": 8,
       "option-legit-auto-move": true,
       "option-move-pace": 1.25,
@@ -129,7 +129,7 @@ const DEFAULT_PRESETS = [
     id: "blitz",
     name: "Blitz",
     summary: "D12 · 3.8s · 350ms",
-    settings: buildPresetSettings({
+    settings: buildPresetExtensionOptions({
       "option-depth": 12,
       "option-legit-auto-move": true,
       "option-move-pace": 3.8,
@@ -148,7 +148,7 @@ const DEFAULT_PRESETS = [
     id: "rapid",
     name: "Rapid",
     summary: "D16 · 12.5s · 600ms",
-    settings: buildPresetSettings({
+    settings: buildPresetExtensionOptions({
       "option-depth": 16,
       "option-legit-auto-move": true
     }),
@@ -158,7 +158,7 @@ const DEFAULT_PRESETS = [
     id: "puzzles",
     name: "Puzzles",
     summary: "D14 · Queue · Hints",
-    settings: buildPresetSettings({
+    settings: buildPresetExtensionOptions({
       "option-depth": 14,
       "option-evaluation-bar": false,
       "option-show-hints": true,
@@ -173,7 +173,7 @@ const DEFAULT_PRESETS = [
     id: "bots",
     name: "Bots",
     summary: "D14 · Auto · Eval",
-    settings: buildPresetSettings({
+    settings: buildPresetExtensionOptions({
       "option-depth": 14,
       "option-show-hints": false,
       "option-move-analysis": false,
@@ -184,17 +184,17 @@ const DEFAULT_PRESETS = [
   }
 ];
 
-let currentTheme = "dark";
-let activeThemeColors = null;
-let activeConfigName = null;
-let customConfigsCache = [];
-let popoverMode = null;
-let statusTimer = null;
-let themeInitialized = false;
-let configInitialized = false;
-let goStopInitialized = false;
+let activeThemeId = "dark";
+let activeThemeCustomColors = null;
+let activeConfigProfileName = null;
+let customConfigProfiles = [];
+let activePopoverMode = null;
+let statusClearTimerId = null;
+let isThemeInitialized = false;
+let isConfigSystemInitialized = false;
+let isSearchStopInitialized = false;
 
-const ZERO_OFF_SLIDER_KEYS = new Set([
+const ZERO_OFF_SLIDER_OPTION_KEYS = new Set([
   "option-depth",
   "option-go-movetime",
   "option-go-nodes",
@@ -203,292 +203,297 @@ const ZERO_OFF_SLIDER_KEYS = new Set([
   "option-go-infinite-timeout"
 ]);
 
-const optionKeys =
-  typeof DefaultExtensionOptions !== "undefined" ? Object.keys(DefaultExtensionOptions) : [];
-const fields = {};
+const EXTENSION_OPTION_KEYS =
+  typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? Object.keys(DEFAULT_EXTENSION_OPTIONS) : [];
+const extensionOptionInputs = {};
 
-function formatBadgeValue(key, value) {
-  const num = Number(value);
-  if (ZERO_OFF_SLIDER_KEYS.has(key) && num === 0) return "Off";
-  if (key === "option-go-nodes" && !Number.isNaN(num)) {
-    return num.toLocaleString("en-US");
+function formatSliderBadgeValue(optionKey, rawValue) {
+  const numericValue = Number(rawValue);
+  if (ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey) && numericValue === 0) return "Off";
+  if (optionKey === "option-go-nodes" && !Number.isNaN(numericValue)) {
+    return numericValue.toLocaleString("en-US");
   }
-  return value;
+  return rawValue;
 }
 
-const editableBadgesBound = new WeakSet();
-const baseRangeSteps = new WeakMap();
+const boundEditableBadges = new WeakSet();
+const baseSliderSteps = new WeakMap();
 
-function isPlainObject(val) {
-  return Boolean(val) && typeof val === "object" && !Array.isArray(val);
+function isPlainRecord(candidate) {
+  return Boolean(candidate) && typeof candidate === "object" && !Array.isArray(candidate);
 }
 
-function normalizeBoolean(value) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    const s = value.trim().toLowerCase();
-    if (s === "false" || s === "0" || s === "off" || s === "") return false;
-    if (s === "true" || s === "1" || s === "on") return true;
+function parseBooleanValue(rawValue) {
+  if (typeof rawValue === "boolean") return rawValue;
+  if (typeof rawValue === "string") {
+    const normalizedText = rawValue.trim().toLowerCase();
+    if (normalizedText === "false" || normalizedText === "0" || normalizedText === "off" || normalizedText === "") {
+      return false;
+    }
+    if (normalizedText === "true" || normalizedText === "1" || normalizedText === "on") {
+      return true;
+    }
   }
-  return Boolean(value);
+  return Boolean(rawValue);
 }
 
-function getBaseRangeStep(rangeInput) {
-  if (baseRangeSteps.has(rangeInput)) return baseRangeSteps.get(rangeInput);
-  const step = rangeInput.step != null && rangeInput.step !== "" ? String(rangeInput.step) : "";
-  baseRangeSteps.set(rangeInput, step);
-  return step;
+function getBaseSliderStep(rangeInput) {
+  if (baseSliderSteps.has(rangeInput)) return baseSliderSteps.get(rangeInput);
+  const baseStep = rangeInput.step != null && rangeInput.step !== "" ? String(rangeInput.step) : "";
+  baseSliderSteps.set(rangeInput, baseStep);
+  return baseStep;
 }
 
-function restoreBaseRangeStep(rangeInput) {
-  const baseStep = getBaseRangeStep(rangeInput);
+function restoreBaseSliderStep(rangeInput) {
+  const baseStep = getBaseSliderStep(rangeInput);
   if (baseStep && rangeInput.step !== baseStep) {
     rangeInput.step = baseStep;
   }
 }
 
-function setRangeExactValue(rangeInput, value) {
-  const baseStep = getBaseRangeStep(rangeInput);
-  const rawMin = parseFloat(rangeInput.min);
-  const min = Number.isNaN(rawMin) ? 0 : rawMin;
-  const numVal = Number(value);
-  const baseNum = parseFloat(baseStep);
+function setSliderExactValue(rangeInput, numericValue) {
+  const baseStep = getBaseSliderStep(rangeInput);
+  const parsedMin = parseFloat(rangeInput.min);
+  const sliderMin = Number.isNaN(parsedMin) ? 0 : parsedMin;
+  const targetNumber = Number(numericValue);
+  const stepNumber = parseFloat(baseStep);
 
-  if (baseStep && Number.isFinite(numVal) && Number.isFinite(baseNum) && baseNum > 0) {
-    const steps = (numVal - min) / baseNum;
-    const aligned = Math.abs(steps - Math.round(steps)) < 1e-9;
-    if (aligned) {
+  if (baseStep && Number.isFinite(targetNumber) && Number.isFinite(stepNumber) && stepNumber > 0) {
+    const stepOffset = (targetNumber - sliderMin) / stepNumber;
+    const isStepAligned = Math.abs(stepOffset - Math.round(stepOffset)) < 1e-9;
+    if (isStepAligned) {
       rangeInput.step = baseStep;
     } else {
-      rangeInput.step = Number.isInteger(numVal) && Number.isInteger(min) ? "1" : "any";
+      rangeInput.step = Number.isInteger(targetNumber) && Number.isInteger(sliderMin) ? "1" : "any";
     }
   }
-  rangeInput.value = String(value);
+  rangeInput.value = String(numericValue);
 }
 
-function normalizeRangeInput(rangeInput, rawText, key = null) {
-  const trimmed = String(rawText ?? "").trim().replace(/,/g, "");
-  if (!trimmed) return null;
+function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
+  const cleanedText = String(rawText ?? "").trim().replace(/,/g, "");
+  if (!cleanedText) return null;
 
-  let parsed;
-  if (key && ZERO_OFF_SLIDER_KEYS.has(key) && trimmed.toLowerCase() === "off") {
-    parsed = 0;
+  let parsedNumber;
+  if (optionKey && ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey) && cleanedText.toLowerCase() === "off") {
+    parsedNumber = 0;
   } else {
-    parsed = Number(trimmed);
-    if (!Number.isFinite(parsed)) return null;
+    parsedNumber = Number(cleanedText);
+    if (!Number.isFinite(parsedNumber)) return null;
   }
 
-  const rawMin = parseFloat(rangeInput.min);
-  const rawMax = parseFloat(rangeInput.max);
-  const min = Number.isNaN(rawMin) ? 0 : rawMin;
-  const max = Number.isNaN(rawMax) ? 100 : rawMax;
-  const clamped = Math.min(max, Math.max(min, parsed));
+  const parsedMin = parseFloat(rangeInput.min);
+  const parsedMax = parseFloat(rangeInput.max);
+  const sliderMin = Number.isNaN(parsedMin) ? 0 : parsedMin;
+  const sliderMax = Number.isNaN(parsedMax) ? 100 : parsedMax;
+  const clampedNumber = Math.min(sliderMax, Math.max(sliderMin, parsedNumber));
 
-  const stepStr = getBaseRangeStep(rangeInput);
-  const dotIdx = stepStr.indexOf(".");
-  const decimals = dotIdx === -1 ? 0 : stepStr.length - dotIdx - 1;
-  return decimals > 0 ? Number(clamped.toFixed(decimals)) : Math.round(clamped);
+  const stepText = getBaseSliderStep(rangeInput);
+  const decimalPointIndex = stepText.indexOf(".");
+  const decimalPlaces = decimalPointIndex === -1 ? 0 : stepText.length - decimalPointIndex - 1;
+  return decimalPlaces > 0 ? Number(clampedNumber.toFixed(decimalPlaces)) : Math.round(clampedNumber);
 }
 
-function bindEditableBadge(badge, rangeInput, { key = null, onCommit } = {}) {
-  if (!badge || !rangeInput || editableBadgesBound.has(badge)) return;
-  editableBadgesBound.add(badge);
-  getBaseRangeStep(rangeInput);
-  rangeInput.addEventListener("pointerdown", () => restoreBaseRangeStep(rangeInput));
-  rangeInput.addEventListener("keydown", () => restoreBaseRangeStep(rangeInput));
-  badge.title = "Click to edit";
+function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, onCommit } = {}) {
+  if (!badgeElement || !rangeInput || boundEditableBadges.has(badgeElement)) return;
+  boundEditableBadges.add(badgeElement);
+  getBaseSliderStep(rangeInput);
+  rangeInput.addEventListener("pointerdown", () => restoreBaseSliderStep(rangeInput));
+  rangeInput.addEventListener("keydown", () => restoreBaseSliderStep(rangeInput));
+  badgeElement.title = "Click to edit";
 
-  badge.addEventListener("click", (event) => {
-    event?.stopPropagation?.();
-    const parent = badge.parentNode;
-    if (!parent || badge.classList?.contains("hidden")) return;
+  badgeElement.addEventListener("click", (clickEvent) => {
+    clickEvent?.stopPropagation?.();
+    const headerElement = badgeElement.parentNode;
+    if (!headerElement || badgeElement.classList?.contains("hidden")) return;
 
-    const editor = createEl("input", {
+    const inlineEditor = createDomElement("input", {
       type: "text",
       className: "badge-input",
       value: String(rangeInput.value ?? "0"),
       spellcheck: false,
       autocomplete: "off"
     });
-    editor.setAttribute?.("inputmode", "decimal");
+    inlineEditor.setAttribute?.("inputmode", "decimal");
 
-    badge.classList?.add("hidden");
-    parent.appendChild(editor);
-    editor.focus?.();
-    editor.select?.();
+    badgeElement.classList?.add("hidden");
+    headerElement.appendChild(inlineEditor);
+    inlineEditor.focus?.();
+    inlineEditor.select?.();
 
-    let finished = false;
-    const finish = (shouldCommit) => {
-      if (finished) return;
-      finished = true;
+    let hasFinishedEdit = false;
+    const finishEdit = (shouldCommit) => {
+      if (hasFinishedEdit) return;
+      hasFinishedEdit = true;
       if (shouldCommit) {
-        const nextVal = normalizeRangeInput(rangeInput, editor.value, key);
-        if (nextVal !== null) {
-          setRangeExactValue(rangeInput, nextVal);
-          badge.textContent = key ? formatBadgeValue(key, rangeInput.value) : String(rangeInput.value);
-          onCommit?.(nextVal);
+        const committedNumber = parseAndClampSliderInput(rangeInput, inlineEditor.value, optionKey);
+        if (committedNumber !== null) {
+          setSliderExactValue(rangeInput, committedNumber);
+          badgeElement.textContent = optionKey
+            ? formatSliderBadgeValue(optionKey, rangeInput.value)
+            : String(rangeInput.value);
+          onCommit?.(committedNumber);
         }
       }
-      editor.remove?.();
-      badge.classList?.remove("hidden");
+      inlineEditor.remove?.();
+      badgeElement.classList?.remove("hidden");
     };
 
-    editor.addEventListener("keydown", (e) => {
-      if (e?.key === "Enter") {
-        e.preventDefault?.();
-        finish(true);
-      } else if (e?.key === "Escape") {
-        e.preventDefault?.();
-        finish(false);
+    inlineEditor.addEventListener("keydown", (keyEvent) => {
+      if (keyEvent?.key === "Enter") {
+        keyEvent.preventDefault?.();
+        finishEdit(true);
+      } else if (keyEvent?.key === "Escape") {
+        keyEvent.preventDefault?.();
+        finishEdit(false);
       }
     });
-    editor.addEventListener("blur", () => finish(true));
+    inlineEditor.addEventListener("blur", () => finishEdit(true));
   });
 }
 
-function parseSearchMovesTokens(raw) {
-  const seen = new Set();
-  const out = [];
-  for (const token of String(raw || "").trim().toLowerCase().split(/\s+/)) {
-    if (/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(token) && !seen.has(token)) {
-      seen.add(token);
-      out.push(token);
+function parseSearchMovesTokens(rawMovesText) {
+  const seenMoves = new Set();
+  const validMoves = [];
+  for (const moveToken of String(rawMovesText || "").trim().toLowerCase().split(/\s+/)) {
+    if (/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(moveToken) && !seenMoves.has(moveToken)) {
+      seenMoves.add(moveToken);
+      validMoves.push(moveToken);
     }
   }
-  return out;
+  return validMoves;
 }
 
-function buildGoPreviewCommand(options) {
-  const opts = options || readCurrentSettings();
-  const searchmoves = parseSearchMovesTokens(opts["option-go-searchmoves"]);
-  if (opts["option-go-infinite"]) {
-    const parts = ["go", "infinite"];
-    if (searchmoves.length > 0) parts.push("searchmoves", ...searchmoves);
-    return parts.join(" ");
+function buildGoPreviewCommand(extensionOptions = null) {
+  const effectiveOptions = extensionOptions || readExtensionOptionsFromDom();
+  const searchMoves = parseSearchMovesTokens(effectiveOptions["option-go-searchmoves"]);
+  if (effectiveOptions["option-go-infinite"]) {
+    const commandParts = ["go", "infinite"];
+    if (searchMoves.length > 0) commandParts.push("searchmoves", ...searchMoves);
+    return commandParts.join(" ");
   }
 
-  const parts = ["go"];
-  const depth = parseInt(opts["option-depth"], 10) || 0;
-  const movetime = parseInt(opts["option-go-movetime"], 10) || 0;
-  const nodes = parseInt(opts["option-go-nodes"], 10) || 0;
-  const mate = parseInt(opts["option-go-mate"], 10) || 0;
-  const clockSync = Boolean(opts["option-go-clock-sync"]);
-  const clockInc = parseInt(opts["option-go-clock-inc"], 10) || 0;
-  const movestogo = parseInt(opts["option-go-movestogo"], 10) || 0;
-  let hasBound = false;
+  const commandParts = ["go"];
+  const depth = parseInt(effectiveOptions["option-depth"], 10) || 0;
+  const movetimeMs = parseInt(effectiveOptions["option-go-movetime"], 10) || 0;
+  const nodeLimit = parseInt(effectiveOptions["option-go-nodes"], 10) || 0;
+  const mateDepth = parseInt(effectiveOptions["option-go-mate"], 10) || 0;
+  const isClockSyncEnabled = Boolean(effectiveOptions["option-go-clock-sync"]);
+  const clockIncrementMs = parseInt(effectiveOptions["option-go-clock-inc"], 10) || 0;
+  const movesToGo = parseInt(effectiveOptions["option-go-movestogo"], 10) || 0;
+  let hasSearchBound = false;
 
   if (depth > 0) {
-    parts.push("depth", String(depth));
-    hasBound = true;
+    commandParts.push("depth", String(depth));
+    hasSearchBound = true;
   }
-  if (movetime > 0) {
-    parts.push("movetime", String(movetime));
-    hasBound = true;
+  if (movetimeMs > 0) {
+    commandParts.push("movetime", String(movetimeMs));
+    hasSearchBound = true;
   }
-  if (nodes > 0) {
-    parts.push("nodes", String(nodes));
-    hasBound = true;
+  if (nodeLimit > 0) {
+    commandParts.push("nodes", String(nodeLimit));
+    hasSearchBound = true;
   }
-  if (mate > 0) {
-    parts.push("mate", String(mate));
-    hasBound = true;
+  if (mateDepth > 0) {
+    commandParts.push("mate", String(mateDepth));
+    hasSearchBound = true;
   }
-  if (clockSync) {
-    parts.push("wtime", "<W>", "btime", "<B>");
-    if (clockInc > 0) {
-      parts.push("winc", String(clockInc), "binc", String(clockInc));
+  if (isClockSyncEnabled) {
+    commandParts.push("wtime", "<W>", "btime", "<B>");
+    if (clockIncrementMs > 0) {
+      commandParts.push("winc", String(clockIncrementMs), "binc", String(clockIncrementMs));
     }
-    if (movestogo > 0) {
-      parts.push("movestogo", String(movestogo));
+    if (movesToGo > 0) {
+      commandParts.push("movestogo", String(movesToGo));
     }
-    hasBound = true;
+    hasSearchBound = true;
   }
-  if (!hasBound) {
-    parts.push("depth", "1");
+  if (!hasSearchBound) {
+    commandParts.push("depth", "1");
   }
-  if (searchmoves.length > 0) {
-    parts.push("searchmoves", ...searchmoves);
+  if (searchMoves.length > 0) {
+    commandParts.push("searchmoves", ...searchMoves);
   }
-  return parts.join(" ");
+  return commandParts.join(" ");
 }
 
-function updateGoPreview(options = null) {
-  const el = document.getElementById("go-command-preview");
-  if (el) {
-    el.textContent = buildGoPreviewCommand(options);
+function updateGoCommandPreview(extensionOptions = null) {
+  const previewElement = document.getElementById("go-command-preview");
+  if (previewElement) {
+    previewElement.textContent = buildGoPreviewCommand(extensionOptions);
   }
 }
 
-function getCurrentThemeColors() {
-  const palette = Object.assign({}, THEMES[currentTheme]?.colors || THEMES.dark.colors);
-  const root = document.documentElement;
-  if (root) {
-    const computed =
+function getActiveThemeColors() {
+  const palette = Object.assign({}, THEMES[activeThemeId]?.colors || THEMES.dark.colors);
+  const rootElement = document.documentElement;
+  if (rootElement) {
+    const computedStyle =
       typeof window !== "undefined" && typeof window.getComputedStyle === "function"
-        ? window.getComputedStyle(root)
+        ? window.getComputedStyle(rootElement)
         : null;
-    for (const v of THEME_COLOR_VARS) {
-      const override = activeThemeColors?.[v] || root.style?.getPropertyValue?.(v);
-      const val = (override || computed?.getPropertyValue?.(v) || "").trim();
-      if (val) palette[v] = val;
+    for (const cssVarName of THEME_COLOR_CSS_VARS) {
+      const overrideColor =
+        activeThemeCustomColors?.[cssVarName] || rootElement.style?.getPropertyValue?.(cssVarName);
+      const resolvedColor = (overrideColor || computedStyle?.getPropertyValue?.(cssVarName) || "").trim();
+      if (resolvedColor) palette[cssVarName] = resolvedColor;
     }
   }
   return palette;
 }
 
-function applyTheme(theme, customColors = null) {
-  const key = THEMES[theme] ? theme : "dark";
-  currentTheme = key;
-  const root = document.documentElement;
-  if (root) {
-    root.dataset.theme = key;
-    if (isPlainObject(customColors)) {
-      const cleanColors = {};
-      for (const v of THEME_COLOR_VARS) {
-        if (typeof customColors[v] === "string" && customColors[v].trim()) {
-          cleanColors[v] = customColors[v].trim();
-          root.style?.setProperty?.(v, cleanColors[v]);
+function applyTheme(themeId, customColors = null) {
+  const resolvedThemeId = THEMES[themeId] ? themeId : "dark";
+  activeThemeId = resolvedThemeId;
+  const rootElement = document.documentElement;
+  if (rootElement) {
+    rootElement.dataset.theme = resolvedThemeId;
+    if (isPlainRecord(customColors)) {
+      const sanitizedColors = {};
+      for (const cssVarName of THEME_COLOR_CSS_VARS) {
+        if (typeof customColors[cssVarName] === "string" && customColors[cssVarName].trim()) {
+          sanitizedColors[cssVarName] = customColors[cssVarName].trim();
+          rootElement.style?.setProperty?.(cssVarName, sanitizedColors[cssVarName]);
         } else {
-          root.style?.removeProperty?.(v);
+          rootElement.style?.removeProperty?.(cssVarName);
         }
       }
-      activeThemeColors = Object.keys(cleanColors).length ? cleanColors : null;
+      activeThemeCustomColors = Object.keys(sanitizedColors).length ? sanitizedColors : null;
     } else {
-      activeThemeColors = null;
-      for (const v of THEME_COLOR_VARS) {
-        root.style?.removeProperty?.(v);
+      activeThemeCustomColors = null;
+      for (const cssVarName of THEME_COLOR_CSS_VARS) {
+        rootElement.style?.removeProperty?.(cssVarName);
       }
     }
   }
-  const btn = document.getElementById("theme-toggle");
-  if (btn) {
-    const meta = THEMES[key];
-    btn.innerHTML = meta.icon;
-    btn.title = `Theme: ${meta.label}`;
-    btn.setAttribute?.("aria-label", `Theme: ${meta.label}`);
+  const themeToggleButton = document.getElementById("theme-toggle");
+  if (themeToggleButton) {
+    const themeMetadata = THEMES[resolvedThemeId];
+    themeToggleButton.innerHTML = themeMetadata.iconSvg;
+    themeToggleButton.title = `Theme: ${themeMetadata.label}`;
+    themeToggleButton.setAttribute?.("aria-label", `Theme: ${themeMetadata.label}`);
   }
 }
 
-function InitTheme() {
+function initializeTheme() {
   applyTheme("dark");
-  const storage = typeof chrome !== "undefined" ? chrome.storage?.local : null;
-  storage?.get?.(["theme", "themeColors"], (res) => {
-    if (res?.theme) {
-      applyTheme(res.theme, res.themeColors || null);
-    } else if (res?.themeColors) {
-      applyTheme("dark", res.themeColors);
+  const localStorageArea = typeof chrome !== "undefined" ? chrome.storage?.local : null;
+  localStorageArea?.get?.(["theme", "themeColors"], (storedThemeState) => {
+    if (storedThemeState?.theme || storedThemeState?.themeColors) {
+      applyTheme(storedThemeState.theme || "dark", storedThemeState.themeColors || null);
     }
   });
-  if (themeInitialized) return;
-  themeInitialized = true;
+  if (isThemeInitialized) return;
+  isThemeInitialized = true;
   document.getElementById("theme-toggle")?.addEventListener("click", () => {
-    const next = THEMES[currentTheme]?.next || "dark";
-    applyTheme(next, null);
-    storageSet("local", { theme: next, themeColors: null });
+    const nextThemeId = THEMES[activeThemeId]?.nextThemeId || "dark";
+    applyTheme(nextThemeId, null);
+    writeChromeStorage("local", { theme: nextThemeId, themeColors: null });
   });
 }
 
-const VISIBILITY_GROUPS = [
+const VISIBILITY_TOGGLE_GROUPS = [
   ["option-go-clock-sync", "go-clock-group"],
   ["option-go-infinite", "go-infinite-group"],
   ["option-auto-queue", "auto-queue-group"],
@@ -496,832 +501,926 @@ const VISIBILITY_GROUPS = [
   ["option-human-like-moves", "human-pace-group"]
 ];
 
-function UpdateVisibility() {
-  for (const [toggleId, groupId] of VISIBILITY_GROUPS) {
-    const toggle = document.getElementById(toggleId);
-    const group = document.getElementById(groupId);
-    if (toggle && group) {
-      group.classList.toggle("hidden", !toggle.checked);
+function updateDependentGroupVisibility() {
+  for (const [toggleInputId, groupContainerId] of VISIBILITY_TOGGLE_GROUPS) {
+    const toggleInput = document.getElementById(toggleInputId);
+    const groupContainer = document.getElementById(groupContainerId);
+    if (toggleInput && groupContainer) {
+      groupContainer.classList.toggle("hidden", !toggleInput.checked);
     }
   }
 }
 
-function parseUciOptionLine(line) {
-  if (!line || typeof line !== "string" || !line.startsWith("option name ")) return null;
-  const rest = line.slice(12);
-  const typeIndex = rest.indexOf(" type ");
-  if (typeIndex === -1) return null;
-  const name = rest.slice(0, typeIndex).trim();
-  const afterType = rest.slice(typeIndex + 6);
-  const tokens = afterType.split(" ");
-  const type = tokens[0];
+function parseUciOptionLine(uciLine) {
+  if (!uciLine || typeof uciLine !== "string" || !uciLine.startsWith("option name ")) return null;
+  const declarationBody = uciLine.slice(12);
+  const typeDelimiterIndex = declarationBody.indexOf(" type ");
+  if (typeDelimiterIndex === -1) return null;
+  const optionName = declarationBody.slice(0, typeDelimiterIndex).trim();
+  const typeAndAttributes = declarationBody.slice(typeDelimiterIndex + 6).trim();
+  const attributeTokens = typeAndAttributes.split(/\s+/);
+  const optionType = attributeTokens[0];
+  if (!optionType) return null;
 
-  let defVal = "";
-  let minVal = null;
-  let maxVal = null;
-  const vars = [];
+  if (optionType === "string") {
+    const defaultMatch = typeAndAttributes.match(/^string\s+default\s*(.*)$/);
+    return {
+      name: optionName,
+      type: optionType,
+      default: defaultMatch ? defaultMatch[1].trim() : "",
+      min: null,
+      max: null,
+      vars: []
+    };
+  }
 
-  const keywords = new Set(["default", "min", "max", "var"]);
-  let currentKey = null;
-  let currentWords = [];
+  let defaultValue = "";
+  let minValue = null;
+  let maxValue = null;
+  const allowedVariants = [];
 
-  const flush = () => {
-    if (!currentKey) return;
-    const value = currentWords.join(" ").trim();
-    if (currentKey === "default") {
-      defVal = value;
-    } else if (currentKey === "min") {
-      minVal = value ? parseInt(value, 10) : null;
-    } else if (currentKey === "max") {
-      maxVal = value ? parseInt(value, 10) : null;
-    } else if (currentKey === "var") {
-      if (value) vars.push(value);
+  const uciKeywords = new Set(["default", "min", "max", "var"]);
+  let activeAttributeKeyword = null;
+  let collectedValueWords = [];
+
+  const commitActiveAttribute = () => {
+    if (!activeAttributeKeyword) return;
+    const attributeValue = collectedValueWords.join(" ").trim();
+    if (activeAttributeKeyword === "default") {
+      defaultValue = attributeValue;
+    } else if (activeAttributeKeyword === "min") {
+      minValue = attributeValue ? parseInt(attributeValue, 10) : null;
+    } else if (activeAttributeKeyword === "max") {
+      maxValue = attributeValue ? parseInt(attributeValue, 10) : null;
+    } else if (activeAttributeKeyword === "var") {
+      if (attributeValue) allowedVariants.push(attributeValue);
     }
-    currentWords = [];
+    collectedValueWords = [];
   };
 
-  for (let i = 1; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (keywords.has(token)) {
-      flush();
-      currentKey = token;
-    } else if (currentKey) {
-      currentWords.push(token);
+  for (let tokenIndex = 1; tokenIndex < attributeTokens.length; tokenIndex++) {
+    const token = attributeTokens[tokenIndex];
+    if (uciKeywords.has(token)) {
+      commitActiveAttribute();
+      activeAttributeKeyword = token;
+    } else if (activeAttributeKeyword) {
+      collectedValueWords.push(token);
     }
   }
-  flush();
+  commitActiveAttribute();
 
-  return { name, type, default: defVal, min: minVal, max: maxVal, vars };
+  return {
+    name: optionName,
+    type: optionType,
+    default: defaultValue,
+    min: minValue,
+    max: maxValue,
+    vars: allowedVariants
+  };
 }
 
-function createEl(tag, props = {}, children = []) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v !== undefined && v !== null) el[k] = v;
+function createDomElement(tagName, properties = {}, childNodes = []) {
+  const element = document.createElement(tagName);
+  for (const [propertyName, propertyValue] of Object.entries(properties)) {
+    if (propertyValue !== undefined && propertyValue !== null) {
+      element[propertyName] = propertyValue;
+    }
   }
-  for (const child of children) {
-    if (child) el.appendChild(child);
+  for (const childNode of childNodes) {
+    if (childNode) element.appendChild(childNode);
   }
-  return el;
+  return element;
 }
 
-const uciRenderers = {
-  spin(opt, currentVal, onOptionChange) {
-    const badge = createEl("span", { className: "badge", textContent: currentVal });
-    const input = createEl("input", {
+const uciOptionControlRenderers = {
+  spin(uciOption, currentValue, onUciOptionChange) {
+    const valueBadge = createDomElement("span", { className: "badge", textContent: currentValue });
+    const rangeInput = createDomElement("input", {
       type: "range",
       className: "range-slider",
-      min: opt.min ?? 0,
-      max: opt.max ?? 100,
-      value: currentVal
+      min: uciOption.min ?? 0,
+      max: uciOption.max ?? 100,
+      value: currentValue
     });
-    input.addEventListener("input", () => {
-      badge.textContent = input.value;
-      onOptionChange?.(opt.name, parseInt(input.value, 10), false);
+    rangeInput.addEventListener("input", () => {
+      valueBadge.textContent = rangeInput.value;
+      onUciOptionChange?.(uciOption.name, parseInt(rangeInput.value, 10), false);
     });
-    bindEditableBadge(badge, input, {
-      onCommit: (val) => onOptionChange?.(opt.name, parseInt(val, 10), false)
+    bindEditableSliderBadge(valueBadge, rangeInput, {
+      onCommit: (committedNumber) => onUciOptionChange?.(uciOption.name, parseInt(committedNumber, 10), false)
     });
-    return createEl("div", { className: "control-col" }, [
-      createEl("div", { className: "slider-header" }, [
-        createEl("span", { className: "title", textContent: opt.name }),
-        badge
+    return createDomElement("div", { className: "control-col" }, [
+      createDomElement("div", { className: "slider-header" }, [
+        createDomElement("span", { className: "title", textContent: uciOption.name }),
+        valueBadge
       ]),
-      input
+      rangeInput
     ]);
   },
-  check(opt, currentVal, onOptionChange) {
-    const input = createEl("input", {
+  check(uciOption, currentValue, onUciOptionChange) {
+    const checkboxInput = createDomElement("input", {
       type: "checkbox",
       className: "toggle-input",
-      checked: currentVal === true || currentVal === "true"
+      checked: currentValue === true || currentValue === "true"
     });
-    input.addEventListener("change", () => {
-      onOptionChange?.(opt.name, input.checked, false);
+    checkboxInput.addEventListener("change", () => {
+      onUciOptionChange?.(uciOption.name, checkboxInput.checked, false);
     });
-    return createEl("label", { className: "control-row" }, [
-      createEl("span", { className: "control-label-text", textContent: opt.name }),
-      input,
-      createEl("span", { className: "toggle-slider" })
+    return createDomElement("label", { className: "control-row" }, [
+      createDomElement("span", { className: "control-label-text", textContent: uciOption.name }),
+      checkboxInput,
+      createDomElement("span", { className: "toggle-slider" })
     ]);
   },
-  combo(opt, currentVal, onOptionChange) {
-    const select = createEl(
+  combo(uciOption, currentValue, onUciOptionChange) {
+    const selectInput = createDomElement(
       "select",
       { className: "select-input" },
-      (opt.vars || []).map((v) =>
-        createEl("option", { value: v, textContent: v, selected: v === String(currentVal) })
+      (uciOption.vars || []).map((optionVariant) =>
+        createDomElement("option", {
+          value: optionVariant,
+          textContent: optionVariant,
+          selected: optionVariant === String(currentValue)
+        })
       )
     );
-    select.addEventListener("change", () => {
-      onOptionChange?.(opt.name, select.value, false);
+    selectInput.addEventListener("change", () => {
+      onUciOptionChange?.(uciOption.name, selectInput.value, false);
     });
-    return createEl("div", { className: "control-col" }, [
-      createEl("label", { className: "control-label-text", textContent: opt.name }),
-      select
+    return createDomElement("div", { className: "control-col" }, [
+      createDomElement("label", { className: "control-label-text", textContent: uciOption.name }),
+      selectInput
     ]);
   },
-  string(opt, currentVal, onOptionChange) {
-    const input = createEl("input", {
+  string(uciOption, currentValue, onUciOptionChange) {
+    const textInput = createDomElement("input", {
       type: "text",
       className: "text-input",
-      value: String(currentVal ?? ""),
+      value: String(currentValue ?? ""),
       spellcheck: false,
       autocomplete: "off"
     });
-    input.addEventListener("change", () => {
-      onOptionChange?.(opt.name, input.value.trim(), false);
+    textInput.addEventListener("change", () => {
+      onUciOptionChange?.(uciOption.name, textInput.value.trim(), false);
     });
-    return createEl("div", { className: "control-col" }, [
-      createEl("label", { className: "control-label-text", textContent: opt.name }),
-      input
+    return createDomElement("div", { className: "control-col" }, [
+      createDomElement("label", { className: "control-label-text", textContent: uciOption.name }),
+      textInput
     ]);
   },
-  button(opt, _currentVal, onOptionChange) {
-    const btn = createEl("button", { type: "button", className: "action-btn", textContent: "Execute" });
-    btn.addEventListener("click", () => {
-      onOptionChange?.(opt.name, "", true);
+  button(uciOption, _currentValue, onUciOptionChange) {
+    const executeButton = createDomElement("button", {
+      type: "button",
+      className: "action-btn",
+      textContent: "Execute"
     });
-    return createEl("div", { className: "control-row" }, [
-      createEl("span", { className: "control-label-text", textContent: opt.name }),
-      btn
+    executeButton.addEventListener("click", () => {
+      onUciOptionChange?.(uciOption.name, "", true);
+    });
+    return createDomElement("div", { className: "control-row" }, [
+      createDomElement("span", { className: "control-label-text", textContent: uciOption.name }),
+      executeButton
     ]);
   }
 };
 
-function renderDynamicUciOptions(optionsList, savedValues, container, onOptionChange) {
-  if (!container) return;
-  container.innerHTML = "";
-  if (!optionsList || optionsList.length === 0) {
-    container.innerHTML = '<span class="status-text">No configurable options reported by engine.</span>';
+function renderDynamicUciOptions(uciOptionDefinitions, savedUciValues, containerElement, onUciOptionChange) {
+  if (!containerElement) return;
+  containerElement.innerHTML = "";
+  if (!uciOptionDefinitions || uciOptionDefinitions.length === 0) {
+    containerElement.innerHTML =
+      '<span class="status-text">No configurable options reported by engine.</span>';
     return;
   }
 
-  const target =
-    typeof document !== "undefined" && typeof document.createDocumentFragment === "function"
-      ? document.createDocumentFragment()
-      : container;
-
-  optionsList.forEach((opt) => {
-    const renderer = uciRenderers[opt.type];
-    if (!renderer) return;
-    const currentVal = savedValues?.[opt.name] ?? opt.default;
-    target.appendChild(renderer(opt, currentVal, onOptionChange));
+  uciOptionDefinitions.forEach((uciOption) => {
+    const renderControl = uciOptionControlRenderers[uciOption.type];
+    if (!renderControl) return;
+    const currentValue = savedUciValues?.[uciOption.name] ?? uciOption.default;
+    containerElement.appendChild(renderControl(uciOption, currentValue, onUciOptionChange));
   });
-
-  if (target !== container) {
-    container.appendChild(target);
-  }
 }
 
-let activeProbeWs = null;
-let probeTimeout = null;
-let probedUrl = null;
-let lastProbedOptions = [];
+let activeProbeSocket = null;
+let probeTimeoutTimerId = null;
+let lastProbedEngineUrl = null;
+let lastProbedUciOptions = [];
 
-function setEngineOptionsStatus(msg) {
-  const container = document.getElementById("engine-options-container");
-  if (!container) return;
-  container.innerHTML = "";
-  container.appendChild(createEl("span", { className: "status-text", textContent: msg }));
+function setEngineOptionsStatusMessage(statusMessage) {
+  const containerElement = document.getElementById("engine-options-container");
+  if (!containerElement) return;
+  containerElement.innerHTML = "";
+  containerElement.appendChild(
+    createDomElement("span", { className: "status-text", textContent: statusMessage })
+  );
 }
 
-function resetProbe() {
-  if (probeTimeout) {
-    clearTimeout(probeTimeout);
-    probeTimeout = null;
+function resetEngineProbe() {
+  if (probeTimeoutTimerId) {
+    clearTimeout(probeTimeoutTimerId);
+    probeTimeoutTimerId = null;
   }
-  if (activeProbeWs) {
-    const ws = activeProbeWs;
-    activeProbeWs = null;
+  if (activeProbeSocket) {
+    const probeSocket = activeProbeSocket;
+    activeProbeSocket = null;
     try {
-      ws.close();
-    } catch (err) {
-      console.warn("[BetterMint] Failed to close probe WebSocket:", err);
+      probeSocket.close();
+    } catch (closeError) {
+      console.warn("[BetterMint] Failed to close probe WebSocket:", closeError);
     }
   }
 }
 
-function probeEngine(url, onComplete = loadAndRenderEngineOptions) {
-  const container = document.getElementById("engine-options-container");
-  if (!container) return;
-  resetProbe();
+function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineUciOptions) {
+  const containerElement = document.getElementById("engine-options-container");
+  if (!containerElement) return;
+  resetEngineProbe();
 
   if (typeof WebSocket === "undefined") {
-    setEngineOptionsStatus("WebSocket unavailable.");
+    setEngineOptionsStatusMessage("WebSocket unavailable.");
     return;
   }
-  if (!url || !/^wss?:\/\//i.test(url)) {
-    setEngineOptionsStatus("Invalid WebSocket URL (use ws:// or wss://).");
+  if (!engineUrl || !/^wss?:\/\//i.test(engineUrl)) {
+    setEngineOptionsStatusMessage("Invalid WebSocket URL (use ws:// or wss://).");
     return;
   }
 
-  setEngineOptionsStatus("Connecting to engine...");
-  const discovered = [];
+  setEngineOptionsStatusMessage("Connecting to engine...");
+  const discoveredUciOptions = [];
   let lastErrorLine = "";
   try {
-    const ws = new WebSocket(url);
-    activeProbeWs = ws;
-    probeTimeout = setTimeout(() => {
-      if (activeProbeWs !== ws) return;
-      resetProbe();
-      setEngineOptionsStatus("Connection timed out.");
+    const probeSocket = new WebSocket(engineUrl);
+    activeProbeSocket = probeSocket;
+    probeTimeoutTimerId = setTimeout(() => {
+      if (activeProbeSocket !== probeSocket) return;
+      resetEngineProbe();
+      setEngineOptionsStatusMessage("Connection timed out.");
     }, PROBE_TIMEOUT_MS);
 
-    ws.addEventListener("open", () => {
-      if (activeProbeWs !== ws) return;
-      if (probeTimeout) clearTimeout(probeTimeout);
-      probeTimeout = setTimeout(() => {
-        if (activeProbeWs !== ws) return;
-        resetProbe();
-        setEngineOptionsStatus("Engine handshake timed out.");
+    probeSocket.addEventListener("open", () => {
+      if (activeProbeSocket !== probeSocket) return;
+      if (probeTimeoutTimerId) clearTimeout(probeTimeoutTimerId);
+      probeTimeoutTimerId = setTimeout(() => {
+        if (activeProbeSocket !== probeSocket) return;
+        resetEngineProbe();
+        setEngineOptionsStatusMessage("Engine handshake timed out.");
       }, PROBE_TIMEOUT_MS);
-      ws.send("uci\n");
+      probeSocket.send("uci\n");
     });
 
-    ws.addEventListener("message", (event) => {
-      if (activeProbeWs !== ws) return;
-      if (!event.data) return;
-      const lines = String(event.data).split("\n");
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith("info string Error:")) {
-          lastErrorLine = trimmed.slice("info string ".length);
+    probeSocket.addEventListener("message", (messageEvent) => {
+      if (activeProbeSocket !== probeSocket) return;
+      if (!messageEvent.data) return;
+      const uciLines = String(messageEvent.data).split("\n");
+      for (const uciLine of uciLines) {
+        const trimmedLine = uciLine.trim();
+        if (trimmedLine.startsWith("info string Error:")) {
+          lastErrorLine = trimmedLine.slice("info string ".length);
         }
-        const opt = parseUciOptionLine(trimmed);
-        if (opt) {
-          discovered.push(opt);
-        } else if (trimmed === "uciok") {
-          probedUrl = url;
-          lastProbedOptions = discovered.slice();
-          resetProbe();
-          onComplete(url, discovered, container);
+        const parsedUciOption = parseUciOptionLine(trimmedLine);
+        if (parsedUciOption) {
+          discoveredUciOptions.push(parsedUciOption);
+        } else if (trimmedLine === "uciok") {
+          lastProbedEngineUrl = engineUrl;
+          lastProbedUciOptions = discoveredUciOptions.slice();
+          resetEngineProbe();
+          onProbeComplete(engineUrl, discoveredUciOptions, containerElement);
           return;
         }
       }
     });
 
-    ws.addEventListener("close", () => {
-      if (activeProbeWs !== ws) return;
-      resetProbe();
-      setEngineOptionsStatus(lastErrorLine || "Engine connection closed before handshake.");
+    probeSocket.addEventListener("close", () => {
+      if (activeProbeSocket !== probeSocket) return;
+      resetEngineProbe();
+      setEngineOptionsStatusMessage(
+        lastErrorLine || "Engine connection closed before handshake."
+      );
     });
 
-    ws.addEventListener("error", () => {
-      if (activeProbeWs !== ws) return;
-      resetProbe();
-      setEngineOptionsStatus("Unable to connect to engine.");
+    probeSocket.addEventListener("error", () => {
+      if (activeProbeSocket !== probeSocket) return;
+      resetEngineProbe();
+      setEngineOptionsStatusMessage("Unable to connect to engine.");
     });
-  } catch (err) {
-    console.warn("[BetterMint] Failed to initialize engine probe socket:", err);
-    resetProbe();
-    setEngineOptionsStatus("Failed to initialize engine socket.");
+  } catch (socketError) {
+    console.warn("[BetterMint] Failed to initialize engine probe socket:", socketError);
+    resetEngineProbe();
+    setEngineOptionsStatusMessage("Failed to initialize engine socket.");
   }
 }
 
-function invalidateEngineProbe(url) {
-  probedUrl = null;
-  lastProbedOptions = [];
-  resetProbe();
+function invalidateEngineProbe(engineUrl) {
+  lastProbedEngineUrl = null;
+  lastProbedUciOptions = [];
+  resetEngineProbe();
   if (document.getElementById("engine-options-details")?.open) {
-    probeEngine(url);
+    probeEngineUciOptions(engineUrl);
   } else {
-    setEngineOptionsStatus("Expand to load engine options.");
+    setEngineOptionsStatusMessage("Expand to load engine options.");
   }
 }
 
-let engineOptsSyncTimer = null;
-let pendingEngineOpts = null;
+let uciOptionsSyncTimerId = null;
+let pendingUciOptionsWrite = null;
 
-function storageSet(area, data) {
-  const store = typeof chrome !== "undefined" ? chrome.storage?.[area] : null;
-  if (!store?.set) return;
-  store.set(data, () => {
-    const err = typeof chrome !== "undefined" ? chrome.runtime?.lastError : null;
-    if (err) {
-      console.error(`[BetterMint] Failed to write ${area} storage:`, err.message || err);
-      setConfigStatus("Failed to save settings.", true);
+function writeChromeStorage(storageArea, storagePayload) {
+  const storageHandle = typeof chrome !== "undefined" ? chrome.storage?.[storageArea] : null;
+  if (!storageHandle?.set) return;
+  storageHandle.set(storagePayload, () => {
+    const runtimeError = typeof chrome !== "undefined" ? chrome.runtime?.lastError : null;
+    if (runtimeError) {
+      console.error(
+        `[BetterMint] Failed to write ${storageArea} storage:`,
+        runtimeError.message || runtimeError
+      );
+      setConfigStatusMessage("Failed to save settings.", true);
     }
   });
 }
 
-function flushPendingEngineOpts({ notify = true } = {}) {
-  if (!pendingEngineOpts) return;
-  if (engineOptsSyncTimer) {
-    clearTimeout(engineOptsSyncTimer);
-    engineOptsSyncTimer = null;
+function flushPendingUciOptions({ shouldNotifyTabs = true } = {}) {
+  if (!pendingUciOptionsWrite) return;
+  if (uciOptionsSyncTimerId) {
+    clearTimeout(uciOptionsSyncTimerId);
+    uciOptionsSyncTimerId = null;
   }
-  const { key, url, data } = pendingEngineOpts;
-  pendingEngineOpts = null;
-  storageSet("local", { [key]: data });
-  const activeUrl = fields["option-url-api-stockfish"]?.value?.trim();
-  if (notify && (!url || !activeUrl || url === activeUrl)) {
-    notifyTabs({ customEngineOptions: data });
+  const { storageKey, engineUrl, uciOptions } = pendingUciOptionsWrite;
+  pendingUciOptionsWrite = null;
+  writeChromeStorage("local", { [storageKey]: uciOptions });
+  const activeEngineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value?.trim();
+  if (shouldNotifyTabs && (!engineUrl || !activeEngineUrl || engineUrl === activeEngineUrl)) {
+    notifyActiveChessComTabs({ customEngineOptions: uciOptions });
   }
 }
 
-function bindDynamicUciOptions(storageKey, optionsList, savedValues, container, url = null) {
-  const saved = Object.assign({}, savedValues || {});
-  renderDynamicUciOptions(optionsList, saved, container, (name, val, isButton) => {
-    if (isButton) {
-      notifyTabs({ uciButton: name });
-      return;
+function bindDynamicUciOptionControls(
+  storageKey,
+  uciOptionDefinitions,
+  savedUciValues,
+  containerElement,
+  engineUrl = null
+) {
+  const mutableUciValues = Object.assign({}, savedUciValues || {});
+  renderDynamicUciOptions(
+    uciOptionDefinitions,
+    mutableUciValues,
+    containerElement,
+    (optionName, optionValue, isButtonOption) => {
+      if (isButtonOption) {
+        notifyActiveChessComTabs({ uciButton: optionName });
+        return;
+      }
+      mutableUciValues[optionName] = optionValue;
+      setActiveConfigProfileName(null);
+      pendingUciOptionsWrite = { storageKey, engineUrl, uciOptions: mutableUciValues };
+      if (uciOptionsSyncTimerId) clearTimeout(uciOptionsSyncTimerId);
+      uciOptionsSyncTimerId = setTimeout(flushPendingUciOptions, UCI_OPTIONS_SYNC_DEBOUNCE_MS);
     }
-    saved[name] = val;
-    setActiveConfigName(null);
-    pendingEngineOpts = { key: storageKey, url, data: saved };
-    if (engineOptsSyncTimer) clearTimeout(engineOptsSyncTimer);
-    engineOptsSyncTimer = setTimeout(flushPendingEngineOpts, ENGINE_OPTS_DEBOUNCE_MS);
-  });
+  );
 }
 
-function loadAndRenderEngineOptions(url, optionsList, container) {
+function loadAndRenderEngineUciOptions(engineUrl, uciOptionDefinitions, containerElement) {
   if (typeof chrome === "undefined" || !chrome.storage?.local) {
-    renderDynamicUciOptions(optionsList, {}, container, null);
+    renderDynamicUciOptions(uciOptionDefinitions, {}, containerElement, null);
     return;
   }
-  const storageKey = getEngineOptionsStorageKey(url);
-  chrome.storage.local.get([storageKey], (result) => {
-    bindDynamicUciOptions(storageKey, optionsList, result?.[storageKey], container, url);
+  const storageKey = getEngineOptionsStorageKey(engineUrl);
+  chrome.storage.local.get([storageKey], (storedResult) => {
+    if (lastProbedEngineUrl !== engineUrl) return;
+    bindDynamicUciOptionControls(
+      storageKey,
+      uciOptionDefinitions,
+      storedResult?.[storageKey],
+      containerElement,
+      engineUrl
+    );
   });
 }
 
-function notifyTabs(data) {
+function notifyActiveChessComTabs(extensionOptions) {
   if (typeof chrome === "undefined" || !chrome.tabs?.query) return;
-  chrome.tabs.query({ url: "*://*.chess.com/*" }, (tabs) => {
-    tabs.forEach((tab) => {
-      chrome.tabs.sendMessage(tab.id, { type: "UpdateOptions", data })?.catch?.(() => {});
+  chrome.tabs.query({ url: "*://*.chess.com/*" }, (matchingTabs) => {
+    if (chrome.runtime?.lastError || !Array.isArray(matchingTabs)) return;
+    matchingTabs.forEach((tab) => {
+      if (tab?.id === undefined) return;
+      chrome.tabs
+        .sendMessage(tab.id, { type: "UpdateOptions", extensionOptions })
+        ?.catch?.(() => {});
     });
   });
 }
 
-function probeIfExpanded() {
-  const details = document.getElementById("engine-options-details");
-  if (!details?.open) return;
-  const url = fields["option-url-api-stockfish"]?.value?.trim();
-  if (!url) {
-    resetProbe();
-    setEngineOptionsStatus("Invalid WebSocket URL.");
-    return;
-  }
-  if (probedUrl !== url) {
-    probeEngine(url);
+function probeEngineIfPanelExpanded() {
+  const engineDetailsElement = document.getElementById("engine-options-details");
+  if (!engineDetailsElement?.open) return;
+  const engineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value?.trim();
+  if (lastProbedEngineUrl !== engineUrl) {
+    probeEngineUciOptions(engineUrl);
   }
 }
 
-function readCurrentSettings() {
-  const options = {};
-  optionKeys.forEach((key) => {
-    const field = fields[key];
-    if (!field) {
-      options[key] = baseDefaults[key];
+function readExtensionOptionsFromDom() {
+  const extensionOptions = {};
+  EXTENSION_OPTION_KEYS.forEach((optionKey) => {
+    const inputElement = extensionOptionInputs[optionKey];
+    if (!inputElement) {
+      extensionOptions[optionKey] = DEFAULT_EXTENSION_OPTION_VALUES[optionKey];
       return;
     }
-    if (field.type === "checkbox") {
-      options[key] = Boolean(field.checked);
-    } else if (field.type === "range") {
-      const val = parseFloat(field.value);
-      options[key] = Number.isNaN(val) ? 0 : val;
+    if (inputElement.type === "checkbox") {
+      extensionOptions[optionKey] = Boolean(inputElement.checked);
+    } else if (inputElement.type === "range") {
+      const numericValue = parseFloat(inputElement.value);
+      extensionOptions[optionKey] = Number.isNaN(numericValue) ? 0 : numericValue;
     } else {
-      options[key] = String(field.value ?? "").trim();
+      extensionOptions[optionKey] = String(inputElement.value ?? "").trim();
     }
   });
-  return options;
+  return extensionOptions;
 }
 
-function normalizeSettings(raw) {
-  const normalized = {};
-  optionKeys.forEach((key) => {
-    const defVal = baseDefaults[key];
-    const incoming = raw && Object.prototype.hasOwnProperty.call(raw, key) ? raw[key] : defVal;
-    if (typeof defVal === "boolean") {
-      normalized[key] = normalizeBoolean(incoming);
-    } else if (typeof defVal === "number") {
-      const num = parseFloat(incoming);
-      normalized[key] = Number.isNaN(num) ? defVal : num;
+function normalizeExtensionOptions(rawExtensionOptions) {
+  const normalizedOptions = {};
+  EXTENSION_OPTION_KEYS.forEach((optionKey) => {
+    const defaultValue = DEFAULT_EXTENSION_OPTION_VALUES[optionKey];
+    const incomingValue =
+      rawExtensionOptions && Object.prototype.hasOwnProperty.call(rawExtensionOptions, optionKey)
+        ? rawExtensionOptions[optionKey]
+        : defaultValue;
+    if (typeof defaultValue === "boolean") {
+      normalizedOptions[optionKey] = parseBooleanValue(incomingValue);
+    } else if (typeof defaultValue === "number") {
+      const parsedNumber = parseFloat(incomingValue);
+      normalizedOptions[optionKey] = Number.isNaN(parsedNumber) ? defaultValue : parsedNumber;
     } else {
-      normalized[key] = String(incoming ?? defVal ?? "").trim();
+      normalizedOptions[optionKey] = String(incomingValue ?? defaultValue ?? "").trim();
     }
   });
-  return normalized;
+  return normalizedOptions;
 }
 
-function applySettingsToDom(options) {
-  optionKeys.forEach((key) => {
-    const field = fields[key];
-    if (!field) return;
-    const val = options[key] ?? baseDefaults[key];
-    if (field.type === "checkbox") {
-      field.checked = normalizeBoolean(val);
-    } else if (field.type === "range") {
-      setRangeExactValue(field, val);
-      const badge = document.getElementById("badge-" + key);
-      if (badge) badge.textContent = formatBadgeValue(key, val);
+function applyExtensionOptionsToDom(extensionOptions) {
+  EXTENSION_OPTION_KEYS.forEach((optionKey) => {
+    const inputElement = extensionOptionInputs[optionKey];
+    if (!inputElement) return;
+    const optionValue = extensionOptions[optionKey] ?? DEFAULT_EXTENSION_OPTION_VALUES[optionKey];
+    if (inputElement.type === "checkbox") {
+      inputElement.checked = parseBooleanValue(optionValue);
+    } else if (inputElement.type === "range") {
+      setSliderExactValue(inputElement, optionValue);
+      const badgeElement = document.getElementById("badge-" + optionKey);
+      if (badgeElement) {
+        badgeElement.textContent = formatSliderBadgeValue(optionKey, optionValue);
+      }
     } else {
-      field.value = val;
+      inputElement.value = optionValue;
     }
   });
-  UpdateVisibility();
-  updateGoPreview(options);
+  updateDependentGroupVisibility();
+  updateGoCommandPreview(extensionOptions);
 }
 
-function setActiveConfigName(name) {
-  const nextName = name || null;
-  if (activeConfigName === nextName) return;
-  activeConfigName = nextName;
-  storageSet("local", { activeConfigName });
+function setActiveConfigProfileName(profileName) {
+  const normalizedName = profileName || null;
+  if (activeConfigProfileName === normalizedName) return;
+  activeConfigProfileName = normalizedName;
+  writeChromeStorage("local", { activeConfigName: activeConfigProfileName });
 }
 
-function setConfigStatus(msg, isError = false) {
-  const el = document.getElementById("config-status");
-  if (!el) return;
-  if (statusTimer) {
-    clearTimeout(statusTimer);
-    statusTimer = null;
+function setConfigStatusMessage(statusMessage, isError = false) {
+  const statusElement = document.getElementById("config-status");
+  if (!statusElement) return;
+  if (statusClearTimerId) {
+    clearTimeout(statusClearTimerId);
+    statusClearTimerId = null;
   }
-  el.textContent = msg || "";
-  el.classList?.toggle("is-error", Boolean(isError));
-  el.classList?.toggle("hidden", !msg);
-  if (msg) {
-    statusTimer = setTimeout(() => {
-      el.textContent = "";
-      el.classList?.add("hidden");
-      statusTimer = null;
+  statusElement.textContent = statusMessage || "";
+  statusElement.classList?.toggle("is-error", Boolean(isError));
+  statusElement.classList?.toggle("hidden", !statusMessage);
+  if (statusMessage) {
+    statusClearTimerId = setTimeout(() => {
+      statusElement.textContent = "";
+      statusElement.classList?.add("hidden");
+      statusClearTimerId = null;
     }, CONFIG_STATUS_DURATION_MS);
   }
 }
 
-function sanitizeFilename(name) {
-  const clean = String(name || "")
+function sanitizeConfigFilename(rawName) {
+  const sanitizedName = String(rawName || "")
     .trim()
     .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "-")
     .replace(/\s+/g, " ");
-  return clean || "config";
+  return sanitizedName || "config";
 }
 
-function stripMintExtension(filename) {
+function stripMintFileExtension(filename) {
   return String(filename || "").replace(/\.mint$/i, "").trim();
 }
 
-function getExportFilename(name = activeConfigName) {
-  return name ? `${sanitizeFilename(name)}.mint` : "config.mint";
+function getExportConfigFilename(profileName = activeConfigProfileName) {
+  return profileName ? `${sanitizeConfigFilename(profileName)}.mint` : "config.mint";
 }
 
-function applyConfigProfile(rawSettings, customEngineOptions = {}, { name = null, markSaved = false } = {}) {
-  const prevUrl = fields["option-url-api-stockfish"]?.value?.trim();
-  const nextSettings = normalizeSettings(rawSettings);
-  const nextEngineOpts = isPlainObject(customEngineOptions)
-    ? Object.assign({}, customEngineOptions)
+function applyConfigProfile(
+  rawExtensionOptions,
+  uciOptionOverrides = {},
+  { profileName = null, shouldMarkSaved = false } = {}
+) {
+  const previousEngineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value?.trim();
+  const normalizedExtensionOptions = normalizeExtensionOptions(rawExtensionOptions);
+  const sanitizedUciOptions = isPlainRecord(uciOptionOverrides)
+    ? Object.assign({}, uciOptionOverrides)
     : {};
 
-  pendingEngineOpts = null;
-  if (engineOptsSyncTimer) {
-    clearTimeout(engineOptsSyncTimer);
-    engineOptsSyncTimer = null;
+  pendingUciOptionsWrite = null;
+  if (uciOptionsSyncTimerId) {
+    clearTimeout(uciOptionsSyncTimerId);
+    uciOptionsSyncTimerId = null;
   }
 
-  applySettingsToDom(nextSettings);
-  setActiveConfigName(markSaved ? name : null);
+  applyExtensionOptionsToDom(normalizedExtensionOptions);
+  setActiveConfigProfileName(shouldMarkSaved ? profileName : null);
 
-  const nextUrl = nextSettings["option-url-api-stockfish"];
-  const engineKey = getEngineOptionsStorageKey(nextUrl);
-  if (engineKey) {
-    storageSet("local", { [engineKey]: nextEngineOpts });
+  const nextEngineUrl = normalizedExtensionOptions["option-url-api-stockfish"];
+  const engineStorageKey = getEngineOptionsStorageKey(nextEngineUrl);
+  if (engineStorageKey) {
+    writeChromeStorage("local", { [engineStorageKey]: sanitizedUciOptions });
   }
-  storageSet("sync", nextSettings);
+  writeChromeStorage("sync", normalizedExtensionOptions);
 
-  if (prevUrl !== nextUrl) {
-    invalidateEngineProbe(nextUrl);
-  } else if (document.getElementById("engine-options-details")?.open && probedUrl === nextUrl) {
-    const container = document.getElementById("engine-options-container");
-    if (container && lastProbedOptions.length > 0 && engineKey) {
-      bindDynamicUciOptions(engineKey, lastProbedOptions, nextEngineOpts, container, nextUrl);
+  if (previousEngineUrl !== nextEngineUrl) {
+    invalidateEngineProbe(nextEngineUrl);
+  } else if (
+    document.getElementById("engine-options-details")?.open &&
+    lastProbedEngineUrl === nextEngineUrl
+  ) {
+    const containerElement = document.getElementById("engine-options-container");
+    if (containerElement && lastProbedUciOptions.length > 0 && engineStorageKey) {
+      bindDynamicUciOptionControls(
+        engineStorageKey,
+        lastProbedUciOptions,
+        sanitizedUciOptions,
+        containerElement,
+        nextEngineUrl
+      );
     }
   }
 
-  notifyTabs(Object.assign({}, nextSettings, { customEngineOptions: nextEngineOpts }));
-  return nextSettings;
+  notifyActiveChessComTabs(
+    Object.assign({}, normalizedExtensionOptions, { customEngineOptions: sanitizedUciOptions })
+  );
 }
 
-function saveCustomConfigEntry(name, settings, customEngineOptions) {
-  const trimmed = String(name || "").trim();
-  if (!trimmed) return null;
-  const entry = {
-    name: trimmed,
-    settings: normalizeSettings(settings),
-    customEngineOptions: Object.assign({}, customEngineOptions || {}),
+function saveCustomConfigProfile(profileName, extensionOptions, uciOptionOverrides) {
+  const trimmedName = String(profileName || "").trim();
+  if (!trimmedName) return null;
+  const savedProfile = {
+    name: trimmedName,
+    settings: normalizeExtensionOptions(extensionOptions),
+    customEngineOptions: Object.assign({}, uciOptionOverrides || {}),
     updatedAt: Date.now()
   };
-  const filtered = customConfigsCache.filter(
-    (item) => item.name.toLowerCase() !== trimmed.toLowerCase()
+  const remainingProfiles = customConfigProfiles.filter(
+    (profile) => profile.name.toLowerCase() !== trimmedName.toLowerCase()
   );
-  customConfigsCache = [entry, ...filtered];
-  storageSet("local", { customConfigs: customConfigsCache });
-  return entry;
+  customConfigProfiles = [savedProfile, ...remainingProfiles];
+  writeChromeStorage("local", { customConfigs: customConfigProfiles });
+  return savedProfile;
 }
 
-function deleteCustomConfigEntry(name) {
-  customConfigsCache = customConfigsCache.filter((item) => item.name !== name);
-  const updates = { customConfigs: customConfigsCache };
-  if (activeConfigName === name) {
-    activeConfigName = null;
-    updates.activeConfigName = null;
+function deleteCustomConfigProfile(profileName) {
+  customConfigProfiles = customConfigProfiles.filter((profile) => profile.name !== profileName);
+  const storageUpdates = { customConfigs: customConfigProfiles };
+  if (activeConfigProfileName === profileName) {
+    activeConfigProfileName = null;
+    storageUpdates.activeConfigName = null;
   }
-  storageSet("local", updates);
+  writeChromeStorage("local", storageUpdates);
 }
 
-function formatConfigSummary(settings) {
-  const depth = settings?.["option-depth"] ?? baseDefaults["option-depth"];
-  const pace = settings?.["option-move-pace"] ?? baseDefaults["option-move-pace"];
-  const auto = settings?.["option-legit-auto-move"] ? "Auto" : "Manual";
-  return `D${depth} · ${auto} · ${pace}s`;
+function formatConfigProfileSummary(extensionOptions) {
+  const depth = extensionOptions?.["option-depth"] ?? DEFAULT_EXTENSION_OPTION_VALUES["option-depth"];
+  const movePace =
+    extensionOptions?.["option-move-pace"] ?? DEFAULT_EXTENSION_OPTION_VALUES["option-move-pace"];
+  const autoMoveMode = extensionOptions?.["option-legit-auto-move"] ? "Auto" : "Manual";
+  return `D${depth} · ${autoMoveMode} · ${movePace}s`;
 }
 
-function renderLoadList() {
-  const list = document.getElementById("config-load-list");
-  if (!list) return;
-  list.innerHTML = "";
+function renderSavedConfigList() {
+  const listContainer = document.getElementById("config-load-list");
+  if (!listContainer) return;
+  listContainer.innerHTML = "";
 
-  list.appendChild(createEl("div", { className: "config-section-label", textContent: "Presets" }));
-  DEFAULT_PRESETS.forEach((preset) => {
-    const btn = createEl("button", { type: "button", className: "config-item-btn" }, [
-      createEl("span", { className: "config-item-name", textContent: preset.name }),
-      createEl("span", { className: "config-item-meta", textContent: preset.summary })
+  listContainer.appendChild(
+    createDomElement("div", { className: "config-section-label", textContent: "Presets" })
+  );
+  DEFAULT_CONFIG_PRESETS.forEach((presetProfile) => {
+    const presetButton = createDomElement("button", { type: "button", className: "config-item-btn" }, [
+      createDomElement("span", { className: "config-item-name", textContent: presetProfile.name }),
+      createDomElement("span", { className: "config-item-meta", textContent: presetProfile.summary })
     ]);
-    btn.addEventListener("click", () => {
-      applyConfigProfile(preset.settings, preset.customEngineOptions, { markSaved: false });
+    presetButton.addEventListener("click", () => {
+      applyConfigProfile(presetProfile.settings, presetProfile.customEngineOptions, {
+        shouldMarkSaved: false
+      });
       setConfigPopoverMode(null);
-      setConfigStatus(`Loaded ${preset.name}`);
+      setConfigStatusMessage(`Loaded ${presetProfile.name}`);
     });
-    list.appendChild(createEl("div", { className: "config-item-row config-item" }, [btn]));
+    listContainer.appendChild(
+      createDomElement("div", { className: "config-item-row config-item" }, [presetButton])
+    );
   });
 
-  list.appendChild(createEl("div", { className: "config-section-label", textContent: "Custom" }));
-  if (customConfigsCache.length === 0) {
-    list.appendChild(
-      createEl("div", { className: "config-empty", textContent: "No saved configs yet." })
+  listContainer.appendChild(
+    createDomElement("div", { className: "config-section-label", textContent: "Custom" })
+  );
+  if (customConfigProfiles.length === 0) {
+    listContainer.appendChild(
+      createDomElement("div", { className: "config-empty", textContent: "No saved configs yet." })
     );
     return;
   }
 
-  customConfigsCache.forEach((entry) => {
-    const isActive = activeConfigName === entry.name;
-    const selectBtn = createEl(
+  customConfigProfiles.forEach((savedProfile) => {
+    const isActiveProfile = activeConfigProfileName === savedProfile.name;
+    const selectProfileButton = createDomElement(
       "button",
       {
         type: "button",
-        className: isActive ? "config-item-btn is-active" : "config-item-btn"
+        className: isActiveProfile ? "config-item-btn is-active" : "config-item-btn"
       },
       [
-        createEl("span", { className: "config-item-name", textContent: entry.name }),
-        createEl("span", {
+        createDomElement("span", { className: "config-item-name", textContent: savedProfile.name }),
+        createDomElement("span", {
           className: "config-item-meta",
-          textContent: formatConfigSummary(entry.settings)
+          textContent: formatConfigProfileSummary(savedProfile.settings)
         })
       ]
     );
-    selectBtn.addEventListener("click", () => {
-      applyConfigProfile(entry.settings, entry.customEngineOptions, {
-        name: entry.name,
-        markSaved: true
+    selectProfileButton.addEventListener("click", () => {
+      applyConfigProfile(savedProfile.settings, savedProfile.customEngineOptions, {
+        profileName: savedProfile.name,
+        shouldMarkSaved: true
       });
       setConfigPopoverMode(null);
-      setConfigStatus(`Loaded ${entry.name}`);
+      setConfigStatusMessage(`Loaded ${savedProfile.name}`);
     });
 
-    const deleteBtn = createEl("button", {
+    const deleteProfileButton = createDomElement("button", {
       type: "button",
       className: "config-delete-btn",
-      title: `Delete ${entry.name}`,
+      title: `Delete ${savedProfile.name}`,
       textContent: "×"
     });
-    deleteBtn.setAttribute?.("aria-label", `Delete ${entry.name}`);
-    deleteBtn.addEventListener("click", (event) => {
-      event?.stopPropagation?.();
-      deleteCustomConfigEntry(entry.name);
-      renderLoadList();
+    deleteProfileButton.setAttribute?.("aria-label", `Delete ${savedProfile.name}`);
+    deleteProfileButton.addEventListener("click", (clickEvent) => {
+      clickEvent?.stopPropagation?.();
+      deleteCustomConfigProfile(savedProfile.name);
+      renderSavedConfigList();
     });
 
-    list.appendChild(
-      createEl("div", { className: "config-item-row config-item" }, [selectBtn, deleteBtn])
+    listContainer.appendChild(
+      createDomElement("div", { className: "config-item-row config-item" }, [
+        selectProfileButton,
+        deleteProfileButton
+      ])
     );
   });
 }
 
-function setConfigPopoverMode(mode) {
-  popoverMode = mode || null;
-  const popover = document.getElementById("config-popover");
-  const toggleBtn = document.getElementById("config-toggle");
-  const menu = document.getElementById("config-menu");
-  const loadPanel = document.getElementById("config-load-panel");
-  const savePanel = document.getElementById("config-save-panel");
-  const saveError = document.getElementById("config-save-error");
+function setConfigPopoverMode(popoverMode) {
+  activePopoverMode = popoverMode || null;
+  const popoverElement = document.getElementById("config-popover");
+  const configToggleButton = document.getElementById("config-toggle");
+  const actionMenuElement = document.getElementById("config-menu");
+  const loadPanelElement = document.getElementById("config-load-panel");
+  const savePanelElement = document.getElementById("config-save-panel");
+  const saveErrorElement = document.getElementById("config-save-error");
 
-  if (toggleBtn) {
-    toggleBtn.setAttribute?.("aria-expanded", String(Boolean(popoverMode)));
+  if (configToggleButton) {
+    configToggleButton.setAttribute?.("aria-expanded", String(Boolean(activePopoverMode)));
   }
-  if (!popover) return;
+  if (!popoverElement) return;
 
-  popover.classList?.toggle("hidden", !popoverMode);
-  popover.classList?.toggle("is-wide", popoverMode === "load" || popoverMode === "save");
-  menu?.classList?.toggle("hidden", popoverMode !== "menu");
-  loadPanel?.classList?.toggle("hidden", popoverMode !== "load");
-  savePanel?.classList?.toggle("hidden", popoverMode !== "save");
-  saveError?.classList?.add("hidden");
+  popoverElement.classList?.toggle("hidden", !activePopoverMode);
+  popoverElement.classList?.toggle(
+    "is-wide",
+    activePopoverMode === "load" || activePopoverMode === "save"
+  );
+  actionMenuElement?.classList?.toggle("hidden", activePopoverMode !== "menu");
+  loadPanelElement?.classList?.toggle("hidden", activePopoverMode !== "load");
+  savePanelElement?.classList?.toggle("hidden", activePopoverMode !== "save");
+  saveErrorElement?.classList?.add("hidden");
 
-  if (popoverMode === "load") {
-    refreshConfigStorage(() => renderLoadList());
-  } else if (popoverMode === "save") {
-    const input = document.getElementById("config-save-name");
-    if (input) {
-      input.value = activeConfigName || "";
-      input.focus?.();
-      input.select?.();
+  if (activePopoverMode === "load") {
+    loadConfigStorageState(() => renderSavedConfigList());
+  } else if (activePopoverMode === "save") {
+    const profileNameInput = document.getElementById("config-save-name");
+    if (profileNameInput) {
+      profileNameInput.value = activeConfigProfileName || "";
+      profileNameInput.focus?.();
+      profileNameInput.select?.();
     }
   }
 }
 
-function refreshConfigStorage(cb) {
-  const url = fields["option-url-api-stockfish"]?.value?.trim() || baseDefaults["option-url-api-stockfish"];
-  const engineKey = getEngineOptionsStorageKey(url);
-  const keys = ["customConfigs", "activeConfigName"];
-  if (engineKey) keys.push(engineKey);
+function loadConfigStorageState(onLoaded) {
+  const engineUrl =
+    extensionOptionInputs["option-url-api-stockfish"]?.value?.trim() ||
+    DEFAULT_EXTENSION_OPTION_VALUES["option-url-api-stockfish"];
+  const engineStorageKey = getEngineOptionsStorageKey(engineUrl);
+  const storageKeys = ["customConfigs", "activeConfigName"];
+  if (engineStorageKey) storageKeys.push(engineStorageKey);
 
   if (typeof chrome === "undefined" || !chrome.storage?.local) {
-    cb?.({
-      customConfigs: customConfigsCache,
-      activeConfigName,
+    onLoaded?.({
+      customConfigs: customConfigProfiles,
+      activeConfigName: activeConfigProfileName,
       customEngineOptions: {}
     });
     return;
   }
 
-  chrome.storage.local.get(keys, (res) => {
-    if (Array.isArray(res?.customConfigs)) customConfigsCache = res.customConfigs;
-    if (Object.prototype.hasOwnProperty.call(res || {}, "activeConfigName")) {
-      activeConfigName = res.activeConfigName || null;
+  chrome.storage.local.get(storageKeys, (storedState) => {
+    if (Array.isArray(storedState?.customConfigs)) {
+      customConfigProfiles = storedState.customConfigs;
     }
-    const storedEngineOpts = engineKey ? res?.[engineKey] || {} : {};
-    const liveEngineOpts =
-      pendingEngineOpts && pendingEngineOpts.key === engineKey
-        ? pendingEngineOpts.data
-        : storedEngineOpts;
-    cb?.({
-      customConfigs: customConfigsCache,
-      activeConfigName,
-      customEngineOptions: Object.assign({}, liveEngineOpts)
+    if (Object.prototype.hasOwnProperty.call(storedState || {}, "activeConfigName")) {
+      activeConfigProfileName = storedState.activeConfigName || null;
+    }
+    const storedUciOptions = engineStorageKey ? storedState?.[engineStorageKey] || {} : {};
+    const liveUciOptions =
+      pendingUciOptionsWrite && pendingUciOptionsWrite.storageKey === engineStorageKey
+        ? pendingUciOptionsWrite.uciOptions
+        : storedUciOptions;
+    onLoaded?.({
+      customConfigs: customConfigProfiles,
+      activeConfigName: activeConfigProfileName,
+      customEngineOptions: Object.assign({}, liveUciOptions)
     });
   });
 }
 
-function buildExportSnapshot(cb) {
-  const settings = readCurrentSettings();
-  refreshConfigStorage((state) => {
-    const snapshot = {
+function buildConfigExportSnapshot(onSnapshotReady) {
+  const extensionOptions = readExtensionOptionsFromDom();
+  loadConfigStorageState((storageState) => {
+    const exportSnapshot = {
       format: "bettermint-config",
       version: 2,
-      name: state.activeConfigName || null,
+      name: storageState.activeConfigName || null,
       exportedAt: new Date().toISOString(),
-      settings,
-      customEngineOptions: state.customEngineOptions || {},
+      settings: extensionOptions,
+      customEngineOptions: storageState.customEngineOptions || {},
       theme: {
-        id: currentTheme,
-        colors: getCurrentThemeColors()
+        id: activeThemeId,
+        colors: getActiveThemeColors()
       },
-      presets: DEFAULT_PRESETS.map((preset) => ({
-        id: preset.id,
-        name: preset.name,
-        settings: preset.settings,
-        customEngineOptions: preset.customEngineOptions || {}
+      presets: DEFAULT_CONFIG_PRESETS.map((presetProfile) => ({
+        id: presetProfile.id,
+        name: presetProfile.name,
+        settings: presetProfile.settings,
+        customEngineOptions: presetProfile.customEngineOptions || {}
       })),
-      customConfigs: state.customConfigs.map((entry) => ({
-        name: entry.name,
-        settings: entry.settings,
-        customEngineOptions: entry.customEngineOptions || {},
-        updatedAt: entry.updatedAt
+      customConfigs: storageState.customConfigs.map((savedProfile) => ({
+        name: savedProfile.name,
+        settings: savedProfile.settings,
+        customEngineOptions: savedProfile.customEngineOptions || {},
+        updatedAt: savedProfile.updatedAt
       }))
     };
-    cb?.(snapshot, getExportFilename(state.activeConfigName));
+    onSnapshotReady?.(exportSnapshot, getExportConfigFilename(storageState.activeConfigName));
   });
 }
 
-function triggerFileDownload(filename, content) {
+function downloadJsonFile(filename, jsonContent) {
   if (typeof Blob === "undefined" || typeof URL === "undefined" || !URL.createObjectURL) return;
-  const blob = new Blob([content], { type: "application/json" });
-  const objectUrl = URL.createObjectURL(blob);
-  const link = createEl("a", {
-    href: objectUrl,
+  const fileBlob = new Blob([jsonContent], { type: "application/json" });
+  const blobUrl = URL.createObjectURL(fileBlob);
+  const downloadLink = createDomElement("a", {
+    href: blobUrl,
     download: filename,
     className: "hidden"
   });
-  document.body?.appendChild?.(link);
-  link.click?.();
-  link.remove?.();
-  URL.revokeObjectURL?.(objectUrl);
+  document.body?.appendChild?.(downloadLink);
+  downloadLink.click?.();
+  downloadLink.remove?.();
+  URL.revokeObjectURL?.(blobUrl);
 }
 
-function exportCurrentConfig() {
-  flushPendingEngineOpts();
-  buildExportSnapshot((snapshot, filename) => {
-    triggerFileDownload(filename, JSON.stringify(snapshot, null, 2));
+function exportActiveConfig() {
+  flushPendingUciOptions();
+  buildConfigExportSnapshot((exportSnapshot, filename) => {
+    downloadJsonFile(filename, JSON.stringify(exportSnapshot, null, 2));
     setConfigPopoverMode(null);
-    setConfigStatus(`Exported ${filename}`);
+    setConfigStatusMessage(`Exported ${filename}`);
   });
 }
 
-function handleSaveSubmit() {
-  const input = document.getElementById("config-save-name");
-  const errorEl = document.getElementById("config-save-error");
-  const name = input?.value?.trim() || "";
-  if (!name) {
-    if (errorEl) {
-      errorEl.textContent = "Enter a config name.";
-      errorEl.classList?.remove("hidden");
+function handleSaveProfileSubmit() {
+  const profileNameInput = document.getElementById("config-save-name");
+  const saveErrorElement = document.getElementById("config-save-error");
+  const profileName = profileNameInput?.value?.trim() || "";
+  if (!profileName) {
+    if (saveErrorElement) {
+      saveErrorElement.textContent = "Enter a config name.";
+      saveErrorElement.classList?.remove("hidden");
     }
-    input?.focus?.();
+    profileNameInput?.focus?.();
     return;
   }
 
-  flushPendingEngineOpts();
-  const settings = readCurrentSettings();
-  refreshConfigStorage((state) => {
-    saveCustomConfigEntry(name, settings, state.customEngineOptions);
-    setActiveConfigName(name);
+  flushPendingUciOptions();
+  const extensionOptions = readExtensionOptionsFromDom();
+  loadConfigStorageState((storageState) => {
+    saveCustomConfigProfile(profileName, extensionOptions, storageState.customEngineOptions);
+    setActiveConfigProfileName(profileName);
     setConfigPopoverMode(null);
-    setConfigStatus(`Saved ${name}`);
+    setConfigStatusMessage(`Saved ${profileName}`);
   });
 }
 
-function importMintText(rawText, filename = "config.mint") {
-  let parsed;
+function importMintConfigText(rawJsonText, filename = "config.mint") {
+  let parsedSnapshot;
   try {
-    parsed = JSON.parse(String(rawText || ""));
+    parsedSnapshot = JSON.parse(String(rawJsonText || ""));
   } catch {
-    return { ok: false, error: "Invalid .mint file." };
+    return { isSuccess: false, error: "Invalid .mint file." };
   }
 
-  if (!isPlainObject(parsed)) {
-    return { ok: false, error: "Invalid .mint payload." };
+  if (!isPlainRecord(parsedSnapshot)) {
+    return { isSuccess: false, error: "Invalid .mint payload." };
   }
 
-  const rawSettings = isPlainObject(parsed.settings)
-    ? parsed.settings
-    : optionKeys.some((k) => Object.prototype.hasOwnProperty.call(parsed, k))
-      ? parsed
+  const importedExtensionOptions = isPlainRecord(parsedSnapshot.settings)
+    ? parsedSnapshot.settings
+    : EXTENSION_OPTION_KEYS.some((optionKey) =>
+          Object.prototype.hasOwnProperty.call(parsedSnapshot, optionKey)
+        )
+      ? parsedSnapshot
       : null;
 
-  if (!rawSettings) {
-    return { ok: false, error: "No valid settings in .mint file." };
+  if (!importedExtensionOptions) {
+    return { isSuccess: false, error: "No valid settings in .mint file." };
   }
 
-  if (Array.isArray(parsed.customConfigs)) {
-    parsed.customConfigs.forEach((entry) => {
+  if (Array.isArray(parsedSnapshot.customConfigs)) {
+    parsedSnapshot.customConfigs.forEach((savedProfile) => {
       if (
-        isPlainObject(entry) &&
-        typeof entry.name === "string" &&
-        entry.name.trim() &&
-        isPlainObject(entry.settings)
+        isPlainRecord(savedProfile) &&
+        typeof savedProfile.name === "string" &&
+        savedProfile.name.trim() &&
+        isPlainRecord(savedProfile.settings)
       ) {
-        saveCustomConfigEntry(entry.name, entry.settings, entry.customEngineOptions);
+        saveCustomConfigProfile(
+          savedProfile.name,
+          savedProfile.settings,
+          savedProfile.customEngineOptions
+        );
       }
     });
   }
 
-  if (parsed.theme) {
-    const themeId = typeof parsed.theme === "string" ? parsed.theme : parsed.theme.id;
-    const themeColors =
-      isPlainObject(parsed.theme) && isPlainObject(parsed.theme.colors)
-        ? parsed.theme.colors
+  if (parsedSnapshot.theme) {
+    const importedThemeId =
+      typeof parsedSnapshot.theme === "string" ? parsedSnapshot.theme : parsedSnapshot.theme.id;
+    const importedThemeColors =
+      isPlainRecord(parsedSnapshot.theme) && isPlainRecord(parsedSnapshot.theme.colors)
+        ? parsedSnapshot.theme.colors
         : null;
-    applyTheme(themeId || currentTheme, themeColors);
-    storageSet("local", { theme: currentTheme, themeColors: activeThemeColors });
+    applyTheme(importedThemeId || activeThemeId, importedThemeColors);
+    writeChromeStorage("local", { theme: activeThemeId, themeColors: activeThemeCustomColors });
   }
 
-  const importedName =
-    (typeof parsed.name === "string" && parsed.name.trim()) ||
-    stripMintExtension(filename) ||
+  const importedProfileName =
+    (typeof parsedSnapshot.name === "string" && parsedSnapshot.name.trim()) ||
+    stripMintFileExtension(filename) ||
     "Imported Config";
-  const engineOpts = isPlainObject(parsed.customEngineOptions)
-    ? parsed.customEngineOptions
+  const importedUciOptions = isPlainRecord(parsedSnapshot.customEngineOptions)
+    ? parsedSnapshot.customEngineOptions
     : {};
 
-  saveCustomConfigEntry(importedName, rawSettings, engineOpts);
-  applyConfigProfile(rawSettings, engineOpts, { name: importedName, markSaved: true });
+  saveCustomConfigProfile(importedProfileName, importedExtensionOptions, importedUciOptions);
+  applyConfigProfile(importedExtensionOptions, importedUciOptions, {
+    profileName: importedProfileName,
+    shouldMarkSaved: true
+  });
 
-  return { ok: true, name: importedName };
+  return { isSuccess: true, name: importedProfileName };
 }
 
-function InitConfigSystem() {
+function initializeConfigSystem() {
   if (typeof chrome !== "undefined") {
     chrome.storage?.local?.remove?.("presetOverrides");
   }
-  refreshConfigStorage();
-  if (configInitialized) return;
-  configInitialized = true;
+  loadConfigStorageState();
+  if (isConfigSystemInitialized) return;
+  isConfigSystemInitialized = true;
 
-  document.getElementById("config-toggle")?.addEventListener("click", (event) => {
-    event?.stopPropagation?.();
-    setConfigPopoverMode(popoverMode ? null : "menu");
+  document.getElementById("config-toggle")?.addEventListener("click", (clickEvent) => {
+    clickEvent?.stopPropagation?.();
+    setConfigPopoverMode(activePopoverMode ? null : "menu");
   });
 
   document.getElementById("config-action-load")?.addEventListener("click", () => {
@@ -1333,166 +1432,178 @@ function InitConfigSystem() {
   });
 
   document.getElementById("config-action-export")?.addEventListener("click", () => {
-    exportCurrentConfig();
+    exportActiveConfig();
   });
 
-  const importInput = document.getElementById("config-import-input");
+  const importFileInput = document.getElementById("config-import-input");
   document.getElementById("config-action-import")?.addEventListener("click", () => {
     setConfigPopoverMode(null);
-    if (importInput) {
-      importInput.value = "";
-      importInput.click?.();
+    if (importFileInput) {
+      importFileInput.value = "";
+      importFileInput.click?.();
     }
   });
 
-  importInput?.addEventListener("change", () => {
-    const file = importInput.files?.[0];
-    if (!file) return;
-    file.text().then(
-      (text) => {
-        refreshConfigStorage(() => {
-          const result = importMintText(text, file.name);
-          setConfigStatus(result.ok ? `Imported ${result.name}` : result.error, !result.ok);
+  importFileInput?.addEventListener("change", () => {
+    const selectedFile = importFileInput.files?.[0];
+    if (!selectedFile) return;
+    selectedFile.text().then(
+      (fileContents) => {
+        loadConfigStorageState(() => {
+          const importOutcome = importMintConfigText(fileContents, selectedFile.name);
+          setConfigStatusMessage(
+            importOutcome.isSuccess ? `Imported ${importOutcome.name}` : importOutcome.error,
+            !importOutcome.isSuccess
+          );
         });
       },
-      () => setConfigStatus("Failed to read .mint file.", true)
+      () => setConfigStatusMessage("Failed to read .mint file.", true)
     );
   });
 
-  for (const closeId of ["config-load-close", "config-save-close", "config-save-cancel"]) {
-    document.getElementById(closeId)?.addEventListener("click", () => setConfigPopoverMode(null));
+  for (const closeButtonId of ["config-load-close", "config-save-close", "config-save-cancel"]) {
+    document
+      .getElementById(closeButtonId)
+      ?.addEventListener("click", () => setConfigPopoverMode(null));
   }
-  document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveSubmit);
+  document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveProfileSubmit);
 
-  document.getElementById("config-save-name")?.addEventListener("keydown", (event) => {
-    if (event?.key === "Enter") {
-      event.preventDefault?.();
-      handleSaveSubmit();
+  document.getElementById("config-save-name")?.addEventListener("keydown", (keyEvent) => {
+    if (keyEvent?.key === "Enter") {
+      keyEvent.preventDefault?.();
+      handleSaveProfileSubmit();
     }
   });
 
-  document.addEventListener?.("click", (event) => {
-    if (!popoverMode) return;
-    const popover = document.getElementById("config-popover");
-    const toggleBtn = document.getElementById("config-toggle");
-    const target = event?.target;
-    if (popover?.contains?.(target) || toggleBtn?.contains?.(target)) return;
+  document.addEventListener?.("click", (clickEvent) => {
+    if (!activePopoverMode) return;
+    const popoverElement = document.getElementById("config-popover");
+    const configToggleButton = document.getElementById("config-toggle");
+    const eventTarget = clickEvent?.target;
+    if (popoverElement?.contains?.(eventTarget) || configToggleButton?.contains?.(eventTarget)) {
+      return;
+    }
     setConfigPopoverMode(null);
   });
 
-  document.addEventListener?.("keydown", (event) => {
-    if (event?.key === "Escape" && popoverMode) {
+  document.addEventListener?.("keydown", (keyEvent) => {
+    if (keyEvent?.key === "Escape" && activePopoverMode) {
       setConfigPopoverMode(null);
     }
   });
 }
 
-function RestoreOptions() {
+function restoreExtensionOptions() {
   if (typeof chrome === "undefined" || !chrome.storage?.sync) {
-    UpdateVisibility();
+    updateDependentGroupVisibility();
     return;
   }
-  chrome.storage.sync.get(DefaultExtensionOptions, (opts) => {
-    applySettingsToDom(opts || {});
-    probeIfExpanded();
+  chrome.storage.sync.get(DEFAULT_EXTENSION_OPTION_VALUES, (storedExtensionOptions) => {
+    applyExtensionOptionsToDom(storedExtensionOptions || {});
+    probeEngineIfPanelExpanded();
   });
 }
 
-function OnOptionsChange(changedKey) {
-  const options = readCurrentSettings();
+function handleExtensionOptionChange(changedOptionKey) {
+  const extensionOptions = readExtensionOptionsFromDom();
 
-  UpdateVisibility();
-  updateGoPreview(options);
-  setActiveConfigName(null);
+  updateDependentGroupVisibility();
+  updateGoCommandPreview(extensionOptions);
+  setActiveConfigProfileName(null);
 
-  if (changedKey === "option-url-api-stockfish") {
-    flushPendingEngineOpts({ notify: false });
-    invalidateEngineProbe(options["option-url-api-stockfish"]);
+  if (changedOptionKey === "option-url-api-stockfish") {
+    flushPendingUciOptions({ shouldNotifyTabs: false });
+    invalidateEngineProbe(extensionOptions["option-url-api-stockfish"]);
   }
 
-  const payload = changedKey ? { [changedKey]: options[changedKey] } : options;
-  storageSet("sync", payload);
-  notifyTabs(payload);
+  const changedPayload = changedOptionKey
+    ? { [changedOptionKey]: extensionOptions[changedOptionKey] }
+    : extensionOptions;
+  writeChromeStorage("sync", changedPayload);
+  notifyActiveChessComTabs(changedPayload);
 }
 
-function InitOptions() {
-  optionKeys.forEach((key) => {
-    const field = document.getElementById(key);
-    if (!field) return;
-    fields[key] = field;
+function initializeOptionsPage() {
+  EXTENSION_OPTION_KEYS.forEach((optionKey) => {
+    const inputElement = document.getElementById(optionKey);
+    if (!inputElement) return;
+    extensionOptionInputs[optionKey] = inputElement;
 
-    if (field.type === "range") {
-      const badge = document.getElementById("badge-" + key);
-      field.addEventListener("input", () => {
-        if (badge) badge.textContent = formatBadgeValue(key, field.value);
-        if (key === "option-depth" || key.startsWith("option-go-")) {
-          updateGoPreview();
+    if (inputElement.type === "range") {
+      const badgeElement = document.getElementById("badge-" + optionKey);
+      inputElement.addEventListener("input", () => {
+        if (badgeElement) {
+          badgeElement.textContent = formatSliderBadgeValue(optionKey, inputElement.value);
+        }
+        if (optionKey === "option-depth" || optionKey.startsWith("option-go-")) {
+          updateGoCommandPreview();
         }
       });
-      if (badge) {
-        bindEditableBadge(badge, field, {
-          key,
-          onCommit: () => OnOptionsChange(key)
+      if (badgeElement) {
+        bindEditableSliderBadge(badgeElement, inputElement, {
+          optionKey,
+          onCommit: () => handleExtensionOptionChange(optionKey)
         });
       }
-    } else if (key === "option-go-searchmoves") {
-      field.addEventListener("input", () => updateGoPreview());
+    } else if (optionKey === "option-go-searchmoves") {
+      inputElement.addEventListener("input", () => updateGoCommandPreview());
     }
-    field.addEventListener("change", () => OnOptionsChange(key));
+    inputElement.addEventListener("change", () => handleExtensionOptionChange(optionKey));
   });
 
-  if (!goStopInitialized) {
-    goStopInitialized = true;
+  if (!isSearchStopInitialized) {
+    isSearchStopInitialized = true;
     document.getElementById("go-stop-btn")?.addEventListener("click", () => {
-      notifyTabs({ stopSearch: true });
-      setConfigStatus("Stop sent");
+      notifyActiveChessComTabs({ shouldStopSearch: true });
+      setConfigStatusMessage("Stop sent");
     });
-    document.getElementById("engine-options-details")?.addEventListener("toggle", probeIfExpanded);
+    document
+      .getElementById("engine-options-details")
+      ?.addEventListener("toggle", probeEngineIfPanelExpanded);
   }
-  InitTheme();
-  InitConfigSystem();
-  RestoreOptions();
+  initializeTheme();
+  initializeConfigSystem();
+  restoreExtensionOptions();
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("pagehide", flushPendingEngineOpts);
+  window.addEventListener("pagehide", flushPendingUciOptions);
 
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("github-link")?.addEventListener("click", () => {
       chrome.tabs?.create({ url: "https://github.com/y9felix/BetterMint" });
     });
 
-    InitOptions();
+    initializeOptionsPage();
   });
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     THEMES,
-    DEFAULT_PRESETS,
-    formatBadgeValue,
+    DEFAULT_CONFIG_PRESETS,
+    formatSliderBadgeValue,
     buildGoPreviewCommand,
     applyTheme,
-    getCurrentThemeColors,
-    getExportFilename,
+    getActiveThemeColors,
+    getExportConfigFilename,
     applyConfigProfile,
-    buildExportSnapshot,
-    importMintText,
-    saveCustomConfigEntry,
-    deleteCustomConfigEntry,
+    buildConfigExportSnapshot,
+    importMintConfigText,
+    deleteCustomConfigProfile,
     setConfigPopoverMode,
     parseUciOptionLine,
     renderDynamicUciOptions,
-    probeEngine,
-    InitOptions,
-    OnOptionsChange,
-    resetProbedUrlForTesting: () => {
-      probedUrl = null;
-      lastProbedOptions = [];
-      activeConfigName = null;
-      customConfigsCache = [];
-      popoverMode = null;
-      activeThemeColors = null;
+    probeEngineUciOptions,
+    initializeOptionsPage,
+    handleExtensionOptionChange,
+    resetProbeStateForTesting: () => {
+      lastProbedEngineUrl = null;
+      lastProbedUciOptions = [];
+      activeConfigProfileName = null;
+      customConfigProfiles = [];
+      activePopoverMode = null;
+      activeThemeCustomColors = null;
     }
   };
 }

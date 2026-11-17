@@ -6,251 +6,259 @@ from fastapi import FastAPI, WebSocket
 from fastapi.websockets import WebSocketDisconnect, WebSocketState
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
-DEFAULT_CONFIG = {
+DEFAULT_ENGINE_CONFIG = {
     "default": "stockfish",
     "engines": {
         "stockfish": ["stockfish"]
     }
 }
 
-def load_config(path: str = CONFIG_PATH) -> dict:
-    if not os.path.exists(path):
+def load_engine_config(config_path: str = CONFIG_PATH) -> dict:
+    if not os.path.exists(config_path):
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(DEFAULT_CONFIG, f, indent=2)
-        except OSError as e:
-            print(f"[CONFIG WARN] Failed to write default config '{path}': {e}", flush=True)
-        return dict(DEFAULT_CONFIG)
+            with open(config_path, "w", encoding="utf-8") as config_file:
+                json.dump(DEFAULT_ENGINE_CONFIG, config_file, indent=2)
+        except OSError as write_error:
+            print(f"[CONFIG WARN] Failed to write default config '{config_path}': {write_error}", flush=True)
+        return dict(DEFAULT_ENGINE_CONFIG)
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                return data
-            print(f"[CONFIG WARN] Config '{path}' root is not an object; using defaults", flush=True)
-    except (OSError, json.JSONDecodeError) as e:
-        print(f"[CONFIG WARN] Failed to load '{path}': {e}; using defaults", flush=True)
-    return dict(DEFAULT_CONFIG)
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            parsed_config = json.load(config_file)
+            if isinstance(parsed_config, dict):
+                return parsed_config
+            print(f"[CONFIG WARN] Config '{config_path}' root is not an object; using defaults", flush=True)
+    except (OSError, json.JSONDecodeError) as load_error:
+        print(f"[CONFIG WARN] Failed to load '{config_path}': {load_error}; using defaults", flush=True)
+    return dict(DEFAULT_ENGINE_CONFIG)
 
-def resolve_engine_cmd(cfg: dict, engine_name: str | None) -> list[str]:
-    engines = cfg.get("engines")
-    if not isinstance(engines, dict):
-        engines = {}
-    if engine_name and engine_name in engines:
-        cmd = engines[engine_name]
+def resolve_engine_command(engine_config: dict, engine_name: str | None) -> list[str]:
+    engines_map = engine_config.get("engines")
+    if not isinstance(engines_map, dict):
+        engines_map = {}
+    if engine_name and engine_name in engines_map:
+        raw_command = engines_map[engine_name]
     else:
-        cmd = engines.get(cfg.get("default", "stockfish"), ["stockfish"])
-    if isinstance(cmd, str):
-        return [cmd] if cmd else ["stockfish"]
-    if isinstance(cmd, list):
-        parts = [str(c) for c in cmd if str(c)]
-        return parts or ["stockfish"]
+        raw_command = engines_map.get(engine_config.get("default", "stockfish"), ["stockfish"])
+    if isinstance(raw_command, str):
+        return [raw_command] if raw_command else ["stockfish"]
+    if isinstance(raw_command, list):
+        command_parts = [str(part) for part in raw_command if str(part)]
+        return command_parts or ["stockfish"]
     return ["stockfish"]
 
 class EngineProcess:
-    def __init__(self, cmd: list[str]):
-        self.cmd = cmd
-        self._proc = None
-        self._quit_sent = False
+    def __init__(self, command: list[str]):
+        self.command = command
+        self._process = None
+        self._has_sent_quit = False
 
     async def start(self):
-        self._proc = await asyncio.create_subprocess_exec(
-            *self.cmd,
+        self._process = await asyncio.create_subprocess_exec(
+            *self.command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         return self
 
-    def _write(self, cmd: str) -> bool:
-        if not self._proc or not self._proc.stdin or self._proc.returncode is not None or self._quit_sent:
+    def _write_uci_lines(self, uci_payload: str) -> bool:
+        if not self._process or not self._process.stdin or self._process.returncode is not None or self._has_sent_quit:
             return False
-        wrote = False
-        for raw_line in cmd.replace("\r", "\n").split("\n"):
-            clean = raw_line.strip()
-            if not clean or self._quit_sent:
+        has_written = False
+        for raw_line in uci_payload.replace("\r", "\n").split("\n"):
+            clean_line = raw_line.strip()
+            if not clean_line or self._has_sent_quit:
                 continue
-            lower = clean.lower()
-            if lower.startswith("setoption ") and ("debug log file" in lower or "logfile" in lower):
+            lower_line = " ".join(clean_line.lower().split())
+            if lower_line.startswith("setoption ") and ("debug log file" in lower_line or "logfile" in lower_line):
                 continue
             try:
-                self._proc.stdin.write(f"{clean}\n".encode("utf-8"))
-                wrote = True
-                if lower == "quit":
-                    self._quit_sent = True
+                self._process.stdin.write(f"{clean_line}\n".encode("utf-8"))
+                has_written = True
+                if lower_line == "quit":
+                    self._has_sent_quit = True
             except OSError:
                 break
-        return wrote
+        return has_written
 
-    async def put(self, cmd: str):
-        if self._write(cmd):
+    async def send_uci(self, uci_payload: str):
+        if self._write_uci_lines(uci_payload):
             try:
-                await self._proc.stdin.drain()
+                await self._process.stdin.drain()
             except OSError:
                 pass
 
-    async def read_line(self) -> str | None:
-        if not self._proc or not self._proc.stdout:
+    async def read_stdout_line(self) -> str | None:
+        if not self._process or not self._process.stdout:
             return None
-        raw = await self._proc.stdout.readline()
-        if not raw:
+        raw_bytes = await self._process.stdout.readline()
+        if not raw_bytes:
             return None
-        return raw.decode("utf-8", errors="replace").strip()
+        return raw_bytes.decode("utf-8", errors="replace").strip()
 
     def terminate(self):
-        if not self._proc:
+        if not self._process:
             return
         try:
-            if not self._quit_sent:
-                self._write("quit")
-            if self._proc.returncode is None:
-                self._proc.terminate()
+            if not self._has_sent_quit:
+                self._write_uci_lines("quit")
+            if self._process.returncode is None:
+                self._process.terminate()
         except OSError:
             pass
 
-    async def wait_closed(self):
-        if not self._proc:
+    async def wait_until_closed(self):
+        if not self._process:
             return
-        if self._proc.stdin:
+        if self._process.stdin:
             try:
-                self._proc.stdin.close()
+                self._process.stdin.close()
             except OSError:
                 pass
         try:
-            await asyncio.wait_for(self._proc.wait(), timeout=2.0)
+            await asyncio.wait_for(self._process.wait(), timeout=2.0)
         except asyncio.TimeoutError:
             try:
-                self._proc.kill()
-                await asyncio.wait_for(self._proc.wait(), timeout=1.0)
+                self._process.kill()
+                await asyncio.wait_for(self._process.wait(), timeout=1.0)
             except (asyncio.TimeoutError, OSError):
                 pass
 
 MAX_CONCURRENT_ENGINES = 8
-VERBOSE_UCI = os.environ.get("BETTERMINT_VERBOSE", "1") != "0"
-engine_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENGINES)
+IS_VERBOSE_UCI_LOGGING = os.environ.get("BETTERMINT_VERBOSE", "1") != "0"
+engine_concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENGINES)
 
-def is_allowed_ws_origin(websocket: WebSocket) -> bool:
+def is_allowed_websocket_origin(websocket: WebSocket) -> bool:
     headers = getattr(websocket, "headers", None)
     origin = headers.get("origin") if headers else None
     if not isinstance(origin, str):
         return True
     if origin.startswith("chrome-extension://"):
         return True
-    parsed = urlparse(origin)
-    host = (parsed.hostname or "").lower()
-    return parsed.scheme == "https" and (host == "chess.com" or host.endswith(".chess.com"))
+    parsed_origin = urlparse(origin)
+    hostname = (parsed_origin.hostname or "").lower()
+    return parsed_origin.scheme == "https" and (hostname == "chess.com" or hostname.endswith(".chess.com"))
 
 app = FastAPI()
 
-async def handle_engine(websocket: WebSocket, cmd: list[str]):
-    if not is_allowed_ws_origin(websocket):
+async def serve_engine_websocket(websocket: WebSocket, engine_command: list[str]):
+    if not is_allowed_websocket_origin(websocket):
         await websocket.close(code=1008)
         return
-    if engine_semaphore.locked():
+    if engine_concurrency_semaphore.locked():
         await websocket.close(code=1013)
         return
 
-    async with engine_semaphore:
+    async with engine_concurrency_semaphore:
         await websocket.accept()
-        print(f"[ENGINE SPAWN] {' '.join(cmd)}", flush=True)
+        print(f"[ENGINE SPAWN] {' '.join(engine_command)}", flush=True)
         try:
-            engine = await EngineProcess(cmd).start()
+            engine_process = await EngineProcess(engine_command).start()
         except FileNotFoundError:
-            print(f"[ENGINE ERROR] Binary not found: {' '.join(cmd)}", flush=True)
+            print(f"[ENGINE ERROR] Binary not found: {' '.join(engine_command)}", flush=True)
             try:
-                await websocket.send_text(f"info string Error: Engine binary '{cmd[0]}' not found")
+                await websocket.send_text(f"info string Error: Engine binary '{engine_command[0]}' not found")
+                await websocket.close()
+            except (WebSocketDisconnect, RuntimeError, OSError):
+                pass
+            return
+        except OSError as launch_error:
+            print(f"[ENGINE ERROR] Failed to start engine '{' '.join(engine_command)}': {launch_error}", flush=True)
+            try:
+                await websocket.send_text(f"info string Error: Failed to start engine '{engine_command[0]}': {launch_error}")
                 await websocket.close()
             except (WebSocketDisconnect, RuntimeError, OSError):
                 pass
             return
 
-        async def read_socket():
+        async def forward_websocket_to_engine():
             try:
-                async for msg in websocket.iter_text():
-                    if VERBOSE_UCI:
-                        safe_msg = msg.replace("\r", "\\r").replace("\n", "\\n")
-                        print(f"[UCI IN] {safe_msg}", flush=True)
-                    await engine.put(msg)
+                async for uci_message in websocket.iter_text():
+                    if IS_VERBOSE_UCI_LOGGING:
+                        escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
+                        print(f"[UCI IN] {escaped_message}", flush=True)
+                    await engine_process.send_uci(uci_message)
             except WebSocketDisconnect:
                 pass
-            except Exception as e:
-                print(f"[WS ERROR] Ingress: {e}", flush=True)
+            except Exception as ingress_error:
+                print(f"[WS ERROR] Ingress: {ingress_error}", flush=True)
 
-        async def send_socket():
+        async def forward_engine_to_websocket():
             try:
                 while websocket.client_state == WebSocketState.CONNECTED:
                     app_state = getattr(websocket, "application_state", WebSocketState.CONNECTED)
                     if isinstance(app_state, WebSocketState) and app_state != WebSocketState.CONNECTED:
                         break
-                    res = await engine.read_line()
-                    if res is None:
+                    stdout_line = await engine_process.read_stdout_line()
+                    if stdout_line is None:
                         break
-                    if res:
-                        await websocket.send_text(res)
+                    if stdout_line:
+                        await websocket.send_text(stdout_line)
             except WebSocketDisconnect:
                 pass
-            except Exception as e:
-                print(f"[WS ERROR] Egress: {e}", flush=True)
+            except Exception as egress_error:
+                print(f"[WS ERROR] Egress: {egress_error}", flush=True)
 
-        last_stderr = ""
+        last_stderr_line = ""
 
-        async def stream_stderr():
-            nonlocal last_stderr
+        async def log_engine_stderr():
+            nonlocal last_stderr_line
             try:
-                proc = getattr(engine, "_proc", None)
-                if not proc or not proc.stderr:
+                subprocess_handle = getattr(engine_process, "_process", None)
+                if not subprocess_handle or not subprocess_handle.stderr:
                     return
-                while line := await proc.stderr.readline():
-                    text = line.decode("utf-8", errors="replace").strip()
-                    if text:
-                        last_stderr = text
-                        print(f"[ENGINE STDERR] {text}", flush=True)
-            except Exception as e:
-                print(f"[ENGINE ERROR] Stderr: {e}", flush=True)
+                while stderr_bytes := await subprocess_handle.stderr.readline():
+                    stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+                    if stderr_text:
+                        last_stderr_line = stderr_text
+                        print(f"[ENGINE STDERR] {stderr_text}", flush=True)
+            except Exception as stderr_error:
+                print(f"[ENGINE ERROR] Stderr: {stderr_error}", flush=True)
 
-        task_in = asyncio.create_task(read_socket())
-        task_out = asyncio.create_task(send_socket())
-        task_err = asyncio.create_task(stream_stderr())
+        ingress_task = asyncio.create_task(forward_websocket_to_engine())
+        egress_task = asyncio.create_task(forward_engine_to_websocket())
+        stderr_task = asyncio.create_task(log_engine_stderr())
 
         try:
             await asyncio.wait(
-                [task_in, task_out],
+                [ingress_task, egress_task],
                 return_when=asyncio.FIRST_COMPLETED
             )
         finally:
-            if task_out.done() and not task_err.done():
+            if egress_task.done() and not stderr_task.done():
                 try:
-                    await asyncio.wait_for(asyncio.shield(task_err), timeout=0.2)
+                    await asyncio.wait_for(asyncio.shield(stderr_task), timeout=0.2)
                 except asyncio.TimeoutError:
                     pass
-            for t in (task_in, task_out, task_err):
-                if not t.done():
-                    t.cancel()
-            await asyncio.gather(task_in, task_out, task_err, return_exceptions=True)
-            quit_already_sent = getattr(engine, "_quit_sent", False)
-            engine.terminate()
-            await engine.wait_closed()
-            proc = getattr(engine, "_proc", None)
-            rc = getattr(proc, "returncode", None) if proc else None
+            for task in (ingress_task, egress_task, stderr_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(ingress_task, egress_task, stderr_task, return_exceptions=True)
+            had_sent_quit = getattr(engine_process, "_has_sent_quit", False)
+            engine_process.terminate()
+            await engine_process.wait_until_closed()
+            subprocess_handle = getattr(engine_process, "_process", None)
+            exit_code = getattr(subprocess_handle, "returncode", None) if subprocess_handle else None
             if (
-                isinstance(rc, int)
-                and rc != 0
-                and not quit_already_sent
+                isinstance(exit_code, int)
+                and exit_code != 0
+                and not had_sent_quit
                 and websocket.client_state == WebSocketState.CONNECTED
             ):
-                detail = f": {last_stderr}" if last_stderr else ""
+                error_detail = f": {last_stderr_line}" if last_stderr_line else ""
                 try:
-                    await websocket.send_text(f"info string Error: Engine crashed (exit {rc}){detail}")
+                    await websocket.send_text(f"info string Error: Engine crashed (exit {exit_code}){error_detail}")
                     await websocket.close(code=1011)
                 except (WebSocketDisconnect, RuntimeError, OSError):
                     pass
-            print(f"[ENGINE STOP] {' '.join(cmd)}", flush=True)
+            print(f"[ENGINE STOP] {' '.join(engine_command)}", flush=True)
 
 @app.websocket("/ws")
-async def ws_default(websocket: WebSocket):
-    await ws_named(websocket, None)
+async def connect_default_engine(websocket: WebSocket):
+    await connect_named_engine(websocket, None)
 
 @app.websocket("/ws/{engine_name}")
-async def ws_named(websocket: WebSocket, engine_name: str | None = None):
-    cfg = load_config()
-    cmd = resolve_engine_cmd(cfg, engine_name)
-    await handle_engine(websocket, cmd)
+async def connect_named_engine(websocket: WebSocket, engine_name: str | None = None):
+    engine_config = load_engine_config()
+    engine_command = resolve_engine_command(engine_config, engine_name)
+    await serve_engine_websocket(websocket, engine_command)
