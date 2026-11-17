@@ -35,7 +35,7 @@
     height: 100%;
     left: 0;
     position: absolute;
-    transition: transform 0.25s ease-out;
+    transition: transform 1s ease;
     width: 100%;
 }
 
