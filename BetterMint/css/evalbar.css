@@ -1,13 +1,14 @@
 .bettermint-evalbar {
-    border-radius: .2rem;
+    border-radius: 3px;
     flex-shrink: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
     isolation: isolate;
     pointer-events: auto;
     position: fixed;
     -webkit-user-select: none;
     user-select: none;
-    width: 30px;
+    width: 20px;
     z-index: 5;
 }
 
@@ -21,13 +22,24 @@
 }
 
 .bettermint-evalbar .bettermint-evalbar-fill {
-    background-color: hsla(0, 0%, 100%, .05);
-    border-radius: .2rem;
+    background-color: #403d39;
+    border-radius: 3px;
     height: 100%;
     overflow: hidden;
     position: relative;
     width: 100%;
     z-index: 0;
+}
+
+.bettermint-evalbar .bettermint-evalbar-fill::after {
+    border: 1px solid rgba(0, 0, 0, 0.28);
+    border-radius: 3px;
+    box-sizing: border-box;
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 4;
 }
 
 .bettermint-evalbar .bettermint-evalbar-color {
@@ -40,8 +52,17 @@
 }
 
 .bettermint-evalbar .bettermint-evalbar-white {
-    background-color: #fff;
+    background-color: #ffffff;
     z-index: 2;
+}
+
+.bettermint-evalbar .bettermint-evalbar-draw {
+    background-color: rgba(128, 128, 128, 0.25);
+    bottom: 50%;
+    height: 1px;
+    pointer-events: none;
+    transition: none;
+    z-index: 3;
 }
 
 .bettermint-evalbar .bettermint-evalbar-black {
@@ -54,41 +75,46 @@
     font-size: 11px;
     font-weight: 700;
     line-height: 1.2;
-    padding: 4px 2px;
+    pointer-events: none;
     position: absolute;
     text-align: center;
     white-space: nowrap;
-    z-index: 3;
+    z-index: 6;
 }
 
 .bettermint-evalbar:hover .bettermint-evalbar-score {
-    border-radius: .3rem;
+    border-radius: 4px;
     bottom: auto;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.38);
     display: block;
     left: 50%;
-    min-width: 40px;
-    padding: 2px 6px;
+    min-width: 42px;
+    padding: 3px 6px;
     top: 50%;
     transform: translate(-50%, -50%) var(--flipTransform, rotate(0deg));
     width: auto;
 }
 
 .bettermint-evalbar:hover .bettermint-evalbar-score.bettermint-evalbar-dark {
-    background-color: #fff;
-    color: #403d39;
+    background-color: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    color: #312e2b;
 }
 
 .bettermint-evalbar:hover .bettermint-evalbar-score.bettermint-evalbar-light {
-    background-color: #403d39;
-    color: #fff;
+    background-color: #262421;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #ffffff;
 }
 
 .bettermint-evalbar .bettermint-evalbar-scoreAbbreviated {
-    font-size: 10px;
-    font-weight: 600;
+    box-sizing: border-box;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     line-height: 1;
-    padding: 4px 0;
+    padding: 4px 1px;
+    pointer-events: none;
     position: absolute;
     text-align: center;
     white-space: pre;
@@ -102,6 +128,17 @@
 }
 
 .bettermint-evalbar .bettermint-evalbar-scoreAbbreviated.bettermint-evalbar-light {
-    color: #fff;
+    color: #ffffff;
     top: 0;
+}
+
+@media all and (min-width: 60em) {
+    .bettermint-evalbar {
+        width: 30px;
+    }
+
+    .bettermint-evalbar .bettermint-evalbar-scoreAbbreviated {
+        font-size: 10px;
+        padding: 5px 1px;
+    }
 }

@@ -2,7 +2,10 @@
 "use strict";
 
 const TURN_BLACK = 2;
-const EVAL_BAR_OFFSET_PX = 40;
+const EVAL_BAR_DESKTOP_MIN_WIDTH_PX = 960;
+const EVAL_BAR_DESKTOP_WIDTH_PX = 30;
+const EVAL_BAR_COMPACT_WIDTH_PX = 20;
+const EVAL_BAR_GUTTER_PX = 10;
 const AUTO_QUEUE_COOLDOWN_MS = 4000;
 const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
@@ -88,6 +91,42 @@ const CLOCK_TOP_SELECTOR = ".clock-component.clock-top, .clock-button-component.
 
 function cpToWinProbability(cp) {
   return 1 / (1 + Math.exp(-0.00368208 * cp));
+}
+
+function getEvalBarOffsetPx(viewportWidth) {
+  const width = Number.isFinite(viewportWidth) ? viewportWidth : EVAL_BAR_DESKTOP_MIN_WIDTH_PX;
+  const barWidth = width >= EVAL_BAR_DESKTOP_MIN_WIDTH_PX ? EVAL_BAR_DESKTOP_WIDTH_PX : EVAL_BAR_COMPACT_WIDTH_PX;
+  return barWidth + EVAL_BAR_GUTTER_PX;
+}
+
+function formatEvaluation(score, isMate) {
+  if (isMate) {
+    const shortText = "M" + String(Math.abs(score));
+    return {
+      percentage: score < 0 ? 100 : 0,
+      abbreviated: shortText,
+      full: (score < 0 ? "-" : "+") + shortText,
+      isDark: score >= 0
+    };
+  }
+  const smallScore = score / 100;
+  const absScore = Math.abs(smallScore);
+  const percentage = Math.max(5, Math.min(95, (1 - cpToWinProbability(score)) * 100));
+  const full = absScore < 0.005 ? "0.00" : (smallScore > 0 ? "+" : "") + smallScore.toFixed(2);
+  let abbreviated;
+  if (absScore < 0.05) {
+    abbreviated = "0.0";
+  } else if (absScore >= 9.95) {
+    abbreviated = String(Math.round(absScore));
+  } else {
+    abbreviated = absScore.toFixed(1);
+  }
+  return {
+    percentage,
+    abbreviated,
+    full,
+    isDark: score >= 0
+  };
 }
 
 function parseClockElementSeconds(selector) {
@@ -502,7 +541,7 @@ class GameController {
 
     const evalBar = document.createElement("div");
     evalBar.className = "bettermint-evalbar";
-    evalBar.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">+0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBar.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-draw"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
     body.appendChild(evalBar);
 
     this.evalBar = evalBar;
@@ -541,11 +580,12 @@ class GameController {
         }
         return;
       }
+      const offsetPx = getEvalBarOffsetPx(typeof window !== "undefined" ? window.innerWidth : undefined);
       const top = Math.round(rect.top);
       const height = Math.round(rect.height);
-      const left = Math.max(4, Math.round(rect.left - EVAL_BAR_OFFSET_PX));
-      const overlapsBoard = rect.left < EVAL_BAR_OFFSET_PX;
-      const layoutKey = `${top}:${height}:${left}:${overlapsBoard ? 1 : 0}`;
+      const left = Math.max(4, Math.round(rect.left - offsetPx));
+      const overlapsBoard = rect.left < offsetPx;
+      const layoutKey = `${top}:${height}:${left}:${offsetPx}:${overlapsBoard ? 1 : 0}`;
       if (layoutKey === lastLayout) return;
       lastLayout = layoutKey;
 
@@ -713,23 +753,10 @@ class GameController {
 
   SetEvaluation(score, isMate) {
     if (this.evalBar == null) return;
-    let percentage;
-    let textNumber;
-    let textScoreAbb;
-    if (!isMate) {
-      const smallScore = score / 100;
-      percentage = Math.max(5, Math.min(95, (1 - cpToWinProbability(score)) * 100));
-      textNumber = (score >= 0 ? "+" : "") + smallScore.toFixed(2);
-      textScoreAbb = Math.abs(smallScore).toFixed(1);
-    } else {
-      percentage = score < 0 ? 100 : 0;
-      textNumber = "M" + Math.abs(score).toString();
-      textScoreAbb = textNumber;
-    }
+    const { percentage, abbreviated, full, isDark } = formatEvaluation(score, isMate);
     this.evalBarFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
-    this.evalScore.textContent = textNumber;
-    this.evalScoreAbbreviated.textContent = textScoreAbb;
-    const isDark = score >= 0;
+    this.evalScore.textContent = full;
+    this.evalScoreAbbreviated.textContent = abbreviated;
     this.evalScore.classList.toggle("bettermint-evalbar-dark", isDark);
     this.evalScore.classList.toggle("bettermint-evalbar-light", !isDark);
     this.evalScoreAbbreviated.classList.toggle("bettermint-evalbar-dark", isDark);
@@ -1827,6 +1854,8 @@ if (typeof module !== "undefined" && module.exports) {
     TopMove,
     enumOptions,
     resolveLegalMove,
+    formatEvaluation,
+    getEvalBarOffsetPx,
     setOptionsForTesting: (opts) => { tempOptions = opts; }
   };
 }
