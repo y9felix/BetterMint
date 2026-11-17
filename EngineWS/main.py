@@ -1,9 +1,12 @@
 import asyncio
+from http import HTTPStatus
 import json
 import os
-from urllib.parse import urlparse
-from fastapi import FastAPI, WebSocket
-from fastapi.websockets import WebSocketDisconnect, WebSocketState
+import signal
+from urllib.parse import unquote, urlparse
+from websockets.asyncio.server import ServerConnection, serve
+from websockets.exceptions import ConnectionClosed
+from websockets.protocol import State
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 DEFAULT_ENGINE_CONFIG = {
@@ -12,6 +15,11 @@ DEFAULT_ENGINE_CONFIG = {
         "stockfish": ["stockfish"]
     }
 }
+SERVER_HOST = os.environ.get("ENGINEWS_HOST", "127.0.0.1")
+SERVER_PORT = int(os.environ.get("ENGINEWS_PORT", "8000"))
+MAX_CONCURRENT_ENGINES = 8
+IS_VERBOSE_UCI_LOGGING = os.environ.get("BETTERMINT_VERBOSE", "1") != "0"
+engine_concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENGINES)
 
 def load_engine_config(config_path: str = CONFIG_PATH) -> dict:
     if not os.path.exists(config_path):
@@ -45,6 +53,33 @@ def resolve_engine_command(engine_config: dict, engine_name: str | None) -> list
         command_parts = [str(part) for part in raw_command if str(part)]
         return command_parts or ["stockfish"]
     return ["stockfish"]
+
+def resolve_engine_name_from_path(raw_path: str) -> tuple[bool, str | None]:
+    parsed_path = urlparse(raw_path or "").path.rstrip("/")
+    if parsed_path == "/ws":
+        return True, None
+    if parsed_path.startswith("/ws/"):
+        engine_segment = parsed_path[len("/ws/"):]
+        if engine_segment and "/" not in engine_segment:
+            return True, unquote(engine_segment)
+    return False, None
+
+def is_allowed_websocket_origin(origin: str | None) -> bool:
+    if not isinstance(origin, str):
+        return True
+    if origin.startswith("chrome-extension://"):
+        return True
+    parsed_origin = urlparse(origin)
+    hostname = (parsed_origin.hostname or "").lower()
+    return parsed_origin.scheme == "https" and (hostname == "chess.com" or hostname.endswith(".chess.com"))
+
+def validate_websocket_handshake(connection: ServerConnection, request):
+    is_valid_path, _ = resolve_engine_name_from_path(request.path)
+    if not is_valid_path:
+        return connection.respond(HTTPStatus.NOT_FOUND, "Not Found\n")
+    if not is_allowed_websocket_origin(request.headers.get("origin")):
+        return connection.respond(HTTPStatus.FORBIDDEN, "Forbidden\n")
+    return None
 
 class EngineProcess:
     def __init__(self, command: list[str]):
@@ -124,77 +159,58 @@ class EngineProcess:
             except (asyncio.TimeoutError, OSError):
                 pass
 
-MAX_CONCURRENT_ENGINES = 8
-IS_VERBOSE_UCI_LOGGING = os.environ.get("BETTERMINT_VERBOSE", "1") != "0"
-engine_concurrency_semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENGINES)
-
-def is_allowed_websocket_origin(websocket: WebSocket) -> bool:
-    headers = getattr(websocket, "headers", None)
-    origin = headers.get("origin") if headers else None
-    if not isinstance(origin, str):
-        return True
-    if origin.startswith("chrome-extension://"):
-        return True
-    parsed_origin = urlparse(origin)
-    hostname = (parsed_origin.hostname or "").lower()
-    return parsed_origin.scheme == "https" and (hostname == "chess.com" or hostname.endswith(".chess.com"))
-
-app = FastAPI()
-
-async def serve_engine_websocket(websocket: WebSocket, engine_command: list[str]):
-    if not is_allowed_websocket_origin(websocket):
-        await websocket.close(code=1008)
-        return
+async def serve_engine_websocket(websocket: ServerConnection, engine_command: list[str]):
     if engine_concurrency_semaphore.locked():
         await websocket.close(code=1013)
         return
 
     async with engine_concurrency_semaphore:
-        await websocket.accept()
         print(f"[ENGINE SPAWN] {' '.join(engine_command)}", flush=True)
         try:
             engine_process = await EngineProcess(engine_command).start()
         except FileNotFoundError:
             print(f"[ENGINE ERROR] Binary not found: {' '.join(engine_command)}", flush=True)
             try:
-                await websocket.send_text(f"info string Error: Engine binary '{engine_command[0]}' not found")
+                await websocket.send(f"info string Error: Engine binary '{engine_command[0]}' not found")
                 await websocket.close()
-            except (WebSocketDisconnect, RuntimeError, OSError):
+            except (ConnectionClosed, RuntimeError, OSError):
                 pass
             return
         except OSError as launch_error:
             print(f"[ENGINE ERROR] Failed to start engine '{' '.join(engine_command)}': {launch_error}", flush=True)
             try:
-                await websocket.send_text(f"info string Error: Failed to start engine '{engine_command[0]}': {launch_error}")
+                await websocket.send(f"info string Error: Failed to start engine '{engine_command[0]}': {launch_error}")
                 await websocket.close()
-            except (WebSocketDisconnect, RuntimeError, OSError):
+            except (ConnectionClosed, RuntimeError, OSError):
                 pass
             return
 
         async def forward_websocket_to_engine():
             try:
-                async for uci_message in websocket.iter_text():
+                async for raw_message in websocket:
+                    uci_message = (
+                        raw_message.decode("utf-8", errors="replace")
+                        if isinstance(raw_message, bytes)
+                        else raw_message
+                    )
                     if IS_VERBOSE_UCI_LOGGING:
                         escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
                         print(f"[UCI IN] {escaped_message}", flush=True)
                     await engine_process.send_uci(uci_message)
-            except WebSocketDisconnect:
+            except ConnectionClosed:
                 pass
             except Exception as ingress_error:
                 print(f"[WS ERROR] Ingress: {ingress_error}", flush=True)
 
         async def forward_engine_to_websocket():
             try:
-                while websocket.client_state == WebSocketState.CONNECTED:
-                    app_state = getattr(websocket, "application_state", WebSocketState.CONNECTED)
-                    if isinstance(app_state, WebSocketState) and app_state != WebSocketState.CONNECTED:
-                        break
+                while websocket.state is State.OPEN:
                     stdout_line = await engine_process.read_stdout_line()
                     if stdout_line is None:
                         break
                     if stdout_line:
-                        await websocket.send_text(stdout_line)
-            except WebSocketDisconnect:
+                        await websocket.send(stdout_line)
+            except ConnectionClosed:
                 pass
             except Exception as egress_error:
                 print(f"[WS ERROR] Egress: {egress_error}", flush=True)
@@ -243,22 +259,46 @@ async def serve_engine_websocket(websocket: WebSocket, engine_command: list[str]
                 isinstance(exit_code, int)
                 and exit_code != 0
                 and not had_sent_quit
-                and websocket.client_state == WebSocketState.CONNECTED
+                and websocket.state is State.OPEN
             ):
                 error_detail = f": {last_stderr_line}" if last_stderr_line else ""
                 try:
-                    await websocket.send_text(f"info string Error: Engine crashed (exit {exit_code}){error_detail}")
+                    await websocket.send(f"info string Error: Engine crashed (exit {exit_code}){error_detail}")
                     await websocket.close(code=1011)
-                except (WebSocketDisconnect, RuntimeError, OSError):
+                except (ConnectionClosed, RuntimeError, OSError):
                     pass
             print(f"[ENGINE STOP] {' '.join(engine_command)}", flush=True)
 
-@app.websocket("/ws")
-async def connect_default_engine(websocket: WebSocket):
-    await connect_named_engine(websocket, None)
-
-@app.websocket("/ws/{engine_name}")
-async def connect_named_engine(websocket: WebSocket, engine_name: str | None = None):
+async def handle_websocket_connection(websocket: ServerConnection):
+    request_path = websocket.request.path if websocket.request else "/ws"
+    is_valid_path, engine_name = resolve_engine_name_from_path(request_path)
+    if not is_valid_path:
+        await websocket.close(code=1008)
+        return
     engine_config = load_engine_config()
     engine_command = resolve_engine_command(engine_config, engine_name)
     await serve_engine_websocket(websocket, engine_command)
+
+async def run_server(host: str = SERVER_HOST, port: int = SERVER_PORT):
+    stop_event = asyncio.Event()
+    running_loop = asyncio.get_running_loop()
+    for stop_signal in (signal.SIGINT, signal.SIGTERM):
+        try:
+            running_loop.add_signal_handler(stop_signal, stop_event.set)
+        except NotImplementedError:
+            pass
+
+    async with serve(
+        handle_websocket_connection,
+        host,
+        port,
+        process_request=validate_websocket_handshake,
+    ):
+        print(f"[ENGINEWS] Listening on ws://{host}:{port}/ws", flush=True)
+        await stop_event.wait()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_server())
+    except KeyboardInterrupt:
+        pass
