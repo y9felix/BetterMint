@@ -541,7 +541,7 @@ class GameController {
 
     const evalBar = document.createElement("div");
     evalBar.className = "bettermint-evalbar";
-    evalBar.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-draw"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBar.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
     body.appendChild(evalBar);
 
     this.evalBar = evalBar;
