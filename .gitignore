@@ -8,7 +8,10 @@ venv/
 env/
 .superpowers/
 docs/
+scripts/
 config.json
+books/
+*.bin
 *.zip
 dist/
 build/

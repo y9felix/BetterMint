@@ -366,6 +366,7 @@ class GameController {
   ];
 
   static HIGHLIGHT_COLORS = Object.freeze({
+    Book: "#a88865",
     BestMove: "#9eba5a",
     Excellent: "#96bc4b",
     Good: "#96af8b",
@@ -1154,6 +1155,9 @@ class UciEngineClient {
     this.candidateMoves = [];
     this.hasUnsortedCandidateMoves = false;
     this.previousPositionCandidateMoves = [];
+    this.currentPositionBookMoves = new Set();
+    this.previousPositionBookMoves = new Set();
+    this.hasCurrentPositionBookHit = false;
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
     this.searchDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
@@ -1210,6 +1214,9 @@ class UciEngineClient {
       this.hasSentIsReady = false;
       this.appliedUciOptions = {};
       this.staleBestMovesToIgnore = 0;
+      this.currentPositionBookMoves = new Set();
+      this.previousPositionBookMoves = new Set();
+      this.hasCurrentPositionBookHit = false;
       this.sendUciCommand("uci");
       this.onReady(() => {
         this.isEngineReady = false;
@@ -1294,6 +1301,9 @@ class UciEngineClient {
       this.readyCallbacks = [];
       this.stopCompletionCallbacks = [];
       this.isSwitchingEngine = false;
+      this.currentPositionBookMoves = new Set();
+      this.previousPositionBookMoves = new Set();
+      this.hasCurrentPositionBookHit = false;
       this.supportedUciOptions = new Set();
       this.uciOptionDefaults = new Map();
       this.appliedUciOptions = {};
@@ -1512,6 +1522,9 @@ class UciEngineClient {
     this.isFinishingSearch = false;
     this.staleBestMovesToIgnore = 0;
     this.pendingPositionUpdate = null;
+    this.currentPositionBookMoves = new Set();
+    this.previousPositionBookMoves = new Set();
+    this.hasCurrentPositionBookHit = false;
     this.readyCallbacks = [];
     this.stopCompletionCallbacks = [];
     if (this.stopFallbackTimeoutId !== null) {
@@ -1862,6 +1875,21 @@ class UciEngineClient {
     } else if (typeof uciLine === "string" && uciLine.startsWith("info string Error:")) {
       this.fatalErrorMessage = uciLine.slice("info string ".length);
       console.error(`[BetterMint] ${this.fatalErrorMessage}`);
+    } else if (typeof uciLine === "string" && uciLine.startsWith("info string book ")) {
+      if (this.hasRequestedStop) return;
+      const bookMoveTokens = uciLine
+        .slice("info string book ".length)
+        .trim()
+        .toLowerCase()
+        .split(/\s+/);
+      for (const bookMoveToken of bookMoveTokens) {
+        if (/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(bookMoveToken)) {
+          this.currentPositionBookMoves.add(bookMoveToken);
+        }
+      }
+      if (this.currentPositionBookMoves.size > 0) {
+        this.hasCurrentPositionBookHit = true;
+      }
     } else if (uciLine === "readyok") {
       if (this.pendingReadyCount > 0) {
         this.pendingReadyCount--;
@@ -1934,9 +1962,11 @@ class UciEngineClient {
           );
 
           if (existingIndex < 0) {
-            console.warn(
-              `The engine returned the best move "${bestUciMove}" but it's not in the top move list.`
-            );
+            if (!this.hasCurrentPositionBookHit) {
+              console.warn(
+                `The engine returned the best move "${bestUciMove}" but it's not in the top move list.`
+              );
+            }
             const fallbackBestCandidate = new CandidateMove(
               bestUciMove,
               getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 1) || 1,
@@ -1957,14 +1987,18 @@ class UciEngineClient {
       const isSamePosition = !isNewGame && fen !== null && fen === this.currentPositionFen;
       if (isNewGame) {
         this.previousPositionCandidateMoves = [];
+        this.previousPositionBookMoves = new Set();
         this.lastAutoMovedFen = null;
       } else if (!isSamePosition) {
         this.ensureCandidateMovesSorted();
         this.previousPositionCandidateMoves = this.candidateMoves;
+        this.previousPositionBookMoves = new Set(this.currentPositionBookMoves);
         this.lastAutoMovedFen = null;
       }
       this.currentPositionFen = fen;
       this.candidateMoves = [];
+      this.currentPositionBookMoves = new Set();
+      this.hasCurrentPositionBookHit = false;
       this.hasUnsortedCandidateMoves = false;
       const resolvedPositionCommand =
         positionCommand || (fen !== null ? `position fen ${fen}` : null);
@@ -1988,8 +2022,14 @@ class UciEngineClient {
     const lastPlayedMove = gameController.chessComGame.getLastMove();
     if (!lastPlayedMove) return;
 
-    let moveQuality = null;
-    if (this.previousPositionCandidateMoves.length > 0 && this.candidateMoves.length > 0) {
+    const lastPlayedUci = formatMoveToUci(lastPlayedMove);
+    const isBookMove = Boolean(
+      (lastPlayedUci && this.previousPositionBookMoves?.has(lastPlayedUci)) ||
+      this.hasCurrentPositionBookHit
+    );
+
+    let moveQuality = isBookMove ? "Book" : null;
+    if (!moveQuality && this.previousPositionCandidateMoves.length > 0 && this.candidateMoves.length > 0) {
       const previousBestMove = this.previousPositionCandidateMoves[0];
       if (resolveLegalMove([lastPlayedMove], previousBestMove)) {
         moveQuality = "BestMove";

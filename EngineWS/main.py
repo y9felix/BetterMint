@@ -7,8 +7,16 @@ from urllib.parse import unquote, urlparse
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
 from websockets.protocol import State
+from polyglot import (
+    PolyglotBoard,
+    extract_go_searchmoves,
+    lookup_polyglot_moves,
+    pick_book_moves,
+    resolve_book_path,
+)
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+ENGINEWS_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(ENGINEWS_DIR, "config.json")
 DEFAULT_ENGINE_CONFIG = {
     "default": "stockfish",
     "engines": {
@@ -159,7 +167,11 @@ class EngineProcess:
             except (asyncio.TimeoutError, OSError):
                 pass
 
-async def serve_engine_websocket(websocket: ServerConnection, engine_command: list[str]):
+async def serve_engine_websocket(
+    websocket: ServerConnection,
+    engine_command: list[str],
+    book_path: str | None = None,
+):
     if engine_concurrency_semaphore.locked():
         await websocket.close(code=1013)
         return
@@ -185,6 +197,20 @@ async def serve_engine_websocket(websocket: ServerConnection, engine_command: li
                 pass
             return
 
+        active_book_path = None
+        if book_path:
+            if os.path.isfile(book_path):
+                active_book_path = book_path
+            else:
+                print(f"[CONFIG WARN] Polyglot book '{book_path}' not found; running without opening book", flush=True)
+
+        board_state = PolyglotBoard()
+        websocket_send_lock = asyncio.Lock()
+
+        async def send_ws_line(text: str):
+            async with websocket_send_lock:
+                await websocket.send(text)
+
         async def forward_websocket_to_engine():
             try:
                 async for raw_message in websocket:
@@ -196,7 +222,28 @@ async def serve_engine_websocket(websocket: ServerConnection, engine_command: li
                     if IS_VERBOSE_UCI_LOGGING:
                         escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
                         print(f"[UCI IN] {escaped_message}", flush=True)
-                    await engine_process.send_uci(uci_message)
+                    for raw_line in uci_message.replace("\r", "\n").split("\n"):
+                        clean_line = raw_line.strip()
+                        if not clean_line:
+                            continue
+                        lower_line = " ".join(clean_line.lower().split())
+                        if lower_line == "ucinewgame":
+                            board_state.reset()
+                            await engine_process.send_uci(clean_line)
+                        elif lower_line.startswith("position "):
+                            board_state.apply_position_command(clean_line)
+                            await engine_process.send_uci(clean_line)
+                        elif active_book_path and (lower_line == "go" or lower_line.startswith("go ")):
+                            book_entries = lookup_polyglot_moves(board_state, active_book_path)
+                            book_selection = pick_book_moves(book_entries, extract_go_searchmoves(clean_line))
+                            if book_selection:
+                                selected_move, ordered_moves = book_selection
+                                await send_ws_line(f"info string book {' '.join(ordered_moves)}")
+                                await send_ws_line(f"bestmove {selected_move}")
+                            else:
+                                await engine_process.send_uci(clean_line)
+                        else:
+                            await engine_process.send_uci(clean_line)
             except ConnectionClosed:
                 pass
             except Exception as ingress_error:
@@ -209,7 +256,7 @@ async def serve_engine_websocket(websocket: ServerConnection, engine_command: li
                     if stdout_line is None:
                         break
                     if stdout_line:
-                        await websocket.send(stdout_line)
+                        await send_ws_line(stdout_line)
             except ConnectionClosed:
                 pass
             except Exception as egress_error:
@@ -277,7 +324,8 @@ async def handle_websocket_connection(websocket: ServerConnection):
         return
     engine_config = load_engine_config()
     engine_command = resolve_engine_command(engine_config, engine_name)
-    await serve_engine_websocket(websocket, engine_command)
+    book_path = resolve_book_path(engine_config, engine_name, ENGINEWS_DIR)
+    await serve_engine_websocket(websocket, engine_command, book_path=book_path)
 
 async def run_server(host: str = SERVER_HOST, port: int = SERVER_PORT):
     stop_event = asyncio.Event()
