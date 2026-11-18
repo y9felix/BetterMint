@@ -4,7 +4,7 @@
 
 **Chess.com engine analysis and auto-move tool.**
 
-[![Version](https://img.shields.io/badge/version-2.1.16-7a5cff?style=for-the-badge)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.16)
+[![Version](https://img.shields.io/badge/version-2.1.17-7a5cff?style=for-the-badge)](https://github.com/y9felix/BetterMint/releases/tag/v2.1.17)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4ade80?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](EngineWS)
 [![License: RPL-1.5](https://img.shields.io/badge/License-RPL%201.5-22c55e?style=for-the-badge)](LICENSE)
