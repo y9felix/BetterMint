@@ -272,8 +272,8 @@ body.is-ready .sub-panel.hidden {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin: 0 -4px;
-    padding: 0 4px;
+    margin: 0 -6px;
+    padding: 0 6px;
 }
 
 .control-row {
@@ -420,7 +420,7 @@ body.is-ready .sub-panel.hidden {
     );
     outline: none;
     cursor: pointer;
-    margin: 7px 0 3px;
+    margin: 7px 0;
 }
 
 .range-slider::-webkit-slider-thumb {
@@ -520,8 +520,8 @@ details.collapse-group::details-content {
     block-size: 0;
     opacity: 0;
     overflow: clip;
-    margin: 0 -4px;
-    padding: 0 4px;
+    margin: 0 -6px;
+    padding: 0 6px;
     transition:
         block-size 0.22s cubic-bezier(0.2, 0, 0, 1),
         opacity 0.18s ease,
@@ -568,7 +568,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding-top: 10px;
+    padding: 10px 0 2px;
 }
 
 @supports not selector(::details-content) {
