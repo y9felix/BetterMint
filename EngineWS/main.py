@@ -9,7 +9,6 @@ from websockets.exceptions import ConnectionClosed
 from websockets.protocol import State
 from polyglot import (
     PolyglotBoard,
-    extract_go_searchmoves,
     lookup_polyglot_moves,
     pick_book_moves,
     resolve_book_path,
@@ -249,7 +248,7 @@ async def serve_engine_websocket(
                             await engine_process.send_uci(clean_line)
                         elif active_book_path and (lower_line == "go" or lower_line.startswith("go ")):
                             book_entries = lookup_polyglot_moves(board_state, active_book_path)
-                            book_selection = pick_book_moves(book_entries, extract_go_searchmoves(clean_line))
+                            book_selection = pick_book_moves(book_entries)
                             if book_selection:
                                 selected_move, ordered_moves = book_selection
                                 await send_ws_line(f"info string book {' '.join(ordered_moves)}")

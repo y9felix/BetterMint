@@ -395,32 +395,11 @@ def lookup_polyglot_moves(board: PolyglotBoard, book_path: str | None) -> list[t
     except OSError:
         return []
 
-def extract_go_searchmoves(go_command: str) -> set[str] | None:
-    tokens = go_command.strip().lower().split()
-    try:
-        searchmoves_index = tokens.index("searchmoves")
-    except ValueError:
-        return None
-    allowed_moves = set()
-    for token in tokens[searchmoves_index + 1:]:
-        if UCI_MOVE_RE.match(token):
-            allowed_moves.add(token)
-        else:
-            break
-    return allowed_moves or None
-
-def pick_book_moves(entries: list[tuple[str, int]], allowed_moves: set[str] | None = None) -> tuple[str, list[str]] | None:
+def pick_book_moves(entries: list[tuple[str, int]]) -> tuple[str, list[str]] | None:
     if not entries:
         return None
-    filtered_entries = (
-        [(move, weight) for move, weight in entries if move in allowed_moves]
-        if allowed_moves is not None
-        else entries
-    )
-    if not filtered_entries:
-        return None
-    positive_entries = [(move, weight) for move, weight in filtered_entries if weight > 0]
-    candidate_pool = positive_entries if positive_entries else filtered_entries
+    positive_entries = [(move, weight) for move, weight in entries if weight > 0]
+    candidate_pool = positive_entries if positive_entries else entries
     moves = [move for move, _ in candidate_pool]
     weights = [weight for _, weight in candidate_pool]
     if sum(weights) > 0:

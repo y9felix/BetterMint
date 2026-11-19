@@ -30,89 +30,6 @@ const THEMES = {
 const DEFAULT_EXTENSION_OPTION_VALUES =
   typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? DEFAULT_EXTENSION_OPTIONS : {};
 
-function buildPresetExtensionOptions(optionOverrides) {
-  return Object.assign({}, DEFAULT_EXTENSION_OPTION_VALUES, optionOverrides);
-}
-
-const DEFAULT_CONFIG_PRESETS = [
-  {
-    id: "bullet",
-    name: "Bullet",
-    summary: "D8 · 1.25s · 200ms",
-    settings: buildPresetExtensionOptions({
-      "option-depth": 8,
-      "option-legit-auto-move": true,
-      "option-move-pace": 1.25,
-      "option-physical-floor": 200,
-      "option-timing-spread": 0.45,
-      "option-recapture-multiplier": 0.50,
-      "option-forced-multiplier": 0.35,
-      "option-opening-moves-threshold": 7,
-      "option-opening-multiplier": 0.65,
-      "option-clock-threshold": 20,
-      "option-clock-min-multiplier": 0.40
-    }),
-    customEngineOptions: {}
-  },
-  {
-    id: "blitz",
-    name: "Blitz",
-    summary: "D12 · 3.8s · 350ms",
-    settings: buildPresetExtensionOptions({
-      "option-depth": 12,
-      "option-legit-auto-move": true,
-      "option-move-pace": 3.8,
-      "option-physical-floor": 350,
-      "option-timing-spread": 0.65,
-      "option-recapture-multiplier": 0.35,
-      "option-forced-multiplier": 0.25,
-      "option-opening-moves-threshold": 8,
-      "option-opening-multiplier": 0.50,
-      "option-clock-threshold": 45,
-      "option-clock-min-multiplier": 0.28
-    }),
-    customEngineOptions: {}
-  },
-  {
-    id: "rapid",
-    name: "Rapid",
-    summary: "D16 · 12.5s · 600ms",
-    settings: buildPresetExtensionOptions({
-      "option-depth": 16,
-      "option-legit-auto-move": true
-    }),
-    customEngineOptions: {}
-  },
-  {
-    id: "puzzles",
-    name: "Puzzles",
-    summary: "D14 · Queue · Hints",
-    settings: buildPresetExtensionOptions({
-      "option-depth": 14,
-      "option-evaluation-bar": false,
-      "option-show-hints": true,
-      "option-move-analysis": false,
-      "option-auto-queue": true,
-      "option-legit-auto-move": true,
-      "option-human-like-moves": false
-    }),
-    customEngineOptions: {}
-  },
-  {
-    id: "bots",
-    name: "Bots",
-    summary: "D14 · Auto · Eval",
-    settings: buildPresetExtensionOptions({
-      "option-depth": 14,
-      "option-show-hints": false,
-      "option-move-analysis": false,
-      "option-legit-auto-move": true,
-      "option-human-like-moves": false
-    }),
-    customEngineOptions: {}
-  }
-];
-
 let activeThemeId = "dark";
 let activeConfigProfileName = null;
 let customConfigProfiles = [];
@@ -120,15 +37,19 @@ let activePopoverMode = null;
 let statusClearTimerId = null;
 let isThemeInitialized = false;
 let isConfigSystemInitialized = false;
-let isSearchStopInitialized = false;
+let isEnginePanelInitialized = false;
 
 const ZERO_OFF_SLIDER_OPTION_KEYS = new Set([
   "option-depth",
   "option-go-movetime",
   "option-go-nodes",
-  "option-go-mate",
-  "option-go-movestogo",
-  "option-go-infinite-timeout"
+  "option-opening-moves-threshold",
+  "option-clock-threshold"
+]);
+
+const ONE_OFF_SLIDER_OPTION_KEYS = new Set([
+  "option-reflex-multiplier",
+  "option-opening-multiplier"
 ]);
 
 const EXTENSION_OPTION_KEYS =
@@ -138,6 +59,7 @@ const extensionOptionInputs = {};
 function formatSliderBadgeValue(optionKey, rawValue) {
   const numericValue = Number(rawValue);
   if (ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey) && numericValue === 0) return "Off";
+  if (ONE_OFF_SLIDER_OPTION_KEYS.has(optionKey) && numericValue >= 1) return "Off";
   if (optionKey === "option-go-nodes" && !Number.isNaN(numericValue)) {
     return numericValue.toLocaleString("en-US");
   }
@@ -203,8 +125,10 @@ function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
   if (!cleanedText) return null;
 
   let parsedNumber;
-  if (optionKey && ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey) && cleanedText.toLowerCase() === "off") {
+  if (cleanedText.toLowerCase() === "off" && optionKey && ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey)) {
     parsedNumber = 0;
+  } else if (cleanedText.toLowerCase() === "off" && optionKey && ONE_OFF_SLIDER_OPTION_KEYS.has(optionKey)) {
+    parsedNumber = 1;
   } else {
     parsedNumber = Number(cleanedText);
     if (!Number.isFinite(parsedNumber)) return null;
@@ -280,69 +204,17 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
   });
 }
 
-function parseSearchMovesTokens(rawMovesText) {
-  const seenMoves = new Set();
-  const validMoves = [];
-  for (const moveToken of String(rawMovesText || "").trim().toLowerCase().split(/\s+/)) {
-    if (/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(moveToken) && !seenMoves.has(moveToken)) {
-      seenMoves.add(moveToken);
-      validMoves.push(moveToken);
-    }
-  }
-  return validMoves;
-}
-
 function buildGoPreviewCommand(extensionOptions = null) {
   const effectiveOptions = extensionOptions || readExtensionOptionsFromDom();
-  const searchMoves = parseSearchMovesTokens(effectiveOptions["option-go-searchmoves"]);
-  if (effectiveOptions["option-go-infinite"]) {
-    const commandParts = ["go", "infinite"];
-    if (searchMoves.length > 0) commandParts.push("searchmoves", ...searchMoves);
-    return commandParts.join(" ");
-  }
-
   const commandParts = ["go"];
   const depth = parseInt(effectiveOptions["option-depth"], 10) || 0;
   const movetimeMs = parseInt(effectiveOptions["option-go-movetime"], 10) || 0;
   const nodeLimit = parseInt(effectiveOptions["option-go-nodes"], 10) || 0;
-  const mateDepth = parseInt(effectiveOptions["option-go-mate"], 10) || 0;
-  const isClockSyncEnabled = Boolean(effectiveOptions["option-go-clock-sync"]);
-  const clockIncrementMs = parseInt(effectiveOptions["option-go-clock-inc"], 10) || 0;
-  const movesToGo = parseInt(effectiveOptions["option-go-movestogo"], 10) || 0;
-  let hasSearchBound = false;
 
-  if (depth > 0) {
-    commandParts.push("depth", String(depth));
-    hasSearchBound = true;
-  }
-  if (movetimeMs > 0) {
-    commandParts.push("movetime", String(movetimeMs));
-    hasSearchBound = true;
-  }
-  if (nodeLimit > 0) {
-    commandParts.push("nodes", String(nodeLimit));
-    hasSearchBound = true;
-  }
-  if (mateDepth > 0) {
-    commandParts.push("mate", String(mateDepth));
-    hasSearchBound = true;
-  }
-  if (isClockSyncEnabled) {
-    commandParts.push("wtime", "<W>", "btime", "<B>");
-    if (clockIncrementMs > 0) {
-      commandParts.push("winc", String(clockIncrementMs), "binc", String(clockIncrementMs));
-    }
-    if (movesToGo > 0) {
-      commandParts.push("movestogo", String(movesToGo));
-    }
-    hasSearchBound = true;
-  }
-  if (!hasSearchBound) {
-    commandParts.push("depth", "1");
-  }
-  if (searchMoves.length > 0) {
-    commandParts.push("searchmoves", ...searchMoves);
-  }
+  if (depth > 0) commandParts.push("depth", String(depth));
+  if (movetimeMs > 0) commandParts.push("movetime", String(movetimeMs));
+  if (nodeLimit > 0) commandParts.push("nodes", String(nodeLimit));
+  if (commandParts.length === 1) commandParts.push("depth", "1");
   return commandParts.join(" ");
 }
 
@@ -386,8 +258,6 @@ function initializeTheme() {
 }
 
 const VISIBILITY_TOGGLE_GROUPS = [
-  ["option-go-clock-sync", "go-clock-group"],
-  ["option-go-infinite", "go-infinite-group"],
   ["option-auto-queue", "auto-queue-group"],
   ["option-legit-auto-move", "pacing-group"],
   ["option-human-like-moves", "human-pace-group"]
@@ -918,22 +788,6 @@ function setConfigStatusMessage(statusMessage, isError = false) {
   }
 }
 
-function sanitizeConfigFilename(rawName) {
-  const sanitizedName = String(rawName || "")
-    .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "-")
-    .replace(/\s+/g, " ");
-  return sanitizedName || "config";
-}
-
-function stripMintFileExtension(filename) {
-  return String(filename || "").replace(/\.mint$/i, "").trim();
-}
-
-function getExportConfigFilename(profileName = activeConfigProfileName) {
-  return profileName ? `${sanitizeConfigFilename(profileName)}.mint` : "config.mint";
-}
-
 function applyConfigProfile(
   rawExtensionOptions,
   uciOptionOverrides = {},
@@ -1024,29 +878,6 @@ function renderSavedConfigList() {
   if (!listContainer) return;
   listContainer.innerHTML = "";
 
-  listContainer.appendChild(
-    createDomElement("div", { className: "config-section-label", textContent: "Presets" })
-  );
-  DEFAULT_CONFIG_PRESETS.forEach((presetProfile) => {
-    const presetButton = createDomElement("button", { type: "button", className: "config-item-btn" }, [
-      createDomElement("span", { className: "config-item-name", textContent: presetProfile.name }),
-      createDomElement("span", { className: "config-item-meta", textContent: presetProfile.summary })
-    ]);
-    presetButton.addEventListener("click", () => {
-      applyConfigProfile(presetProfile.settings, presetProfile.customEngineOptions, {
-        shouldMarkSaved: false
-      });
-      setConfigPopoverMode(null);
-      setConfigStatusMessage(`Loaded ${presetProfile.name}`);
-    });
-    listContainer.appendChild(
-      createDomElement("div", { className: "config-item-row config-item" }, [presetButton])
-    );
-  });
-
-  listContainer.appendChild(
-    createDomElement("div", { className: "config-section-label", textContent: "Custom" })
-  );
   if (customConfigProfiles.length === 0) {
     listContainer.appendChild(
       createDomElement("div", { className: "config-empty", textContent: "No saved configs yet." })
@@ -1173,52 +1004,6 @@ function loadConfigStorageState(onLoaded) {
   });
 }
 
-function buildConfigExportSnapshot(onSnapshotReady) {
-  const extensionOptions = readExtensionOptionsFromDom();
-  loadConfigStorageState((storageState) => {
-    const exportSnapshot = {
-      format: "bettermint-config",
-      version: 2,
-      name: storageState.activeConfigName || null,
-      exportedAt: new Date().toISOString(),
-      settings: extensionOptions,
-      customEngineOptions: storageState.customEngineOptions || {},
-      theme: activeThemeId,
-      customConfigs: storageState.customConfigs.map((savedProfile) => ({
-        name: savedProfile.name,
-        settings: savedProfile.settings,
-        customEngineOptions: savedProfile.customEngineOptions || {},
-        updatedAt: savedProfile.updatedAt
-      }))
-    };
-    onSnapshotReady?.(exportSnapshot, getExportConfigFilename(storageState.activeConfigName));
-  });
-}
-
-function downloadJsonFile(filename, jsonContent) {
-  if (typeof Blob === "undefined" || typeof URL === "undefined" || !URL.createObjectURL) return;
-  const fileBlob = new Blob([jsonContent], { type: "application/json" });
-  const blobUrl = URL.createObjectURL(fileBlob);
-  const downloadLink = createDomElement("a", {
-    href: blobUrl,
-    download: filename,
-    className: "hidden"
-  });
-  document.body?.appendChild?.(downloadLink);
-  downloadLink.click?.();
-  downloadLink.remove?.();
-  URL.revokeObjectURL?.(blobUrl);
-}
-
-function exportActiveConfig() {
-  flushPendingUciOptions();
-  buildConfigExportSnapshot((exportSnapshot, filename) => {
-    downloadJsonFile(filename, JSON.stringify(exportSnapshot, null, 2));
-    setConfigPopoverMode(null);
-    setConfigStatusMessage(`Exported ${filename}`);
-  });
-}
-
 function handleSaveProfileSubmit() {
   const profileNameInput = document.getElementById("config-save-name");
   const saveErrorElement = document.getElementById("config-save-error");
@@ -1242,71 +1027,6 @@ function handleSaveProfileSubmit() {
   });
 }
 
-function importMintConfigText(rawJsonText, filename = "config.mint") {
-  let parsedSnapshot;
-  try {
-    parsedSnapshot = JSON.parse(String(rawJsonText || ""));
-  } catch {
-    return { isSuccess: false, error: "Invalid .mint file." };
-  }
-
-  if (!isPlainRecord(parsedSnapshot)) {
-    return { isSuccess: false, error: "Invalid .mint payload." };
-  }
-
-  const importedExtensionOptions = isPlainRecord(parsedSnapshot.settings)
-    ? parsedSnapshot.settings
-    : EXTENSION_OPTION_KEYS.some((optionKey) =>
-          Object.prototype.hasOwnProperty.call(parsedSnapshot, optionKey)
-        )
-      ? parsedSnapshot
-      : null;
-
-  if (!importedExtensionOptions) {
-    return { isSuccess: false, error: "No valid settings in .mint file." };
-  }
-
-  if (Array.isArray(parsedSnapshot.customConfigs)) {
-    parsedSnapshot.customConfigs.forEach((savedProfile) => {
-      if (
-        isPlainRecord(savedProfile) &&
-        typeof savedProfile.name === "string" &&
-        savedProfile.name.trim() &&
-        isPlainRecord(savedProfile.settings)
-      ) {
-        saveCustomConfigProfile(
-          savedProfile.name,
-          savedProfile.settings,
-          savedProfile.customEngineOptions
-        );
-      }
-    });
-  }
-
-  if (parsedSnapshot.theme) {
-    const importedThemeId =
-      typeof parsedSnapshot.theme === "string" ? parsedSnapshot.theme : parsedSnapshot.theme.id;
-    applyTheme(importedThemeId || activeThemeId);
-    writeChromeStorage("local", { theme: activeThemeId });
-  }
-
-  const importedProfileName =
-    (typeof parsedSnapshot.name === "string" && parsedSnapshot.name.trim()) ||
-    stripMintFileExtension(filename) ||
-    "Imported Config";
-  const importedUciOptions = isPlainRecord(parsedSnapshot.customEngineOptions)
-    ? parsedSnapshot.customEngineOptions
-    : {};
-
-  saveCustomConfigProfile(importedProfileName, importedExtensionOptions, importedUciOptions);
-  applyConfigProfile(importedExtensionOptions, importedUciOptions, {
-    profileName: importedProfileName,
-    shouldMarkSaved: true
-  });
-
-  return { isSuccess: true, name: importedProfileName };
-}
-
 function initializeConfigSystem() {
   loadConfigStorageState();
   if (isConfigSystemInitialized) return;
@@ -1323,36 +1043,6 @@ function initializeConfigSystem() {
 
   document.getElementById("config-action-save")?.addEventListener("click", () => {
     setConfigPopoverMode("save");
-  });
-
-  document.getElementById("config-action-export")?.addEventListener("click", () => {
-    exportActiveConfig();
-  });
-
-  const importFileInput = document.getElementById("config-import-input");
-  document.getElementById("config-action-import")?.addEventListener("click", () => {
-    setConfigPopoverMode(null);
-    if (importFileInput) {
-      importFileInput.value = "";
-      importFileInput.click?.();
-    }
-  });
-
-  importFileInput?.addEventListener("change", () => {
-    const selectedFile = importFileInput.files?.[0];
-    if (!selectedFile) return;
-    selectedFile.text().then(
-      (fileContents) => {
-        loadConfigStorageState(() => {
-          const importOutcome = importMintConfigText(fileContents, selectedFile.name);
-          setConfigStatusMessage(
-            importOutcome.isSuccess ? `Imported ${importOutcome.name}` : importOutcome.error,
-            !importOutcome.isSuccess
-          );
-        });
-      },
-      () => setConfigStatusMessage("Failed to read .mint file.", true)
-    );
   });
 
   for (const closeButtonId of ["config-load-close", "config-save-close", "config-save-cancel"]) {
@@ -1439,18 +1129,12 @@ function initializeOptionsPage() {
           onCommit: () => handleExtensionOptionChange(optionKey)
         });
       }
-    } else if (optionKey === "option-go-searchmoves") {
-      inputElement.addEventListener("input", () => updateGoCommandPreview());
     }
     inputElement.addEventListener("change", () => handleExtensionOptionChange(optionKey));
   });
 
-  if (!isSearchStopInitialized) {
-    isSearchStopInitialized = true;
-    document.getElementById("go-stop-btn")?.addEventListener("click", () => {
-      notifyActiveChessComTabs({ shouldStopSearch: true });
-      setConfigStatusMessage("Stop sent");
-    });
+  if (!isEnginePanelInitialized) {
+    isEnginePanelInitialized = true;
     document
       .getElementById("engine-options-details")
       ?.addEventListener("toggle", probeEngineIfPanelExpanded);
@@ -1475,14 +1159,10 @@ if (typeof window !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     THEMES,
-    DEFAULT_CONFIG_PRESETS,
     formatSliderBadgeValue,
     buildGoPreviewCommand,
     applyTheme,
-    getExportConfigFilename,
     applyConfigProfile,
-    buildConfigExportSnapshot,
-    importMintConfigText,
     deleteCustomConfigProfile,
     setConfigPopoverMode,
     parseUciOptionLine,

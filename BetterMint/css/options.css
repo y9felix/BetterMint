@@ -414,18 +414,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
     gap: 2px;
 }
 
-.config-section-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    padding: 4px 6px 2px 6px;
-}
-
-.config-section-label + .config-item,
-.config-item + .config-section-label {
-    margin-top: 2px;
-}
-
 .config-item-row {
     display: flex;
     align-items: center;

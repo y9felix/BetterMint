@@ -45,14 +45,6 @@ const EXTENSION_OPTION_KEY = {
   Depth: "option-depth",
   GoMovetime: "option-go-movetime",
   GoNodes: "option-go-nodes",
-  GoMate: "option-go-mate",
-  GoSearchmoves: "option-go-searchmoves",
-  GoClockSync: "option-go-clock-sync",
-  GoClockInc: "option-go-clock-inc",
-  GoMovestogo: "option-go-movestogo",
-  GoInfinite: "option-go-infinite",
-  GoInfiniteTimeout: "option-go-infinite-timeout",
-  GoEvalStable: "option-go-eval-stable",
   EvaluationBar: "option-evaluation-bar",
   ShowHints: "option-show-hints",
   MoveAnalysis: "option-move-analysis",
@@ -63,36 +55,20 @@ const EXTENSION_OPTION_KEY = {
   MovePace: "option-move-pace",
   PhysicalFloor: "option-physical-floor",
   TimingSpread: "option-timing-spread",
-  FastRecaptures: "option-fast-recaptures",
-  RecaptureMultiplier: "option-recapture-multiplier",
-  FastForcedMoves: "option-fast-forced-moves",
-  ForcedMultiplier: "option-forced-multiplier",
-  FastOpening: "option-fast-opening",
+  ReflexMultiplier: "option-reflex-multiplier",
   OpeningMovesThreshold: "option-opening-moves-threshold",
   OpeningMultiplier: "option-opening-multiplier",
-  ClockScaling: "option-clock-scaling",
-  ClockThreshold: "option-clock-threshold",
-  ClockMinMultiplier: "option-clock-min-multiplier"
+  ClockThreshold: "option-clock-threshold"
 };
 
 const SEARCH_GO_OPTION_KEYS = new Set([
   EXTENSION_OPTION_KEY.Depth,
   EXTENSION_OPTION_KEY.GoMovetime,
-  EXTENSION_OPTION_KEY.GoNodes,
-  EXTENSION_OPTION_KEY.GoMate,
-  EXTENSION_OPTION_KEY.GoSearchmoves,
-  EXTENSION_OPTION_KEY.GoClockSync,
-  EXTENSION_OPTION_KEY.GoClockInc,
-  EXTENSION_OPTION_KEY.GoMovestogo,
-  EXTENSION_OPTION_KEY.GoInfinite,
-  EXTENSION_OPTION_KEY.GoInfiniteTimeout,
-  EXTENSION_OPTION_KEY.GoEvalStable
+  EXTENSION_OPTION_KEY.GoNodes
 ]);
 
 const CLOCK_BOTTOM_SELECTOR =
   ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
-const CLOCK_TOP_SELECTOR =
-  ".clock-component.clock-top, .clock-button-component.clock-top, .clock.clock-top, .clock-top";
 
 function centipawnsToWinProbability(centipawns) {
   return 1 / (1 + Math.exp(-0.00368208 * centipawns));
@@ -165,19 +141,6 @@ function parseClockElementSeconds(clockSelector) {
 
 function getRemainingPlayerTimeSeconds() {
   return parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
-}
-
-function getClockSyncTimesMs(chessComGame) {
-  const bottomClockSeconds = parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
-  const topClockSeconds = parseClockElementSeconds(CLOCK_TOP_SELECTOR);
-  if (bottomClockSeconds === null || topClockSeconds === null) return null;
-  const isPlayingAsBlack = chessComGame?.getPlayingAs?.() === CHESSCOM_BLACK_TURN;
-  const whiteSeconds = isPlayingAsBlack ? topClockSeconds : bottomClockSeconds;
-  const blackSeconds = isPlayingAsBlack ? bottomClockSeconds : topClockSeconds;
-  return {
-    wtime: Math.max(100, Math.round(whiteSeconds * 1000)),
-    btime: Math.max(100, Math.round(blackSeconds * 1000))
-  };
 }
 
 let activeExtension;
@@ -1072,7 +1035,6 @@ class UciEngineClient {
   }
 
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
-  static INFO_MULTIPV_RE = /\bmultipv (\d+)/;
   static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
   static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
   static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
@@ -1182,7 +1144,6 @@ class UciEngineClient {
   }
 
   resetSessionState({ clearCallbacks = true } = {}) {
-    this.clearInfiniteSearchGuards();
     this.isEngineLoaded = false;
     this.isEngineReady = false;
     this.pendingReadyCount = 0;
@@ -1190,7 +1151,6 @@ class UciEngineClient {
     this.appliedUciOptions = {};
     this.isEvaluating = false;
     this.hasRequestedStop = false;
-    this.isFinishingSearch = false;
     this.staleBestMovesToIgnore = 0;
     this.currentPositionBookMoves = new Set();
     this.previousPositionBookMoves = new Set();
@@ -1319,177 +1279,25 @@ class UciEngineClient {
     return Boolean(this.websocket && this.websocket.readyState === WebSocket.OPEN);
   }
 
-  clearInfiniteSearchGuards() {
-    if (this.infiniteSearchTimeoutId != null) {
-      clearTimeout(this.infiniteSearchTimeoutId);
-      this.infiniteSearchTimeoutId = null;
-    }
-    this.isInfiniteSearchActive = false;
-    this.evalStabilityHistory = [];
-  }
-
   buildGoCommand() {
-    const rawSearchMovesText = String(
-      getExtensionOption(EXTENSION_OPTION_KEY.GoSearchmoves) || ""
-    ).trim();
-    const validSearchMoves = [];
-    if (rawSearchMovesText) {
-      const seenMoves = new Set();
-      const legalMoves = this.extension?.gameController?.chessComGame?.getLegalMoves?.();
-      for (const moveToken of rawSearchMovesText.toLowerCase().split(/\s+/)) {
-        if (!UCI_MOVE_RE.test(moveToken) || seenMoves.has(moveToken)) {
-          continue;
-        }
-        if (Array.isArray(legalMoves)) {
-          const matchedLegalMove = resolveLegalMove(legalMoves, {
-            from: moveToken.slice(0, 2),
-            to: moveToken.slice(2, 4),
-            promotion: moveToken.length > 4 ? moveToken[4] : null
-          });
-          if (!matchedLegalMove) continue;
-        }
-        seenMoves.add(moveToken);
-        validSearchMoves.push(moveToken);
-      }
-    }
-
-    if (getExtensionOption(EXTENSION_OPTION_KEY.GoInfinite)) {
-      const commandParts = ["go", "infinite"];
-      if (validSearchMoves.length > 0) {
-        commandParts.push("searchmoves", ...validSearchMoves);
-      }
-      return { command: commandParts.join(" "), isInfinite: true };
-    }
-
     const commandParts = ["go"];
     const depth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, DEFAULT_SEARCH_DEPTH);
     const movetimeMs = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMovetime, 0);
     const nodeLimit = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoNodes, 0);
-    const mateDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMate, 0);
-    const isClockSyncEnabled = Boolean(getExtensionOption(EXTENSION_OPTION_KEY.GoClockSync));
-    const clockIncrementMs = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoClockInc, 0);
-    const movesToGo = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMovestogo, 0);
-    let hasSearchBound = false;
 
-    if (depth > 0) {
-      commandParts.push("depth", String(depth));
-      hasSearchBound = true;
-    }
-    if (movetimeMs > 0) {
-      commandParts.push("movetime", String(movetimeMs));
-      hasSearchBound = true;
-    }
-    if (nodeLimit > 0) {
-      commandParts.push("nodes", String(nodeLimit));
-      hasSearchBound = true;
-    }
-    if (mateDepth > 0) {
-      commandParts.push("mate", String(mateDepth));
-      hasSearchBound = true;
-    }
-    if (isClockSyncEnabled) {
-      const clockTimesMs = getClockSyncTimesMs(this.extension?.gameController?.chessComGame);
-      if (clockTimesMs) {
-        commandParts.push("wtime", String(clockTimesMs.wtime), "btime", String(clockTimesMs.btime));
-        if (clockIncrementMs > 0) {
-          commandParts.push("winc", String(clockIncrementMs), "binc", String(clockIncrementMs));
-        }
-        if (movesToGo > 0) {
-          commandParts.push("movestogo", String(movesToGo));
-        }
-        hasSearchBound = true;
-      }
-    }
-    if (!hasSearchBound) {
-      commandParts.push("depth", "1");
-    }
-    if (validSearchMoves.length > 0) {
-      commandParts.push("searchmoves", ...validSearchMoves);
-    }
-
-    return { command: commandParts.join(" "), isInfinite: false };
-  }
-
-  finishSearch() {
-    this.clearInfiniteSearchGuards();
-    if (!this.isEvaluating || this.hasRequestedStop || this.isFinishingSearch) return;
-    this.isFinishingSearch = true;
-    this.sendUciCommand("stop");
-  }
-
-  trackEvalStability(primaryCandidateMove, centipawns, mateInMoves) {
-    if (!this.isInfiniteSearchActive || !getExtensionOption(EXTENSION_OPTION_KEY.GoEvalStable)) {
-      return;
-    }
-    if (
-      this.hasRequestedStop ||
-      this.isFinishingSearch ||
-      !primaryCandidateMove ||
-      primaryCandidateMove.searchDepth < 10
-    ) {
-      return;
-    }
-
-    const boundedScoreCp =
-      mateInMoves !== null ? (mateInMoves > 0 ? 10000 : -10000) : centipawns;
-    if (boundedScoreCp === null || boundedScoreCp === undefined) return;
-
-    if (!Array.isArray(this.evalStabilityHistory)) {
-      this.evalStabilityHistory = [];
-    }
-    const latestEntry = this.evalStabilityHistory[this.evalStabilityHistory.length - 1];
-    if (latestEntry && latestEntry.depth === primaryCandidateMove.searchDepth) {
-      this.evalStabilityHistory[this.evalStabilityHistory.length - 1] = {
-        depth: primaryCandidateMove.searchDepth,
-        uciMove: primaryCandidateMove.uciMove,
-        scoreCp: boundedScoreCp
-      };
-    } else if (!latestEntry || primaryCandidateMove.searchDepth > latestEntry.depth) {
-      this.evalStabilityHistory.push({
-        depth: primaryCandidateMove.searchDepth,
-        uciMove: primaryCandidateMove.uciMove,
-        scoreCp: boundedScoreCp
-      });
-      if (this.evalStabilityHistory.length > 3) {
-        this.evalStabilityHistory.shift();
-      }
-    }
-
-    if (this.evalStabilityHistory.length === 3) {
-      const firstDepthMove = this.evalStabilityHistory[0].uciMove;
-      const isSameBestMove = this.evalStabilityHistory.every(
-        (depthSample) => depthSample.uciMove === firstDepthMove
-      );
-      const recentScoresCp = this.evalStabilityHistory.map((depthSample) => depthSample.scoreCp);
-      const scoreSpreadCp = Math.max(...recentScoresCp) - Math.min(...recentScoresCp);
-      if (isSameBestMove && scoreSpreadCp <= 15) {
-        this.finishSearch();
-      }
-    }
+    if (depth > 0) commandParts.push("depth", String(depth));
+    if (movetimeMs > 0) commandParts.push("movetime", String(movetimeMs));
+    if (nodeLimit > 0) commandParts.push("nodes", String(nodeLimit));
+    if (commandParts.length === 1) commandParts.push("depth", "1");
+    return commandParts.join(" ");
   }
 
   startSearch() {
     this.onReady(() => {
       this.stopEvaluation(() => {
         if (this.isEvaluating) return;
-        this.clearInfiniteSearchGuards();
-        this.isFinishingSearch = false;
         this.isEvaluating = true;
-        const { command, isInfinite } = this.buildGoCommand();
-        this.isInfiniteSearchActive = isInfinite;
-        this.sendUciCommand(command);
-        if (isInfinite) {
-          const infiniteTimeoutMs = getNonNegativeIntOption(
-            EXTENSION_OPTION_KEY.GoInfiniteTimeout,
-            0
-          );
-          if (infiniteTimeoutMs > 0) {
-            this.infiniteSearchTimeoutId = setTimeout(() => {
-              this.infiniteSearchTimeoutId = null;
-              this.finishSearch();
-            }, infiniteTimeoutMs);
-          }
-        }
+        this.sendUciCommand(this.buildGoCommand());
       });
     });
   }
@@ -1557,22 +1365,16 @@ class UciEngineClient {
   }
 
   stopEvaluation(callback) {
-    this.clearInfiniteSearchGuards();
     if (!this.isEvaluating) {
-      this.isFinishingSearch = false;
       if (typeof callback === "function") callback();
       return;
     }
     if (typeof callback === "function") {
       this.stopCompletionCallbacks.push(callback);
     }
-    const hadAlreadySentStop = Boolean(this.isFinishingSearch);
-    this.isFinishingSearch = false;
     if (!this.hasRequestedStop) {
       this.hasRequestedStop = true;
-      if (!hadAlreadySentStop) {
-        this.sendUciCommand("stop");
-      }
+      this.sendUciCommand("stop");
       this.stopFallbackTimeoutId = setTimeout(() => {
         this.stopFallbackTimeoutId = null;
         if (this.hasRequestedStop) {
@@ -1601,41 +1403,39 @@ class UciEngineClient {
     const legalMoves = chessComGame.getLegalMoves();
     const lastPlayedMove = chessComGame.getLastMove();
 
-    if (getExtensionOption(EXTENSION_OPTION_KEY.FastForcedMoves) && legalMoves?.length === 1) {
-      medianThinkMs *= getPositiveFloatOption(EXTENSION_OPTION_KEY.ForcedMultiplier, 0.15);
-    } else if (
-      getExtensionOption(EXTENSION_OPTION_KEY.FastRecaptures) &&
-      lastPlayedMove &&
-      bestCandidateMove &&
-      bestCandidateMove.to === lastPlayedMove.to
-    ) {
-      medianThinkMs *= getPositiveFloatOption(EXTENSION_OPTION_KEY.RecaptureMultiplier, 0.25);
-    } else if (getExtensionOption(EXTENSION_OPTION_KEY.FastOpening)) {
-      const openingMoveThreshold = getPositiveFloatOption(
+    const reflexMultiplier = getPositiveFloatOption(EXTENSION_OPTION_KEY.ReflexMultiplier, 0.25);
+    const isForcedMove = legalMoves?.length === 1;
+    const isRecapture = Boolean(
+      lastPlayedMove && bestCandidateMove && bestCandidateMove.to === lastPlayedMove.to
+    );
+
+    if (reflexMultiplier < 1 && (isForcedMove || isRecapture)) {
+      medianThinkMs *= reflexMultiplier;
+    } else {
+      const openingMoveThreshold = getNonNegativeIntOption(
         EXTENSION_OPTION_KEY.OpeningMovesThreshold,
         10
       );
-      const fullMoveNumber = parseInt((chessComGame.getFEN() || "").split(" ")[5], 10) || 1;
-      if (fullMoveNumber <= openingMoveThreshold) {
-        medianThinkMs *= getPositiveFloatOption(EXTENSION_OPTION_KEY.OpeningMultiplier, 0.40);
+      const openingMultiplier = getPositiveFloatOption(
+        EXTENSION_OPTION_KEY.OpeningMultiplier,
+        0.40
+      );
+      if (openingMoveThreshold > 0 && openingMultiplier < 1) {
+        const fullMoveNumber = parseInt((chessComGame.getFEN() || "").split(" ")[5], 10) || 1;
+        if (fullMoveNumber <= openingMoveThreshold) {
+          medianThinkMs *= openingMultiplier;
+        }
       }
     }
 
-    if (getExtensionOption(EXTENSION_OPTION_KEY.ClockScaling)) {
+    const clockThresholdSeconds = getNonNegativeIntOption(
+      EXTENSION_OPTION_KEY.ClockThreshold,
+      180
+    );
+    if (clockThresholdSeconds > 0) {
       const remainingClockSeconds = getRemainingPlayerTimeSeconds();
-      const clockThresholdSeconds = getPositiveFloatOption(
-        EXTENSION_OPTION_KEY.ClockThreshold,
-        180
-      );
       if (remainingClockSeconds != null && remainingClockSeconds < clockThresholdSeconds) {
-        const minClockMultiplier = getPositiveFloatOption(
-          EXTENSION_OPTION_KEY.ClockMinMultiplier,
-          0.20
-        );
-        medianThinkMs *= Math.max(
-          minClockMultiplier,
-          remainingClockSeconds / clockThresholdSeconds
-        );
+        medianThinkMs *= Math.max(0, remainingClockSeconds / clockThresholdSeconds);
       }
     }
 
@@ -1723,11 +1523,6 @@ class UciEngineClient {
           this.extension.gameController.updateEnginePosition(false);
         }
       });
-      return;
-    }
-
-    if (optionUpdates.shouldStopSearch) {
-      this.finishSearch();
       return;
     }
 
@@ -1887,14 +1682,8 @@ class UciEngineClient {
       const numericScore = parseInt(scoreMatch[2], 10);
       const centipawns = scoreUnit === "cp" ? numericScore : null;
       const mateInMoves = scoreUnit === "mate" ? numericScore : null;
-      const multiPvMatch = uciLine.match(UciEngineClient.INFO_MULTIPV_RE);
-      const isPrimaryPv = !multiPvMatch || parseInt(multiPvMatch[1], 10) === 1;
-
       const candidateMove = new CandidateMove(pvMatch[1], searchDepth, centipawns, mateInMoves);
       this.handleCandidateMoveUpdate(candidateMove, false);
-      if (isPrimaryPv) {
-        this.trackEvalStability(candidateMove, centipawns, mateInMoves);
-      }
     } else if (typeof uciLine === "string" && uciLine.startsWith("bestmove ")) {
       const bestMoveMatch = uciLine.match(UciEngineClient.BESTMOVE_RE);
       if (bestMoveMatch) {
@@ -1906,9 +1695,7 @@ class UciEngineClient {
           clearTimeout(this.stopFallbackTimeoutId);
           this.stopFallbackTimeoutId = null;
         }
-        this.clearInfiniteSearchGuards();
         this.isEvaluating = false;
-        this.isFinishingSearch = false;
         const hadRequestedStop = this.hasRequestedStop;
         this.hasRequestedStop = false;
 

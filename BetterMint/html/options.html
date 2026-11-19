@@ -55,70 +55,6 @@
                         </div>
                         <input id="option-go-nodes" type="range" min="0" max="5000000" step="10000" value="0" class="range-slider" />
                     </div>
-
-                    <div class="control-col">
-                        <div class="slider-header">
-                            <span class="title">Mate in N</span>
-                            <span class="badge" id="badge-option-go-mate">Off</span>
-                        </div>
-                        <input id="option-go-mate" type="range" min="0" max="20" step="1" value="0" class="range-slider" />
-                    </div>
-
-                    <div class="control-col">
-                        <label class="control-label-text" for="option-go-searchmoves">Search Moves</label>
-                        <input id="option-go-searchmoves" type="text" class="text-input" placeholder="e.g. e2e4 d2d4" spellcheck="false" autocomplete="off" />
-                    </div>
-
-                    <label class="control-row" for="option-go-clock-sync">
-                        <span class="control-label-text">Clock Sync</span>
-                        <input id="option-go-clock-sync" type="checkbox" class="toggle-input" />
-                        <span class="toggle-slider"></span>
-                    </label>
-
-                    <div id="go-clock-group" class="sub-panel hidden">
-                        <div class="control-col">
-                            <div class="slider-header">
-                                <span class="title">Clock Increment (ms)</span>
-                                <span class="badge" id="badge-option-go-clock-inc">0</span>
-                            </div>
-                            <input id="option-go-clock-inc" type="range" min="0" max="10000" step="100" value="0" class="range-slider" />
-                        </div>
-
-                        <div class="control-col">
-                            <div class="slider-header">
-                                <span class="title">Moves To Go</span>
-                                <span class="badge" id="badge-option-go-movestogo">Off</span>
-                            </div>
-                            <input id="option-go-movestogo" type="range" min="0" max="60" step="1" value="0" class="range-slider" />
-                        </div>
-                    </div>
-
-                    <label class="control-row" for="option-go-infinite">
-                        <span class="control-label-text">Infinite Mode</span>
-                        <input id="option-go-infinite" type="checkbox" class="toggle-input" />
-                        <span class="toggle-slider"></span>
-                    </label>
-
-                    <div id="go-infinite-group" class="sub-panel hidden">
-                        <div class="control-col">
-                            <div class="slider-header">
-                                <span class="title">Infinite Timer (ms)</span>
-                                <span class="badge" id="badge-option-go-infinite-timeout">Off</span>
-                            </div>
-                            <input id="option-go-infinite-timeout" type="range" min="0" max="15000" step="250" value="0" class="range-slider" />
-                        </div>
-
-                        <label class="control-row" for="option-go-eval-stable">
-                            <span class="control-label-text">Stop on Stable Eval</span>
-                            <input id="option-go-eval-stable" type="checkbox" class="toggle-input" />
-                            <span class="toggle-slider"></span>
-                        </label>
-
-                        <div class="control-row">
-                            <span class="control-label-text">Manual Interrupt</span>
-                            <button id="go-stop-btn" type="button" class="action-btn">Stop Search</button>
-                        </div>
-                    </div>
                 </div>
             </details>
 
@@ -210,46 +146,20 @@
                                 <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
                             </div>
 
-                            <label class="control-row" for="option-fast-recaptures">
-                                <span class="control-label-text">Fast Recaptures</span>
-                                <input id="option-fast-recaptures" type="checkbox" class="toggle-input" checked />
-                                <span class="toggle-slider"></span>
-                            </label>
-
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Recapture Multiplier</span>
-                                    <span class="badge" id="badge-option-recapture-multiplier">0.25</span>
+                                    <span class="title">Reflex Move Multiplier</span>
+                                    <span class="badge" id="badge-option-reflex-multiplier">0.25</span>
                                 </div>
-                                <input id="option-recapture-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.25" class="range-slider" />
+                                <input id="option-reflex-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.25" class="range-slider" />
                             </div>
 
-                            <label class="control-row" for="option-fast-forced-moves">
-                                <span class="control-label-text">Fast Forced Moves</span>
-                                <input id="option-fast-forced-moves" type="checkbox" class="toggle-input" checked />
-                                <span class="toggle-slider"></span>
-                            </label>
-
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Forced Move Multiplier</span>
-                                    <span class="badge" id="badge-option-forced-multiplier">0.15</span>
-                                </div>
-                                <input id="option-forced-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.15" class="range-slider" />
-                            </div>
-
-                            <label class="control-row" for="option-fast-opening">
-                                <span class="control-label-text">Fast Opening</span>
-                                <input id="option-fast-opening" type="checkbox" class="toggle-input" checked />
-                                <span class="toggle-slider"></span>
-                            </label>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <span class="title">Opening Moves Threshold</span>
+                                    <span class="title">Opening Moves</span>
                                     <span class="badge" id="badge-option-opening-moves-threshold">10</span>
                                 </div>
-                                <input id="option-opening-moves-threshold" type="range" min="1" max="15" step="1" value="10" class="range-slider" />
+                                <input id="option-opening-moves-threshold" type="range" min="0" max="15" step="1" value="10" class="range-slider" />
                             </div>
 
                             <div class="control-col">
@@ -260,26 +170,12 @@
                                 <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.40" class="range-slider" />
                             </div>
 
-                            <label class="control-row" for="option-clock-scaling">
-                                <span class="control-label-text">Clock Scaling</span>
-                                <input id="option-clock-scaling" type="checkbox" class="toggle-input" checked />
-                                <span class="toggle-slider"></span>
-                            </label>
-
                             <div class="control-col">
                                 <div class="slider-header">
                                     <span class="title">Clock Threshold (Seconds)</span>
                                     <span class="badge" id="badge-option-clock-threshold">180</span>
                                 </div>
-                                <input id="option-clock-threshold" type="range" min="10" max="300" step="5" value="180" class="range-slider" />
-                            </div>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <span class="title">Clock Min Multiplier</span>
-                                    <span class="badge" id="badge-option-clock-min-multiplier">0.20</span>
-                                </div>
-                                <input id="option-clock-min-multiplier" type="range" min="0.10" max="0.80" step="0.01" value="0.20" class="range-slider" />
+                                <input id="option-clock-threshold" type="range" min="0" max="300" step="5" value="180" class="range-slider" />
                             </div>
                         </div>
                     </details>
@@ -297,8 +193,6 @@
             <div id="config-menu" class="config-menu hidden">
                 <button id="config-action-load" type="button" class="config-menu-btn">Load</button>
                 <button id="config-action-save" type="button" class="config-menu-btn">Save</button>
-                <button id="config-action-import" type="button" class="config-menu-btn">Import</button>
-                <button id="config-action-export" type="button" class="config-menu-btn">Export</button>
             </div>
             <div id="config-load-panel" class="config-panel hidden">
                 <div class="config-panel-header">
@@ -322,7 +216,6 @@
                 </div>
             </div>
         </div>
-        <input id="config-import-input" type="file" accept=".mint" class="hidden" />
         <div class="footer-actions">
             <button id="config-toggle" type="button" class="icon-btn" title="Config" aria-label="Config" aria-expanded="false">
                 <svg viewBox="0 0 16 16" class="svg-icon">

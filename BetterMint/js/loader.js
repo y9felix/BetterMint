@@ -5,14 +5,6 @@ const DEFAULT_EXTENSION_OPTIONS = {
   "option-depth": 3,
   "option-go-movetime": 0,
   "option-go-nodes": 0,
-  "option-go-mate": 0,
-  "option-go-searchmoves": "",
-  "option-go-clock-sync": false,
-  "option-go-clock-inc": 0,
-  "option-go-movestogo": 0,
-  "option-go-infinite": false,
-  "option-go-infinite-timeout": 0,
-  "option-go-eval-stable": false,
   "option-evaluation-bar": true,
   "option-show-hints": true,
   "option-move-analysis": true,
@@ -23,16 +15,10 @@ const DEFAULT_EXTENSION_OPTIONS = {
   "option-move-pace": 12.5,
   "option-physical-floor": 600,
   "option-timing-spread": 0.80,
-  "option-fast-recaptures": true,
-  "option-recapture-multiplier": 0.25,
-  "option-fast-forced-moves": true,
-  "option-forced-multiplier": 0.15,
-  "option-fast-opening": true,
+  "option-reflex-multiplier": 0.25,
   "option-opening-moves-threshold": 10,
   "option-opening-multiplier": 0.40,
-  "option-clock-scaling": true,
-  "option-clock-threshold": 180,
-  "option-clock-min-multiplier": 0.20
+  "option-clock-threshold": 180
 };
 
 function getEngineOptionsStorageKey(engineUrl) {
