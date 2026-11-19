@@ -183,6 +183,16 @@ class EngineProcess:
             except (asyncio.TimeoutError, OSError):
                 pass
 
+async def send_error_and_close(websocket: ServerConnection, error_message: str, code: int | None = None):
+    try:
+        await websocket.send(error_message)
+        if code is None:
+            await websocket.close()
+        else:
+            await websocket.close(code=code)
+    except (ConnectionClosed, RuntimeError, OSError):
+        pass
+
 async def serve_engine_websocket(
     websocket: ServerConnection,
     engine_command: list[str],
@@ -198,19 +208,17 @@ async def serve_engine_websocket(
             engine_process = await EngineProcess(engine_command).start()
         except FileNotFoundError:
             print(f"[ENGINE ERROR] Binary not found: {' '.join(engine_command)}", flush=True)
-            try:
-                await websocket.send(f"info string Error: Engine binary '{engine_command[0]}' not found")
-                await websocket.close()
-            except (ConnectionClosed, RuntimeError, OSError):
-                pass
+            await send_error_and_close(
+                websocket,
+                f"info string Error: Engine binary '{engine_command[0]}' not found",
+            )
             return
         except OSError as launch_error:
             print(f"[ENGINE ERROR] Failed to start engine '{' '.join(engine_command)}': {launch_error}", flush=True)
-            try:
-                await websocket.send(f"info string Error: Failed to start engine '{engine_command[0]}': {launch_error}")
-                await websocket.close()
-            except (ConnectionClosed, RuntimeError, OSError):
-                pass
+            await send_error_and_close(
+                websocket,
+                f"info string Error: Failed to start engine '{engine_command[0]}': {launch_error}",
+            )
             return
 
         active_book_path = None
@@ -220,7 +228,7 @@ async def serve_engine_websocket(
             else:
                 print(f"[CONFIG WARN] Polyglot book '{book_path}' not found; running without opening book", flush=True)
 
-        board_state = PolyglotBoard()
+        board_state = PolyglotBoard() if active_book_path else None
         websocket_send_lock = asyncio.Lock()
 
         async def send_ws_line(text: str):
@@ -238,6 +246,9 @@ async def serve_engine_websocket(
                     if IS_VERBOSE_UCI_LOGGING:
                         escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
                         print(f"[UCI IN] {escaped_message}", flush=True)
+                    if board_state is None:
+                        await engine_process.send_uci(uci_message)
+                        continue
                     for clean_line in iter_uci_lines(uci_message):
                         lower_line = " ".join(clean_line.lower().split())
                         if lower_line == "ucinewgame":
@@ -246,7 +257,7 @@ async def serve_engine_websocket(
                         elif lower_line.startswith("position "):
                             board_state.apply_position_command(clean_line)
                             await engine_process.send_uci(clean_line)
-                        elif active_book_path and (lower_line == "go" or lower_line.startswith("go ")):
+                        elif lower_line == "go" or lower_line.startswith("go "):
                             book_entries = lookup_polyglot_moves(board_state, active_book_path)
                             book_selection = pick_book_moves(book_entries)
                             if book_selection:
@@ -321,11 +332,11 @@ async def serve_engine_websocket(
                 and websocket.state is State.OPEN
             ):
                 error_detail = f": {last_stderr_line}" if last_stderr_line else ""
-                try:
-                    await websocket.send(f"info string Error: Engine crashed (exit {exit_code}){error_detail}")
-                    await websocket.close(code=1011)
-                except (ConnectionClosed, RuntimeError, OSError):
-                    pass
+                await send_error_and_close(
+                    websocket,
+                    f"info string Error: Engine crashed (exit {exit_code}){error_detail}",
+                    code=1011,
+                )
             print(f"[ENGINE STOP] {' '.join(engine_command)}", flush=True)
 
 async def handle_websocket_connection(websocket: ServerConnection):

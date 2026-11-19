@@ -401,8 +401,8 @@ def pick_book_moves(entries: list[tuple[str, int]]) -> tuple[str, list[str]] | N
     positive_entries = [(move, weight) for move, weight in entries if weight > 0]
     candidate_pool = positive_entries if positive_entries else entries
     moves = [move for move, _ in candidate_pool]
-    weights = [weight for _, weight in candidate_pool]
-    if sum(weights) > 0:
+    if positive_entries:
+        weights = [weight for _, weight in positive_entries]
         selected_move = random.choices(moves, weights=weights, k=1)[0]
     else:
         selected_move = random.choice(moves)

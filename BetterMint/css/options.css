@@ -190,8 +190,8 @@ body.is-ready .sub-panel {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin: 0 -6px;
-    padding: 0 6px;
+    margin: -6px;
+    padding: 6px;
 }
 
 .control-row {
@@ -410,8 +410,8 @@ details.collapse-group::details-content {
     block-size: 0;
     opacity: 0;
     overflow: clip;
-    margin: 0 -6px;
-    padding: 0 6px;
+    margin: -6px;
+    padding: 6px;
     transition: block-size 0.22s cubic-bezier(0.2, 0, 0, 1), opacity 0.18s ease, content-visibility 0.22s allow-discrete;
 }
 
@@ -445,7 +445,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px 0 2px;
+    padding: 10px 0 6px;
 }
 
 .status-text {
