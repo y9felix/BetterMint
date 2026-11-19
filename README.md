@@ -4,73 +4,75 @@
 
 **Chess.com engine analysis and auto-move tool.**
 
-[![Version](https://img.shields.io/badge/version-2.2.2-7a5cff?style=for-the-badge)](https://github.com/y9felix/BetterMint/releases/tag/v2.2.2)
+[![Version](https://img.shields.io/badge/version-2.1.17-7a5cff?style=for-the-badge)](https://github.com/y9felix/BetterMint/releases/tag/v2.2.2)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4ade80?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](EngineWS)
+[![Wiki](https://img.shields.io/badge/Docs-Wiki-6366f1?style=for-the-badge)](https://github.com/y9felix/BetterMint/wiki)
 [![License: RPL-1.5](https://img.shields.io/badge/License-RPL%201.5-22c55e?style=for-the-badge)](LICENSE)
 
 </div>
 
-
 ## What it is
 
-BetterMint is a Chrome extension that analyzes your Chess.com games with chess engines. It draws an evaluation bar, hint arrows, and move accuracy directly on the board. You can connect it to hosted engine sockets or run local engines with EngineWS.
+BetterMint is a Manifest V3 Chrome extension that connects Chess.com to Universal Chess Interface engines over WebSocket.
+It draws an evaluation bar, hint arrows, and move quality highlights on the board.
+You can connect BetterMint to hosted engine sockets or run local engines through EngineWS.
 
+Full guides, screenshots, and configuration details live in the [BetterMint Wiki](https://github.com/y9felix/BetterMint/wiki)!
 
-## Features
+## Capabilities
 
-- **Dynamic controls**: Adjust engine UCI options directly in the popup.
-- **Board HUD**: Display an evaluation bar, multi-line hint arrows, and move accuracy.
-- **Auto queue**: Rematch opponents and queue new games automatically.
-- **Humanized auto move**: Execute moves with natural delays, fast recaptures, and clock scaling.
+- Live engine switching and dynamic UCI controls in the popup, saved per engine URL.
+- Search Depth, Move Time, and Node Limit controls.
+- Polyglot `.bin` opening book lookups in EngineWS, configurable globally or per engine.
+- Floating evaluation bar, multi-line hint arrows, mate indicators, and move analysis badges.
+- Auto Queue with a Rematch first option and Auto Move with log-normal human-like timing, fast reflex moves, opening pacing, and clock scaling.
+- Saved configs menu for switching setups and four popup themes: Dark, Light, Black, and Chess.com.
 
-
-## Installation
+## Quick start
 
 ### 1. Engine backend
 
-Choose one of two options:
+Pick one of two engine backends:
 
-- **Remote sockets**: Use public engine endpoints from [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) (no local setup required).
-- **Local EngineWS server**: Run native engines on your computer.
+- Remote sockets from [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) require no local setup.
+- Local EngineWS runs native Universal Chess Interface engines such as Stockfish, Patricia, or Maia on your machine with Python 3.10 or newer.
 
-  **Requirements:** Python 3.10+, and a UCI engine (Stockfish, Maia).
+```bash
+cd EngineWS
+pip install -r requirements.txt
+```
 
-  ```bash
-  cd EngineWS
-  pip install -r requirements.txt
-  ```
+Set engine paths in `EngineWS/config.json`:
 
-  Set engine paths in `EngineWS/config.json`:
-
-  ```json
-  {
-    "default": "stockfish",
-    "engines": {
-      "stockfish": ["stockfish"],
-      "maia": ["lc0", "--weights=/path/to/maia-1500.pb.gz"]
-    }
+```json
+{
+  "default": "stockfish",
+  "engines": {
+    "stockfish": ["stockfish"],
+    "maia": ["lc0", "--weights=/path/to/maia-1500.pb.gz"]
   }
-  ```
+}
+```
 
-  Start the server on `127.0.0.1:8000`:
-  - **Linux / macOS:** `./run.sh`
-  - **Windows:** `run.bat`
+Start the server on `127.0.0.1:8000`:
+
+- On Linux or macOS, run `./run.sh`.
+- On Windows, run `run.bat`.
 
 ### 2. Chrome extension
 
-1. Open `chrome://extensions` in a Chromium browser (Brave, Chrome, Edge).
-2. Enable **Developer mode** (top right).
-3. Click **Load unpacked** and select the `BetterMint` directory.
-4. Set the WebSocket URL in the popup (`ws://localhost:8000/ws` or a [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) endpoint).
-5. Open [Chess.com](https://www.chess.com) and play.
-
+1. Open `chrome://extensions` in Chrome, Brave, or Edge.
+2. Turn on Developer mode in the top right corner.
+3. Click Load unpacked and select the `BetterMint` directory.
+4. Open the BetterMint popup and enter `ws://localhost:8000/ws` or a [bettermint-sockets](https://github.com/ProtonDev-sys/bettermint-sockets) endpoint in WebSocket API URL.
+5. Open [Chess.com](https://www.chess.com) and start a game.
 
 ## Credits and license
 
-- **[thedemons](https://github.com/thedemons)**, original extension creator.
-- **[BotSolvers/BetterMint](https://github.com/BotSolvers/BetterMint)**, upstream V2.
-- **[ProtonDev](https://github.com/ProtonDev-sys)**, public engine sockets.
-- **[y9felix](https://github.com/y9felix)**, architecture refactor, dynamic UCI pipeline, and maintenance.
+- [thedemons](https://github.com/thedemons), original extension creator.
+- [BotSolvers/BetterMint](https://github.com/BotSolvers/BetterMint), upstream V2.
+- [ProtonDev](https://github.com/ProtonDev-sys), public engine sockets.
+- [y9felix](https://github.com/y9felix), architecture refactor, dynamic Universal Chess Interface pipeline, and maintenance.
 
-Licensed under the **Reciprocal Public License 1.5 (RPL-1.5)**. See [LICENSE](LICENSE) for details.
+Licensed under the Reciprocal Public License 1.5. See [LICENSE](LICENSE) for details.
