@@ -38,24 +38,43 @@ const isExtensionPage =
   typeof window !== "undefined" &&
   window.location?.protocol === "chrome-extension:";
 
+function isExtensionContextValid() {
+  return (
+    typeof chrome !== "undefined" &&
+    Boolean(chrome.runtime?.id) &&
+    Boolean(chrome.storage?.sync)
+  );
+}
+
 function dispatchOptionsWithEngineSettings(extensionOptions, onReady) {
   const engineUrl = extensionOptions?.["option-url-api-stockfish"];
   const engineOptionsStorageKey = getEngineOptionsStorageKey(engineUrl);
-  if (engineUrl && !extensionOptions.customEngineOptions && engineOptionsStorageKey && chrome.storage?.local) {
-    chrome.storage.local.get([engineOptionsStorageKey], (storedEngineResult) => {
-      if (chrome.runtime?.lastError) {
-        console.warn(
-          "[BetterMint] Failed to read engine options:",
-          chrome.runtime.lastError.message || chrome.runtime.lastError
+  if (
+    engineUrl &&
+    !extensionOptions.customEngineOptions &&
+    engineOptionsStorageKey &&
+    chrome.runtime?.id &&
+    chrome.storage?.local
+  ) {
+    try {
+      chrome.storage.local.get([engineOptionsStorageKey], (storedEngineResult) => {
+        if (chrome.runtime?.lastError) {
+          console.warn(
+            "[BetterMint] Failed to read engine options:",
+            chrome.runtime.lastError.message || chrome.runtime.lastError
+          );
+        }
+        onReady(
+          Object.assign({}, extensionOptions, {
+            customEngineOptions: storedEngineResult?.[engineOptionsStorageKey] || {}
+          })
         );
-      }
-      onReady(
-        Object.assign({}, extensionOptions, {
-          customEngineOptions: storedEngineResult?.[engineOptionsStorageKey] || {}
-        })
-      );
-    });
-    return;
+      });
+      return;
+    } catch {
+      onReady(extensionOptions);
+      return;
+    }
   }
   onReady(extensionOptions);
 }
@@ -68,29 +87,39 @@ if (typeof window !== "undefined" && !isExtensionPage && typeof chrome !== "unde
     });
   });
 
-  window.addEventListener("BetterMintGetOptions", (requestEvent) => {
-    chrome.storage.sync.get(DEFAULT_EXTENSION_OPTIONS, (extensionOptions) => {
-      if (chrome.runtime?.lastError) {
-        console.warn(
-          "[BetterMint] Failed to read sync options:",
-          chrome.runtime.lastError.message || chrome.runtime.lastError
-        );
-      }
-      dispatchOptionsWithEngineSettings(
-        extensionOptions || DEFAULT_EXTENSION_OPTIONS,
-        (mergedExtensionOptions) => {
-          window.dispatchEvent(
-            new CustomEvent("BetterMintSendOptions", {
-              detail: {
-                requestId: requestEvent.detail?.requestId,
-                extensionOptions: mergedExtensionOptions
-              }
-            })
+  const handleGetOptionsRequest = (requestEvent) => {
+    if (!isExtensionContextValid()) {
+      window.removeEventListener("BetterMintGetOptions", handleGetOptionsRequest);
+      return;
+    }
+    try {
+      chrome.storage.sync.get(DEFAULT_EXTENSION_OPTIONS, (extensionOptions) => {
+        if (chrome.runtime?.lastError) {
+          console.warn(
+            "[BetterMint] Failed to read sync options:",
+            chrome.runtime.lastError.message || chrome.runtime.lastError
           );
         }
-      );
-    });
-  });
+        dispatchOptionsWithEngineSettings(
+          extensionOptions || DEFAULT_EXTENSION_OPTIONS,
+          (mergedExtensionOptions) => {
+            window.dispatchEvent(
+              new CustomEvent("BetterMintSendOptions", {
+                detail: {
+                  requestId: requestEvent.detail?.requestId,
+                  extensionOptions: mergedExtensionOptions
+                }
+              })
+            );
+          }
+        );
+      });
+    } catch {
+      window.removeEventListener("BetterMintGetOptions", handleGetOptionsRequest);
+    }
+  };
+
+  window.addEventListener("BetterMintGetOptions", handleGetOptionsRequest);
 
   injectPageScript("js/Mint.js");
 }
