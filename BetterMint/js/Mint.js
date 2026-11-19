@@ -67,8 +67,7 @@ const SEARCH_GO_OPTION_KEYS = new Set([
   EXTENSION_OPTION_KEY.GoNodes
 ]);
 
-const CLOCK_BOTTOM_SELECTOR =
-  ".clock-component.clock-bottom, .clock-button-component.clock-bottom, .clock.clock-bottom, .clock-bottom";
+const CLOCK_BOTTOM_SELECTOR = ".clock-bottom";
 
 function centipawnsToWinProbability(centipawns) {
   return 1 / (1 + Math.exp(-0.00368208 * centipawns));
@@ -113,9 +112,9 @@ function formatEvaluationDisplay(scoreValue, isMateScore) {
   };
 }
 
-function parseClockElementSeconds(clockSelector) {
+function getRemainingPlayerTimeSeconds() {
   const clockElement =
-    typeof document !== "undefined" ? document.querySelector(clockSelector) : null;
+    typeof document !== "undefined" ? document.querySelector(CLOCK_BOTTOM_SELECTOR) : null;
   const clockText = clockElement?.textContent?.trim();
   if (!clockText) return null;
   const colonMatch = clockText.match(/(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
@@ -129,10 +128,6 @@ function parseClockElementSeconds(clockSelector) {
   }
   const secondsMatch = clockText.match(/^(\d+(?:\.\d+)?)$/);
   return secondsMatch ? Number(secondsMatch[1]) : null;
-}
-
-function getRemainingPlayerTimeSeconds() {
-  return parseClockElementSeconds(CLOCK_BOTTOM_SELECTOR);
 }
 
 let activeExtension;
@@ -368,7 +363,7 @@ class GameController {
       this.updateEnginePosition(false);
     });
 
-    if (this.evalBarElement == null && getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) {
+    if (getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) {
       this.createAnalysisTools();
     }
 
@@ -407,7 +402,7 @@ class GameController {
     this.chessComGame.on("UpdateOptions", (optionsEvent) => {
       if (this.isDestroyed) return;
       this.boardOptions = this.chessComGame.getOptions();
-      if (optionsEvent?.data?.flipped !== undefined && this.evalBarElement != null) {
+      if (optionsEvent?.data?.flipped !== undefined && this.evalBarElement) {
         this.evalBarElement.classList.toggle(
           "bettermint-evalbar-flipped",
           Boolean(this.boardOptions?.flipped)
@@ -589,7 +584,11 @@ class GameController {
   }
 
   removeEvaluationBar() {
-    if (this.evalBarAnimationFrameId != null && typeof cancelAnimationFrame === "function") {
+    if (
+      this.evalBarAnimationFrameId !== null &&
+      this.evalBarAnimationFrameId !== undefined &&
+      typeof cancelAnimationFrame === "function"
+    ) {
       cancelAnimationFrame(this.evalBarAnimationFrameId);
       this.evalBarAnimationFrameId = null;
     }
@@ -619,7 +618,7 @@ class GameController {
       this.createAnalysisTools();
     } else if (
       !getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) &&
-      this.evalBarElement != null
+      this.evalBarElement
     ) {
       this.removeEvaluationBar();
     }
@@ -670,7 +669,7 @@ class GameController {
   }
 
   createAnalysisTools() {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) || this.evalBarElement != null) {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) || this.evalBarElement) {
       return;
     }
     const documentBody = document.body || document.documentElement;
@@ -744,7 +743,9 @@ class GameController {
         syncEvalBarPosition();
         return;
       }
-      if (this.evalBarAnimationFrameId != null) return;
+      if (this.evalBarAnimationFrameId !== null && this.evalBarAnimationFrameId !== undefined) {
+        return;
+      }
       this.evalBarAnimationFrameId = requestAnimationFrame(() => {
         this.evalBarAnimationFrameId = null;
         syncEvalBarPosition();
@@ -770,7 +771,6 @@ class GameController {
       this.evalBarElement.classList.add("bettermint-evalbar-flipped");
     }
     if (this.extension?.engineClient?.candidateMoves?.length > 0) {
-      this.extension.engineClient.ensureCandidateMovesSorted?.();
       this.updateEvaluationFromMove(this.extension.engineClient.candidateMoves[0]);
     }
   }
@@ -861,7 +861,7 @@ class GameController {
     this.lastHintSignature = "";
     this.activeHintMarkings.forEach((marking) => {
       const targetKey =
-        marking.data.square != null
+        marking.data.square !== undefined && marking.data.square !== null
           ? marking.data.square
           : `${marking.data.from}${marking.data.to}`;
       const markingId = `${marking.type}|${targetKey}`;
@@ -959,7 +959,7 @@ class GameController {
   }
 
   setEvaluationDisplay(scoreValue, isMateScore) {
-    if (this.evalBarElement == null) return;
+    if (!this.evalBarElement) return;
     const { percentage, abbreviated, isDark } = formatEvaluationDisplay(scoreValue, isMateScore);
     this.evalBarWhiteFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
     this.evalScoreAbbreviatedElement.textContent = abbreviated;
@@ -1051,16 +1051,13 @@ class UciEngineClient {
     this.extension = extension;
     this.stopFallbackTimeoutId = null;
     this.candidateMoves = [];
-    this.hasUnsortedCandidateMoves = false;
     this.previousPositionCandidateMoves = [];
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
     this.currentEngineUrl = getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl);
     this.targetEngineUrl = this.currentEngineUrl;
     this.isSwitchingEngine = false;
-    this.onEngineSwitchedCallback = null;
-    this.supportedUciOptions = new Set();
-    this.uciOptionDefaults = new Map();
+    this.supportedUciOptions = new Map();
     this.uciOptionOverrides = Object.assign(
       {},
       extension?.extensionOptions?.customEngineOptions
@@ -1124,23 +1121,12 @@ class UciEngineClient {
       this.resetSessionState({ clearCallbacks: false });
       this.sendUciCommand("uci");
       this.onReady(() => {
-        this.isEngineReady = false;
-        this.hasSentIsReady = false;
+        this.markEngineUnready();
         this.sendUciCommand("ucinewgame");
         this.onReady(() => {
-          if (this.onEngineSwitchedCallback) {
-            const onSwitchedCallback = this.onEngineSwitchedCallback;
-            this.onEngineSwitchedCallback = null;
-            onSwitchedCallback();
-          } else {
-            const chessComGame = this.extension?.gameController?.chessComGame;
-            if (
-              chessComGame &&
-              chessComGame.getMode?.() !== "gameOver" &&
-              typeof chessComGame.getFEN === "function"
-            ) {
-              this.extension.gameController.updateEnginePosition(false);
-            }
+          const gameController = this.extension?.gameController;
+          if (gameController && gameController.chessComGame?.getMode?.() !== "gameOver") {
+            gameController.updateEnginePosition(false);
           }
         });
       });
@@ -1195,14 +1181,7 @@ class UciEngineClient {
       this.fatalErrorMessage = null;
       this.isSwitchingEngine = false;
       this.resetSessionState();
-      this.supportedUciOptions = new Set();
-      this.uciOptionDefaults = new Map();
-      this.onEngineSwitchedCallback = () => {
-        const gameController = this.extension?.gameController;
-        if (gameController && gameController.chessComGame?.getMode?.() !== "gameOver") {
-          gameController.updateEnginePosition(false);
-        }
-      };
+      this.supportedUciOptions = new Map();
       this.initializeWebSocket(nextEngineUrl);
     });
   }
@@ -1291,10 +1270,15 @@ class UciEngineClient {
     }, reconnectDelayMs);
   }
 
+  markEngineUnready() {
+    this.isEngineReady = false;
+    this.hasSentIsReady = false;
+  }
+
   sendIsReady() {
     if (!this.isEngineLoaded || !this.isWebSocketOpen() || this.hasSentIsReady) return;
     this.hasSentIsReady = true;
-    this.pendingReadyCount = (this.pendingReadyCount || 0) + 1;
+    this.pendingReadyCount++;
     this.sendUciCommand("isready");
   }
 
@@ -1321,7 +1305,7 @@ class UciEngineClient {
       this.stopFallbackTimeoutId = setTimeout(() => {
         this.stopFallbackTimeoutId = null;
         if (this.hasRequestedStop) {
-          this.staleBestMovesToIgnore = (this.staleBestMovesToIgnore || 0) + 1;
+          this.staleBestMovesToIgnore++;
           this.hasRequestedStop = false;
           this.isEvaluating = false;
           const pendingCallbacks = this.stopCompletionCallbacks;
@@ -1377,7 +1361,7 @@ class UciEngineClient {
     );
     if (clockThresholdSeconds > 0) {
       const remainingClockSeconds = getRemainingPlayerTimeSeconds();
-      if (remainingClockSeconds != null && remainingClockSeconds < clockThresholdSeconds) {
+      if (remainingClockSeconds !== null && remainingClockSeconds < clockThresholdSeconds) {
         medianThinkMs *= Math.max(0, remainingClockSeconds / clockThresholdSeconds);
       }
     }
@@ -1390,29 +1374,20 @@ class UciEngineClient {
     return Math.round(physicalFloorMs + Math.exp(logMedianDelayMs + timingSpread * standardNormalSample));
   }
 
-  updatePosition(positionInput = null, isNewGame = true) {
+  updatePosition(positionState, isNewGame = true) {
     if (this.isSwitchingEngine) return;
     if (!this.isWebSocketOpen() || !this.isEngineLoaded) {
       this.reconnectNow();
       return;
     }
-    const isStructuredState = Boolean(positionInput && typeof positionInput === "object");
-    const fen = isStructuredState ? (positionInput.fen ?? null) : positionInput;
-    const positionCommand =
-      isStructuredState && typeof positionInput.positionCommand === "string"
-        ? positionInput.positionCommand
-        : null;
     const hadPendingPosition = this.pendingPositionUpdate !== null;
-    const nextPendingUpdate = {
-      fen,
+    this.pendingPositionUpdate = {
+      fen: positionState?.fen ?? null,
+      positionCommand: positionState?.positionCommand ?? null,
       isNewGame: hadPendingPosition
         ? this.pendingPositionUpdate.isNewGame || isNewGame
         : isNewGame
     };
-    if (positionCommand !== null) {
-      nextPendingUpdate.positionCommand = positionCommand;
-    }
-    this.pendingPositionUpdate = nextPendingUpdate;
     if (hadPendingPosition) return;
 
     this.onReady(() => {
@@ -1425,7 +1400,7 @@ class UciEngineClient {
         this.setPositionAndSearch(
           queuedPosition.fen,
           queuedPosition.isNewGame,
-          queuedPosition.positionCommand ?? null
+          queuedPosition.positionCommand
         );
       });
     });
@@ -1447,8 +1422,7 @@ class UciEngineClient {
       this.stopEvaluation(() => {
         if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(buttonOptionName)) {
           this.sendUciCommand(`setoption name ${buttonOptionName}`);
-          this.isEngineReady = false;
-          this.hasSentIsReady = false;
+          this.markEngineUnready();
         }
         if (this.extension && this.extension.gameController) {
           this.extension.gameController.updateEnginePosition(false);
@@ -1494,9 +1468,6 @@ class UciEngineClient {
   applyUciOptions(uciOptionsMap = null) {
     const targetUciOptions = uciOptionsMap || this.uciOptionOverrides;
     if (!targetUciOptions || typeof targetUciOptions !== "object") return;
-    if (!this.appliedUciOptions || typeof this.appliedUciOptions !== "object") {
-      this.appliedUciOptions = {};
-    }
     let hasSentAnyUciOption = false;
 
     for (const [previousOptionName, previousOptionValue] of Object.entries(this.appliedUciOptions)) {
@@ -1510,8 +1481,8 @@ class UciEngineClient {
         nextOptionValue !== "" && nextOptionValue !== undefined && nextOptionValue !== null;
       if (isOptionActive) continue;
 
-      if (this.uciOptionDefaults?.has(previousOptionName)) {
-        const defaultValue = this.uciOptionDefaults.get(previousOptionName);
+      const defaultValue = this.supportedUciOptions.get(previousOptionName);
+      if (defaultValue !== undefined) {
         if (String(previousOptionValue) !== String(defaultValue)) {
           this.sendUciCommand(
             defaultValue === ""
@@ -1533,14 +1504,11 @@ class UciEngineClient {
       }
     }
     if (hasSentAnyUciOption) {
-      this.isEngineReady = false;
-      this.hasSentIsReady = false;
+      this.markEngineUnready();
     }
   }
 
-  processEngineMessage(messageEvent) {
-    const rawMessage =
-      messageEvent && typeof messageEvent === "object" ? messageEvent.data : messageEvent;
+  processEngineMessage(rawMessage) {
     if (typeof rawMessage !== "string" || !rawMessage) return;
 
     for (const rawLine of rawMessage.split(/\r?\n/)) {
@@ -1555,10 +1523,10 @@ class UciEngineClient {
     if (uciLine.startsWith("option name ")) {
       const parsedUciOption = UciEngineClient.parseUciOptionLine(uciLine);
       if (parsedUciOption) {
-        this.supportedUciOptions.add(parsedUciOption.name);
-        if (parsedUciOption.hasDefault && this.uciOptionDefaults) {
-          this.uciOptionDefaults.set(parsedUciOption.name, parsedUciOption.default);
-        }
+        this.supportedUciOptions.set(
+          parsedUciOption.name,
+          parsedUciOption.hasDefault ? parsedUciOption.default : undefined
+        );
       }
       return;
     }
@@ -1571,10 +1539,10 @@ class UciEngineClient {
       if (this.readyCallbacks.length > 0) {
         this.sendIsReady();
       }
-    } else if (typeof uciLine === "string" && uciLine.startsWith("info string Error:")) {
+    } else if (uciLine.startsWith("info string Error:")) {
       this.fatalErrorMessage = uciLine.slice("info string ".length);
       console.error(`[BetterMint] ${this.fatalErrorMessage}`);
-    } else if (typeof uciLine === "string" && uciLine.startsWith("info string book ")) {
+    } else if (uciLine.startsWith("info string book ")) {
       if (this.hasRequestedStop) return;
       const bookMoveTokens = uciLine
         .slice("info string book ".length)
@@ -1605,7 +1573,7 @@ class UciEngineClient {
       if (!this.isEngineReady && this.readyCallbacks.length > 0) {
         this.sendIsReady();
       }
-    } else if (typeof uciLine === "string" && uciLine.startsWith("info ")) {
+    } else if (uciLine.startsWith("info ")) {
       if (
         this.hasRequestedStop ||
         !uciLine.includes(" pv ") ||
@@ -1627,7 +1595,7 @@ class UciEngineClient {
       const mateInMoves = scoreUnit === "mate" ? numericScore : null;
       const candidateMove = new CandidateMove(pvMatch[1], searchDepth, centipawns, mateInMoves);
       this.handleCandidateMoveUpdate(candidateMove, false);
-    } else if (typeof uciLine === "string" && uciLine.startsWith("bestmove ")) {
+    } else if (uciLine.startsWith("bestmove ")) {
       const bestMoveMatch = uciLine.match(UciEngineClient.BESTMOVE_RE);
       if (bestMoveMatch) {
         if (this.staleBestMovesToIgnore > 0) {
@@ -1681,7 +1649,6 @@ class UciEngineClient {
         this.previousPositionBookMoves = new Set();
         this.lastAutoMovedFen = null;
       } else if (!isSamePosition) {
-        this.ensureCandidateMovesSorted();
         this.previousPositionCandidateMoves = this.candidateMoves;
         this.previousPositionBookMoves = new Set(this.currentPositionBookMoves);
         this.lastAutoMovedFen = null;
@@ -1690,7 +1657,6 @@ class UciEngineClient {
       this.candidateMoves = [];
       this.currentPositionBookMoves = new Set();
       this.hasCurrentPositionBookHit = false;
-      this.hasUnsortedCandidateMoves = false;
       const resolvedPositionCommand =
         positionCommand || (fen !== null ? `position fen ${fen}` : null);
       if (resolvedPositionCommand !== null) this.sendUciCommand(resolvedPositionCommand);
@@ -1698,8 +1664,7 @@ class UciEngineClient {
     };
     this.onReady(() => {
       if (isNewGame) {
-        this.isEngineReady = false;
-        this.hasSentIsReady = false;
+        this.markEngineUnready();
         this.sendUciCommand("ucinewgame");
         this.onReady(startSearchForPosition);
       } else {
@@ -1748,48 +1713,41 @@ class UciEngineClient {
     gameController.showMoveAnalysis(lastPlayedMove.to, moveQuality);
   }
 
-  ensureCandidateMovesSorted() {
-    if (this.hasUnsortedCandidateMoves) {
-      this.candidateMoves.sort(UciEngineClient.compareCandidateMoves);
-      this.hasUnsortedCandidateMoves = false;
-    }
-    return this.candidateMoves;
-  }
-
   handleCandidateMoveUpdate(candidateMove = null, isBestMove = false) {
     let hasSelectedBestMove = false;
+    let hasChangedCandidates = false;
     if (candidateMove !== null) {
       const existingIndex = this.candidateMoves.findIndex(
         (existingMove) => existingMove.uciMove === candidateMove.uciMove
       );
       if (existingIndex === -1) {
         this.candidateMoves.push(candidateMove);
-        this.hasUnsortedCandidateMoves = true;
+        hasChangedCandidates = true;
       } else if (
         !isBestMove &&
         candidateMove.searchDepth >= this.candidateMoves[existingIndex].searchDepth
       ) {
         this.candidateMoves[existingIndex] = candidateMove;
-        this.hasUnsortedCandidateMoves = true;
+        hasChangedCandidates = true;
       }
       if (isBestMove) hasSelectedBestMove = true;
     } else if (isBestMove && this.candidateMoves.length > 0) {
       hasSelectedBestMove = true;
     }
 
+    if (hasChangedCandidates) {
+      this.candidateMoves.sort(UciEngineClient.compareCandidateMoves);
+    }
+
     const multiPvCount = Math.max(1, parseInt(this.uciOptionOverrides?.["MultiPV"], 10) || 1);
 
     if (!hasSelectedBestMove && candidateMove !== null) {
       if (this.extension?.gameController?.renderMoveHints) {
-        const liveTopCandidates = [...this.candidateMoves]
-          .sort(UciEngineClient.compareCandidateMoves)
-          .slice(0, multiPvCount);
-        this.extension.gameController.renderMoveHints(liveTopCandidates);
+        this.extension.gameController.renderMoveHints(this.candidateMoves.slice(0, multiPvCount));
       }
       return;
     }
 
-    this.ensureCandidateMovesSorted();
     if (hasSelectedBestMove && candidateMove !== null) {
       const bestMoveIndex = this.candidateMoves.indexOf(candidateMove);
       if (bestMoveIndex > 0) {
@@ -1854,7 +1812,7 @@ class UciEngineClient {
 
     const targetDelayMs = this.calculateAutoMoveDelayMs(bestCandidateMove);
     const elapsedTurnMs =
-      gameController.turnStartTimestampMs != null
+      typeof gameController.turnStartTimestampMs === "number"
         ? performance.now() - gameController.turnStartTimestampMs
         : 0;
     const remainingDelayMs = Math.max(0, targetDelayMs - elapsedTurnMs);
@@ -1913,7 +1871,6 @@ function initializeBetterMintExtension(chessboardElement) {
       pendingOptionsPromise = null;
       const targetBoardElement = pendingBoardElement || chessboardElement;
       try {
-        fallbackExtensionOptions = loadedOptions;
         if (activeExtension) {
           attachBoardController(targetBoardElement);
         } else {

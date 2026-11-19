@@ -571,23 +571,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
     padding: 10px 0 2px;
 }
 
-@supports not selector(::details-content) {
-    details.collapse-group[open] > .collapse-content {
-        animation: collapse-reveal 0.2s cubic-bezier(0.2, 0, 0, 1);
-    }
-}
-
-@keyframes collapse-reveal {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 .status-text {
     font-size: 12px;
     font-style: italic;

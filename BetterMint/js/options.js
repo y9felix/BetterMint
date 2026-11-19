@@ -39,25 +39,17 @@ let isThemeInitialized = false;
 let isConfigSystemInitialized = false;
 let isEnginePanelInitialized = false;
 
-const ZERO_OFF_SLIDER_OPTION_KEYS = new Set([
-  "option-depth",
-  "option-go-movetime",
-  "option-go-nodes",
-  "option-opening-moves-threshold",
-  "option-clock-threshold"
-]);
-
-const ONE_OFF_SLIDER_OPTION_KEYS = new Set([
-  "option-reflex-multiplier",
-  "option-opening-multiplier"
-]);
-
-const FIXED_TWO_DECIMAL_SLIDER_OPTION_KEYS = new Set([
-  "option-move-pace",
-  "option-timing-spread",
-  "option-reflex-multiplier",
-  "option-opening-multiplier"
-]);
+const SLIDER_VALUE_SPECS = {
+  "option-depth": { offValue: 0 },
+  "option-go-movetime": { offValue: 0 },
+  "option-go-nodes": { offValue: 0, grouped: true },
+  "option-move-pace": { decimals: 2 },
+  "option-timing-spread": { decimals: 2 },
+  "option-reflex-multiplier": { offValue: 1, decimals: 2 },
+  "option-opening-moves-threshold": { offValue: 0 },
+  "option-opening-multiplier": { offValue: 1, decimals: 2 },
+  "option-clock-threshold": { offValue: 0 }
+};
 
 const EXTENSION_OPTION_KEYS =
   typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? Object.keys(DEFAULT_EXTENSION_OPTIONS) : [];
@@ -65,13 +57,12 @@ const extensionOptionInputs = {};
 
 function formatSliderBadgeValue(optionKey, rawValue) {
   const numericValue = Number(rawValue);
-  if (ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey) && numericValue === 0) return "Off";
-  if (ONE_OFF_SLIDER_OPTION_KEYS.has(optionKey) && numericValue >= 1) return "Off";
-  if (optionKey === "option-go-nodes" && !Number.isNaN(numericValue)) {
-    return numericValue.toLocaleString("en-US");
-  }
-  if (FIXED_TWO_DECIMAL_SLIDER_OPTION_KEYS.has(optionKey) && !Number.isNaN(numericValue)) {
-    return numericValue.toFixed(2);
+  const sliderSpec = SLIDER_VALUE_SPECS[optionKey];
+  if (sliderSpec && !Number.isNaN(numericValue)) {
+    if (sliderSpec.offValue === 0 && numericValue === 0) return "Off";
+    if (sliderSpec.offValue === 1 && numericValue >= 1) return "Off";
+    if (sliderSpec.grouped) return numericValue.toLocaleString("en-US");
+    if (sliderSpec.decimals !== undefined) return numericValue.toFixed(sliderSpec.decimals);
   }
   return rawValue;
 }
@@ -85,7 +76,10 @@ function isPlainRecord(candidate) {
 
 function getBaseSliderStep(rangeInput) {
   if (baseSliderSteps.has(rangeInput)) return baseSliderSteps.get(rangeInput);
-  const baseStep = rangeInput.step != null && rangeInput.step !== "" ? String(rangeInput.step) : "";
+  const baseStep =
+    rangeInput.step !== null && rangeInput.step !== undefined && rangeInput.step !== ""
+      ? String(rangeInput.step)
+      : "";
   baseSliderSteps.set(rangeInput, baseStep);
   return baseStep;
 }
@@ -135,11 +129,10 @@ function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
   const cleanedText = String(rawText ?? "").trim().replace(/,/g, "");
   if (!cleanedText) return null;
 
+  const offValue = optionKey ? SLIDER_VALUE_SPECS[optionKey]?.offValue : undefined;
   let parsedNumber;
-  if (cleanedText.toLowerCase() === "off" && optionKey && ZERO_OFF_SLIDER_OPTION_KEYS.has(optionKey)) {
-    parsedNumber = 0;
-  } else if (cleanedText.toLowerCase() === "off" && optionKey && ONE_OFF_SLIDER_OPTION_KEYS.has(optionKey)) {
-    parsedNumber = 1;
+  if (cleanedText.toLowerCase() === "off" && offValue !== undefined) {
+    parsedNumber = offValue;
   } else {
     parsedNumber = Number(cleanedText);
     if (!Number.isFinite(parsedNumber)) return null;
@@ -344,6 +337,8 @@ function updateDependentGroupVisibility() {
   }
 }
 
+const UCI_OPTION_KEYWORDS = new Set(["default", "min", "max", "var"]);
+
 function parseUciOptionLine(uciLine) {
   if (!uciLine || typeof uciLine !== "string" || !uciLine.startsWith("option name ")) return null;
   const declarationBody = uciLine.slice(12);
@@ -373,7 +368,6 @@ function parseUciOptionLine(uciLine) {
   let maxValue = null;
   const allowedVariants = [];
 
-  const uciKeywords = new Set(["default", "min", "max", "var"]);
   let activeAttributeKeyword = null;
   let collectedValueWords = [];
 
@@ -394,7 +388,7 @@ function parseUciOptionLine(uciLine) {
 
   for (let tokenIndex = 1; tokenIndex < attributeTokens.length; tokenIndex++) {
     const token = attributeTokens[tokenIndex];
-    if (uciKeywords.has(token)) {
+    if (UCI_OPTION_KEYWORDS.has(token)) {
       commitActiveAttribute();
       activeAttributeKeyword = token;
     } else if (activeAttributeKeyword) {
@@ -461,7 +455,6 @@ const uciOptionControlRenderers = {
     });
     const titleLabel = createDomElement("label", {
       className: "title",
-      htmlFor: controlId,
       textContent: uciOption.name
     });
     titleLabel.setAttribute?.("for", controlId);
@@ -482,7 +475,7 @@ const uciOptionControlRenderers = {
     });
     const toggleVisual = createDomElement("span", { className: "toggle-slider" });
     toggleVisual.setAttribute?.("aria-hidden", "true");
-    const rowLabel = createDomElement("label", { className: "control-row", htmlFor: controlId }, [
+    const rowLabel = createDomElement("label", { className: "control-row" }, [
       createDomElement("span", { className: "control-label-text", textContent: uciOption.name }),
       checkboxInput,
       toggleVisual
@@ -507,7 +500,6 @@ const uciOptionControlRenderers = {
     });
     const fieldLabel = createDomElement("label", {
       className: "control-label-text",
-      htmlFor: controlId,
       textContent: uciOption.name
     });
     fieldLabel.setAttribute?.("for", controlId);
@@ -527,7 +519,6 @@ const uciOptionControlRenderers = {
     });
     const fieldLabel = createDomElement("label", {
       className: "control-label-text",
-      htmlFor: controlId,
       textContent: uciOption.name
     });
     fieldLabel.setAttribute?.("for", controlId);
@@ -1058,7 +1049,7 @@ function renderSavedConfigList() {
     });
 
     listContainer.appendChild(
-      createDomElement("div", { className: "config-item-row config-item" }, [
+      createDomElement("div", { className: "config-item-row" }, [
         selectProfileButton,
         deleteProfileButton
       ])
@@ -1234,15 +1225,13 @@ function handleExtensionOptionChange(changedOptionKey) {
   updateDependentGroupVisibility();
   setActiveConfigProfileName(null);
 
-  if (changedOptionKey) {
-    const toggledGroupEntry = VISIBILITY_TOGGLE_GROUPS.find(
-      ([toggleInputId]) => toggleInputId === changedOptionKey
-    );
-    if (toggledGroupEntry && extensionOptions[changedOptionKey]) {
-      const revealedGroup = document.getElementById(toggledGroupEntry[1]);
-      if (revealedGroup) {
-        scrollExpandedElementIntoView(revealedGroup, revealedGroup.previousElementSibling);
-      }
+  const toggledGroupEntry = VISIBILITY_TOGGLE_GROUPS.find(
+    ([toggleInputId]) => toggleInputId === changedOptionKey
+  );
+  if (toggledGroupEntry && extensionOptions[changedOptionKey]) {
+    const revealedGroup = document.getElementById(toggledGroupEntry[1]);
+    if (revealedGroup) {
+      scrollExpandedElementIntoView(revealedGroup, revealedGroup.previousElementSibling);
     }
   }
 
@@ -1251,9 +1240,7 @@ function handleExtensionOptionChange(changedOptionKey) {
     invalidateEngineProbe(extensionOptions["option-url-api-stockfish"]);
   }
 
-  const changedPayload = changedOptionKey
-    ? { [changedOptionKey]: extensionOptions[changedOptionKey] }
-    : extensionOptions;
+  const changedPayload = { [changedOptionKey]: extensionOptions[changedOptionKey] };
   writeChromeStorage("sync", changedPayload);
   notifyActiveChessComTabs(changedPayload);
 }
