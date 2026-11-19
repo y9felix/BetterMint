@@ -86,6 +86,22 @@
         <section class="card">
             <h2 class="card-title">Automation</h2>
 
+            <label class="control-row" for="option-auto-queue">
+                <span class="control-label-text">Auto Queue</span>
+                <input id="option-auto-queue" type="checkbox" class="toggle-input" />
+                <span class="toggle-slider" aria-hidden="true"></span>
+            </label>
+
+            <div id="auto-queue-group" class="sub-panel hidden">
+                <div class="sub-panel-inner">
+                    <label class="control-row" for="option-rematch-first">
+                        <span class="control-label-text">Rematch first</span>
+                        <input id="option-rematch-first" type="checkbox" class="toggle-input" />
+                        <span class="toggle-slider" aria-hidden="true"></span>
+                    </label>
+                </div>
+            </div>
+
             <label class="control-row" for="option-legit-auto-move">
                 <span class="control-label-text">Enable Auto Move</span>
                 <input id="option-legit-auto-move" type="checkbox" class="toggle-input" />
@@ -164,22 +180,6 @@
                             </details>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <label class="control-row" for="option-auto-queue">
-                <span class="control-label-text">Auto Queue</span>
-                <input id="option-auto-queue" type="checkbox" class="toggle-input" />
-                <span class="toggle-slider" aria-hidden="true"></span>
-            </label>
-
-            <div id="auto-queue-group" class="sub-panel hidden">
-                <div class="sub-panel-inner">
-                    <label class="control-row" for="option-rematch-first">
-                        <span class="control-label-text">Rematch first</span>
-                        <input id="option-rematch-first" type="checkbox" class="toggle-input" />
-                        <span class="toggle-slider" aria-hidden="true"></span>
-                    </label>
                 </div>
             </div>
         </section>
