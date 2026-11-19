@@ -1134,14 +1134,26 @@ function initializeConfigSystem() {
   });
 }
 
+function enableInteractiveTransitions() {
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.body?.classList?.add("is-ready");
+      });
+    });
+  }
+}
+
 function restoreExtensionOptions() {
   readChromeStorage("sync", DEFAULT_EXTENSION_OPTION_VALUES, (storedExtensionOptions) => {
     if (storedExtensionOptions === null) {
       updateDependentGroupVisibility();
+      enableInteractiveTransitions();
       return;
     }
     applyExtensionOptionsToDom(storedExtensionOptions);
     probeEngineIfPanelExpanded();
+    enableInteractiveTransitions();
   });
 }
 

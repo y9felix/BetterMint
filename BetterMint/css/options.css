@@ -1,11 +1,12 @@
 :root,
 :root[data-theme="dark"] {
-    --bg-app: #121316;
-    --bg-rail: #18191d;
-    --bg-surface: #1d1f24;
-    --bg-surface-subtle: #252830;
-    --bg-input: #131418;
-    --border-subtle: #2f333d;
+    interpolate-size: allow-keywords;
+    --bg-app: #18191d;
+    --bg-rail: #141519;
+    --bg-surface: #202229;
+    --bg-surface-subtle: #262932;
+    --bg-input: #121317;
+    --border-subtle: #2c303a;
     --border-strong: #464c5a;
     --divider-color: rgba(255, 255, 255, 0.08);
     --text-primary: #f3f4f6;
@@ -16,7 +17,7 @@
     --accent-contrast: #ffffff;
     --accent-soft: rgba(99, 102, 241, 0.16);
     --focus-ring: #818cf8;
-    --badge-bg: #282c36;
+    --badge-bg: #262a34;
     --badge-text: #e5e7f5;
     --track-bg: #353a46;
     --thumb-bg: #f8fafc;
@@ -30,12 +31,12 @@
 }
 
 :root[data-theme="light"] {
-    --bg-app: #f3f4f6;
-    --bg-rail: #ffffff;
+    --bg-app: #ffffff;
+    --bg-rail: #f7f8fa;
     --bg-surface: #ffffff;
     --bg-surface-subtle: #f1f3f5;
-    --bg-input: #f9fafb;
-    --border-subtle: #d4d7de;
+    --bg-input: #f4f6f8;
+    --border-subtle: #e2e5eb;
     --border-strong: #9ca3af;
     --divider-color: rgba(17, 24, 39, 0.08);
     --text-primary: #111827;
@@ -62,10 +63,10 @@
 :root[data-theme="black"] {
     --bg-app: #000000;
     --bg-rail: #070709;
-    --bg-surface: #0d0d11;
+    --bg-surface: #0e0e13;
     --bg-surface-subtle: #16161d;
-    --bg-input: #050507;
-    --border-subtle: #262630;
+    --bg-input: #0a0a0e;
+    --border-subtle: #22222b;
     --border-strong: #40404f;
     --divider-color: rgba(255, 255, 255, 0.1);
     --text-primary: #f5f5f7;
@@ -76,7 +77,7 @@
     --accent-contrast: #ffffff;
     --accent-soft: rgba(99, 102, 241, 0.18);
     --focus-ring: #818cf8;
-    --badge-bg: #1c1c24;
+    --badge-bg: #181820;
     --badge-text: #eeeef7;
     --track-bg: #2b2b36;
     --thumb-bg: #ffffff;
@@ -90,12 +91,12 @@
 }
 
 :root[data-theme="chesscom"] {
-    --bg-app: #302e2b;
-    --bg-rail: #262421;
-    --bg-surface: #272522;
-    --bg-surface-subtle: #34312d;
-    --bg-input: #1c1a18;
-    --border-subtle: #47443f;
+    --bg-app: #2b2926;
+    --bg-rail: #23211e;
+    --bg-surface: #312e2b;
+    --bg-surface-subtle: #383531;
+    --bg-input: #1d1b19;
+    --border-subtle: #423f3a;
     --border-strong: #635f58;
     --divider-color: rgba(255, 255, 255, 0.09);
     --text-primary: #f5f5f5;
@@ -106,7 +107,7 @@
     --accent-contrast: #141c0c;
     --accent-soft: rgba(129, 182, 76, 0.18);
     --focus-ring: #a3d165;
-    --badge-bg: #383531;
+    --badge-bg: #36332f;
     --badge-text: #f5f5f5;
     --track-bg: #3d3a35;
     --thumb-bg: #ffffff;
@@ -186,10 +187,10 @@ body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 12px 14px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }
@@ -211,29 +212,68 @@ body {
 }
 
 .card {
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    padding: 12px 14px;
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 12px 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.card + .card {
+    border-top: 1px solid var(--border-subtle);
 }
 
 .card-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--divider-color);
 }
 
 .sub-panel {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    margin-top: 0;
+}
+
+.sub-panel.hidden {
+    display: grid !important;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    margin-top: -12px;
+}
+
+body.is-ready .sub-panel {
+    transition:
+        grid-template-rows 0.22s cubic-bezier(0.2, 0, 0, 1),
+        margin-top 0.22s cubic-bezier(0.2, 0, 0, 1),
+        opacity 0.18s ease,
+        visibility 0s linear 0s;
+}
+
+body.is-ready .sub-panel.hidden {
+    transition:
+        grid-template-rows 0.22s cubic-bezier(0.2, 0, 0, 1),
+        margin-top 0.22s cubic-bezier(0.2, 0, 0, 1),
+        opacity 0.15s ease,
+        visibility 0s linear 0.22s;
+}
+
+.sub-panel-inner {
+    overflow: hidden;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    margin: 0 -4px;
+    padding: 0 4px;
 }
 
 .control-row {
@@ -476,8 +516,21 @@ details.collapse-group[open] > summary.collapse-summary {
     color: var(--text-primary);
 }
 
-details.collapse-group:not([open]) > .collapse-content {
-    display: none;
+details.collapse-group::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: clip;
+    margin: 0 -4px;
+    padding: 0 4px;
+    transition:
+        block-size 0.22s cubic-bezier(0.2, 0, 0, 1),
+        opacity 0.18s ease,
+        content-visibility 0.22s allow-discrete;
+}
+
+details.collapse-group[open]::details-content {
+    block-size: auto;
+    opacity: 1;
 }
 
 details.collapse-group > summary.collapse-summary:hover {
@@ -516,6 +569,23 @@ details.collapse-group > summary.collapse-summary:hover::after {
     flex-direction: column;
     gap: 12px;
     padding-top: 12px;
+}
+
+@supports not selector(::details-content) {
+    details.collapse-group[open] > .collapse-content {
+        animation: collapse-reveal 0.2s cubic-bezier(0.2, 0, 0, 1);
+    }
+}
+
+@keyframes collapse-reveal {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .status-text {
@@ -570,7 +640,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 10px 14px;
+    padding: 10px 16px;
     border-top: 1px solid var(--border-subtle);
     background-color: var(--bg-rail);
 }
@@ -667,9 +737,34 @@ details.collapse-group > summary.collapse-summary:hover::after {
     flex-direction: column;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-strong);
-    border-radius: 10px;
+    border-radius: 8px;
     box-shadow: var(--shadow-popover);
     overflow: hidden;
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+.config-popover.hidden {
+    display: flex !important;
+    opacity: 0;
+    transform: translateY(6px);
+    visibility: hidden;
+    pointer-events: none;
+}
+
+body.is-ready .config-popover {
+    transition:
+        opacity 0.16s ease,
+        transform 0.16s cubic-bezier(0.2, 0, 0, 1),
+        visibility 0s linear 0s;
+}
+
+body.is-ready .config-popover.hidden {
+    transition:
+        opacity 0.14s ease,
+        transform 0.14s ease,
+        visibility 0s linear 0.16s;
 }
 
 .config-panel-header {

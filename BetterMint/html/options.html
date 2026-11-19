@@ -89,11 +89,13 @@
             </label>
 
             <div id="auto-queue-group" class="sub-panel hidden">
-                <label class="control-row" for="option-rematch-first">
-                    <span class="control-label-text">Rematch first</span>
-                    <input id="option-rematch-first" type="checkbox" class="toggle-input" />
-                    <span class="toggle-slider" aria-hidden="true"></span>
-                </label>
+                <div class="sub-panel-inner">
+                    <label class="control-row" for="option-rematch-first">
+                        <span class="control-label-text">Rematch first</span>
+                        <input id="option-rematch-first" type="checkbox" class="toggle-input" />
+                        <span class="toggle-slider" aria-hidden="true"></span>
+                    </label>
+                </div>
             </div>
         </section>
 
@@ -107,73 +109,77 @@
             </label>
 
             <div id="pacing-group" class="sub-panel hidden">
-                <label class="control-row" for="option-human-like-moves">
-                    <span class="control-label-text">Human-like Moves</span>
-                    <input id="option-human-like-moves" type="checkbox" class="toggle-input" checked />
-                    <span class="toggle-slider" aria-hidden="true"></span>
-                </label>
+                <div class="sub-panel-inner">
+                    <label class="control-row" for="option-human-like-moves">
+                        <span class="control-label-text">Human-like Moves</span>
+                        <input id="option-human-like-moves" type="checkbox" class="toggle-input" checked />
+                        <span class="toggle-slider" aria-hidden="true"></span>
+                    </label>
 
-                <div id="human-pace-group" class="sub-panel">
-                    <div class="control-col">
-                        <div class="slider-header">
-                            <label class="title" for="option-move-pace">Move Pace (Seconds)</label>
-                            <button type="button" class="badge" id="badge-option-move-pace" aria-label="Edit Move Pace value">12.50</button>
+                    <div id="human-pace-group" class="sub-panel">
+                        <div class="sub-panel-inner">
+                            <div class="control-col">
+                                <div class="slider-header">
+                                    <label class="title" for="option-move-pace">Move Pace (Seconds)</label>
+                                    <button type="button" class="badge" id="badge-option-move-pace" aria-label="Edit Move Pace value">12.50</button>
+                                </div>
+                                <input id="option-move-pace" type="range" min="0.5" max="30.0" step="0.05" value="12.5" class="range-slider" />
+                            </div>
+
+                            <details id="advanced-timing-details" class="collapse-group">
+                                <summary class="collapse-summary">Advanced Timing Settings</summary>
+                                <div class="collapse-content">
+                                    <div class="control-col">
+                                        <div class="slider-header">
+                                            <label class="title" for="option-physical-floor">Physical Floor (ms)</label>
+                                            <button type="button" class="badge" id="badge-option-physical-floor" aria-label="Edit Physical Floor value">600</button>
+                                        </div>
+                                        <input id="option-physical-floor" type="range" min="50" max="1000" step="10" value="600" class="range-slider" />
+                                    </div>
+
+                                    <div class="control-col">
+                                        <div class="slider-header">
+                                            <label class="title" for="option-timing-spread">Timing Spread (σ)</label>
+                                            <button type="button" class="badge" id="badge-option-timing-spread" aria-label="Edit Timing Spread value">0.80</button>
+                                        </div>
+                                        <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
+                                    </div>
+
+                                    <div class="control-col">
+                                        <div class="slider-header">
+                                            <label class="title" for="option-reflex-multiplier">Reflex Move Multiplier</label>
+                                            <button type="button" class="badge" id="badge-option-reflex-multiplier" aria-label="Edit Reflex Move Multiplier value">0.25</button>
+                                        </div>
+                                        <input id="option-reflex-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.25" class="range-slider" />
+                                    </div>
+
+                                    <div class="control-col">
+                                        <div class="slider-header">
+                                            <label class="title" for="option-opening-moves-threshold">Opening Moves</label>
+                                            <button type="button" class="badge" id="badge-option-opening-moves-threshold" aria-label="Edit Opening Moves value">10</button>
+                                        </div>
+                                        <input id="option-opening-moves-threshold" type="range" min="0" max="15" step="1" value="10" class="range-slider" />
+                                    </div>
+
+                                    <div class="control-col">
+                                        <div class="slider-header">
+                                            <label class="title" for="option-opening-multiplier">Opening Multiplier</label>
+                                            <button type="button" class="badge" id="badge-option-opening-multiplier" aria-label="Edit Opening Multiplier value">0.40</button>
+                                        </div>
+                                        <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.40" class="range-slider" />
+                                    </div>
+
+                                    <div class="control-col">
+                                        <div class="slider-header">
+                                            <label class="title" for="option-clock-threshold">Clock Threshold (Seconds)</label>
+                                            <button type="button" class="badge" id="badge-option-clock-threshold" aria-label="Edit Clock Threshold value">180</button>
+                                        </div>
+                                        <input id="option-clock-threshold" type="range" min="0" max="300" step="5" value="180" class="range-slider" />
+                                    </div>
+                                </div>
+                            </details>
                         </div>
-                        <input id="option-move-pace" type="range" min="0.5" max="30.0" step="0.05" value="12.5" class="range-slider" />
                     </div>
-
-                    <details id="advanced-timing-details" class="collapse-group">
-                        <summary class="collapse-summary">Advanced Timing Settings</summary>
-                        <div class="collapse-content">
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <label class="title" for="option-physical-floor">Physical Floor (ms)</label>
-                                    <button type="button" class="badge" id="badge-option-physical-floor" aria-label="Edit Physical Floor value">600</button>
-                                </div>
-                                <input id="option-physical-floor" type="range" min="50" max="1000" step="10" value="600" class="range-slider" />
-                            </div>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <label class="title" for="option-timing-spread">Timing Spread (σ)</label>
-                                    <button type="button" class="badge" id="badge-option-timing-spread" aria-label="Edit Timing Spread value">0.80</button>
-                                </div>
-                                <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
-                            </div>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <label class="title" for="option-reflex-multiplier">Reflex Move Multiplier</label>
-                                    <button type="button" class="badge" id="badge-option-reflex-multiplier" aria-label="Edit Reflex Move Multiplier value">0.25</button>
-                                </div>
-                                <input id="option-reflex-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.25" class="range-slider" />
-                            </div>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <label class="title" for="option-opening-moves-threshold">Opening Moves</label>
-                                    <button type="button" class="badge" id="badge-option-opening-moves-threshold" aria-label="Edit Opening Moves value">10</button>
-                                </div>
-                                <input id="option-opening-moves-threshold" type="range" min="0" max="15" step="1" value="10" class="range-slider" />
-                            </div>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <label class="title" for="option-opening-multiplier">Opening Multiplier</label>
-                                    <button type="button" class="badge" id="badge-option-opening-multiplier" aria-label="Edit Opening Multiplier value">0.40</button>
-                                </div>
-                                <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.40" class="range-slider" />
-                            </div>
-
-                            <div class="control-col">
-                                <div class="slider-header">
-                                    <label class="title" for="option-clock-threshold">Clock Threshold (Seconds)</label>
-                                    <button type="button" class="badge" id="badge-option-clock-threshold" aria-label="Edit Clock Threshold value">180</button>
-                                </div>
-                                <input id="option-clock-threshold" type="range" min="0" max="300" step="5" value="180" class="range-slider" />
-                            </div>
-                        </div>
-                    </details>
                 </div>
             </div>
         </section>
