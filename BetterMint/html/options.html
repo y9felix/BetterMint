@@ -10,8 +10,8 @@
 <body>
     <header class="app-header">
         <div class="brand">
-            <img src="../img/betterlogo.png" alt="BetterMint Logo" class="brand-logo">
-            <span class="brand-title">BetterMint</span>
+            <img src="../img/betterlogo.png" alt="" class="brand-logo">
+            <h1 class="brand-title">BetterMint</h1>
         </div>
     </header>
 
@@ -21,7 +21,7 @@
 
             <div class="control-col">
                 <label class="control-label-text" for="option-url-api-stockfish">WebSocket API URL</label>
-                <input id="option-url-api-stockfish" type="text" class="text-input" spellcheck="false" autocomplete="off" />
+                <input id="option-url-api-stockfish" type="text" class="text-input" placeholder="ws://localhost:8000/ws" spellcheck="false" autocomplete="off" />
             </div>
 
             <details id="go-command-details" class="collapse-group">
@@ -29,24 +29,24 @@
                 <div class="collapse-content">
                     <div class="control-col">
                         <div class="slider-header">
-                            <span class="title">Search Depth</span>
-                            <span class="badge" id="badge-option-depth">3</span>
+                            <label class="title" for="option-depth">Search Depth</label>
+                            <button type="button" class="badge" id="badge-option-depth" aria-label="Edit Search Depth value">3</button>
                         </div>
                         <input id="option-depth" type="range" min="0" max="50" step="1" value="3" class="range-slider" />
                     </div>
 
                     <div class="control-col">
                         <div class="slider-header">
-                            <span class="title">Move Time (ms)</span>
-                            <span class="badge" id="badge-option-go-movetime">Off</span>
+                            <label class="title" for="option-go-movetime">Move Time (ms)</label>
+                            <button type="button" class="badge" id="badge-option-go-movetime" aria-label="Edit Move Time value">Off</button>
                         </div>
                         <input id="option-go-movetime" type="range" min="0" max="5000" step="50" value="0" class="range-slider" />
                     </div>
 
                     <div class="control-col">
                         <div class="slider-header">
-                            <span class="title">Node Limit</span>
-                            <span class="badge" id="badge-option-go-nodes">Off</span>
+                            <label class="title" for="option-go-nodes">Node Limit</label>
+                            <button type="button" class="badge" id="badge-option-go-nodes" aria-label="Edit Node Limit value">Off</button>
                         </div>
                         <input id="option-go-nodes" type="range" min="0" max="5000000" step="10000" value="0" class="range-slider" />
                     </div>
@@ -55,44 +55,44 @@
 
             <details id="engine-options-details" class="collapse-group">
                 <summary class="collapse-summary">UCI Options</summary>
-                <div id="engine-options-container" class="collapse-content">
+                <div id="engine-options-container" class="collapse-content" aria-live="polite" aria-busy="false">
                     <span class="status-text">Expand to load engine options.</span>
                 </div>
             </details>
         </section>
 
         <section class="card">
-            <h2 class="card-title">HUD & Display</h2>
+            <h2 class="card-title">HUD &amp; Display</h2>
 
             <label class="control-row" for="option-evaluation-bar">
                 <span class="control-label-text">Evaluation Bar</span>
                 <input id="option-evaluation-bar" type="checkbox" class="toggle-input" checked />
-                <span class="toggle-slider"></span>
+                <span class="toggle-slider" aria-hidden="true"></span>
             </label>
 
             <label class="control-row" for="option-show-hints">
                 <span class="control-label-text">Show Hint Arrows</span>
                 <input id="option-show-hints" type="checkbox" class="toggle-input" checked />
-                <span class="toggle-slider"></span>
+                <span class="toggle-slider" aria-hidden="true"></span>
             </label>
 
             <label class="control-row" for="option-move-analysis">
                 <span class="control-label-text">Move Analysis</span>
                 <input id="option-move-analysis" type="checkbox" class="toggle-input" checked />
-                <span class="toggle-slider"></span>
+                <span class="toggle-slider" aria-hidden="true"></span>
             </label>
 
             <label class="control-row" for="option-auto-queue">
                 <span class="control-label-text">Auto Queue</span>
                 <input id="option-auto-queue" type="checkbox" class="toggle-input" />
-                <span class="toggle-slider"></span>
+                <span class="toggle-slider" aria-hidden="true"></span>
             </label>
 
             <div id="auto-queue-group" class="sub-panel hidden">
                 <label class="control-row" for="option-rematch-first">
                     <span class="control-label-text">Rematch first</span>
                     <input id="option-rematch-first" type="checkbox" class="toggle-input" />
-                    <span class="toggle-slider"></span>
+                    <span class="toggle-slider" aria-hidden="true"></span>
                 </label>
             </div>
         </section>
@@ -103,21 +103,21 @@
             <label class="control-row" for="option-legit-auto-move">
                 <span class="control-label-text">Enable Auto Move</span>
                 <input id="option-legit-auto-move" type="checkbox" class="toggle-input" />
-                <span class="toggle-slider"></span>
+                <span class="toggle-slider" aria-hidden="true"></span>
             </label>
 
             <div id="pacing-group" class="sub-panel hidden">
                 <label class="control-row" for="option-human-like-moves">
                     <span class="control-label-text">Human-like Moves</span>
                     <input id="option-human-like-moves" type="checkbox" class="toggle-input" checked />
-                    <span class="toggle-slider"></span>
+                    <span class="toggle-slider" aria-hidden="true"></span>
                 </label>
 
                 <div id="human-pace-group" class="sub-panel">
                     <div class="control-col">
                         <div class="slider-header">
-                            <span class="title">Move Pace (Seconds)</span>
-                            <span class="badge" id="badge-option-move-pace">12.5</span>
+                            <label class="title" for="option-move-pace">Move Pace (Seconds)</label>
+                            <button type="button" class="badge" id="badge-option-move-pace" aria-label="Edit Move Pace value">12.50</button>
                         </div>
                         <input id="option-move-pace" type="range" min="0.5" max="30.0" step="0.05" value="12.5" class="range-slider" />
                     </div>
@@ -127,48 +127,48 @@
                         <div class="collapse-content">
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Physical Floor (ms)</span>
-                                    <span class="badge" id="badge-option-physical-floor">600</span>
+                                    <label class="title" for="option-physical-floor">Physical Floor (ms)</label>
+                                    <button type="button" class="badge" id="badge-option-physical-floor" aria-label="Edit Physical Floor value">600</button>
                                 </div>
                                 <input id="option-physical-floor" type="range" min="50" max="1000" step="10" value="600" class="range-slider" />
                             </div>
 
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Timing Spread (σ)</span>
-                                    <span class="badge" id="badge-option-timing-spread">0.80</span>
+                                    <label class="title" for="option-timing-spread">Timing Spread (σ)</label>
+                                    <button type="button" class="badge" id="badge-option-timing-spread" aria-label="Edit Timing Spread value">0.80</button>
                                 </div>
                                 <input id="option-timing-spread" type="range" min="0.10" max="1.20" step="0.05" value="0.80" class="range-slider" />
                             </div>
 
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Reflex Move Multiplier</span>
-                                    <span class="badge" id="badge-option-reflex-multiplier">0.25</span>
+                                    <label class="title" for="option-reflex-multiplier">Reflex Move Multiplier</label>
+                                    <button type="button" class="badge" id="badge-option-reflex-multiplier" aria-label="Edit Reflex Move Multiplier value">0.25</button>
                                 </div>
                                 <input id="option-reflex-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.25" class="range-slider" />
                             </div>
 
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Opening Moves</span>
-                                    <span class="badge" id="badge-option-opening-moves-threshold">10</span>
+                                    <label class="title" for="option-opening-moves-threshold">Opening Moves</label>
+                                    <button type="button" class="badge" id="badge-option-opening-moves-threshold" aria-label="Edit Opening Moves value">10</button>
                                 </div>
                                 <input id="option-opening-moves-threshold" type="range" min="0" max="15" step="1" value="10" class="range-slider" />
                             </div>
 
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Opening Multiplier</span>
-                                    <span class="badge" id="badge-option-opening-multiplier">0.40</span>
+                                    <label class="title" for="option-opening-multiplier">Opening Multiplier</label>
+                                    <button type="button" class="badge" id="badge-option-opening-multiplier" aria-label="Edit Opening Multiplier value">0.40</button>
                                 </div>
                                 <input id="option-opening-multiplier" type="range" min="0.10" max="1.00" step="0.05" value="0.40" class="range-slider" />
                             </div>
 
                             <div class="control-col">
                                 <div class="slider-header">
-                                    <span class="title">Clock Threshold (Seconds)</span>
-                                    <span class="badge" id="badge-option-clock-threshold">180</span>
+                                    <label class="title" for="option-clock-threshold">Clock Threshold (Seconds)</label>
+                                    <button type="button" class="badge" id="badge-option-clock-threshold" aria-label="Edit Clock Threshold value">180</button>
                                 </div>
                                 <input id="option-clock-threshold" type="range" min="0" max="300" step="5" value="180" class="range-slider" />
                             </div>
@@ -182,34 +182,34 @@
     <footer class="app-footer">
         <div class="footer-meta">
             <span class="version-badge">v2.1.18</span>
-            <span id="config-status" class="config-status hidden"></span>
+            <span id="config-status" class="config-status hidden" role="status" aria-live="polite"></span>
         </div>
-        <div id="config-popover" class="config-popover hidden" role="dialog" aria-label="Configs">
+        <div id="config-popover" class="config-popover hidden" role="dialog" aria-labelledby="config-popover-title">
             <div class="config-panel-header">
-                <span class="config-panel-title">Configs</span>
-                <button id="config-close" type="button" class="config-close-btn" title="Close" aria-label="Close">&times;</button>
+                <h2 id="config-popover-title" class="config-panel-title">Configs</h2>
+                <button id="config-close" type="button" class="config-close-btn" title="Close" aria-label="Close configs">&times;</button>
             </div>
             <div class="config-save-row">
-                <input id="config-save-name" type="text" class="text-input" placeholder="Config name" spellcheck="false" autocomplete="off" />
+                <input id="config-save-name" type="text" class="text-input" placeholder="Config name" aria-label="Config name" spellcheck="false" autocomplete="off" />
                 <button id="config-save-confirm" type="button" class="btn-primary">Save</button>
             </div>
-            <span id="config-save-error" class="config-error hidden"></span>
+            <span id="config-save-error" class="config-error hidden" role="alert"></span>
             <div id="config-load-list" class="config-list"></div>
         </div>
         <div class="footer-actions">
-            <button id="config-toggle" type="button" class="icon-btn" title="Config" aria-label="Config" aria-expanded="false">
-                <svg viewBox="0 0 16 16" class="svg-icon">
+            <button id="config-toggle" type="button" class="icon-btn" title="Configs" aria-label="Configs" aria-controls="config-popover" aria-expanded="false">
+                <svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false">
                     <path fill="currentColor" d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/>
                     <path fill="currentColor" d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
                 </svg>
             </button>
             <button id="theme-toggle" type="button" class="icon-btn" title="Theme: Dark" aria-label="Theme: Dark">
-                <svg viewBox="0 0 16 16" class="svg-icon">
+                <svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false">
                     <path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278" />
                 </svg>
             </button>
             <button id="github-link" type="button" class="icon-btn" title="GitHub Repository" aria-label="GitHub Repository">
-                <svg viewBox="0 0 16 16" class="svg-icon">
+                <svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false">
                     <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
                 </svg>
             </button>

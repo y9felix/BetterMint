@@ -8,22 +8,22 @@ const THEMES = {
   dark: {
     label: "Dark",
     nextThemeId: "light",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>'
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>'
   },
   light: {
     label: "Light",
     nextThemeId: "black",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>'
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>'
   },
   black: {
     label: "Black",
     nextThemeId: "chesscom",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>'
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>'
   },
   chesscom: {
     label: "Chess.com",
     nextThemeId: "dark",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>'
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>'
   }
 };
 
@@ -52,6 +52,13 @@ const ONE_OFF_SLIDER_OPTION_KEYS = new Set([
   "option-opening-multiplier"
 ]);
 
+const FIXED_TWO_DECIMAL_SLIDER_OPTION_KEYS = new Set([
+  "option-move-pace",
+  "option-timing-spread",
+  "option-reflex-multiplier",
+  "option-opening-multiplier"
+]);
+
 const EXTENSION_OPTION_KEYS =
   typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? Object.keys(DEFAULT_EXTENSION_OPTIONS) : [];
 const extensionOptionInputs = {};
@@ -62,6 +69,9 @@ function formatSliderBadgeValue(optionKey, rawValue) {
   if (ONE_OFF_SLIDER_OPTION_KEYS.has(optionKey) && numericValue >= 1) return "Off";
   if (optionKey === "option-go-nodes" && !Number.isNaN(numericValue)) {
     return numericValue.toLocaleString("en-US");
+  }
+  if (FIXED_TWO_DECIMAL_SLIDER_OPTION_KEYS.has(optionKey) && !Number.isNaN(numericValue)) {
+    return numericValue.toFixed(2);
   }
   return rawValue;
 }
@@ -87,6 +97,20 @@ function restoreBaseSliderStep(rangeInput) {
   }
 }
 
+function updateSliderTrackFill(rangeInput) {
+  if (!rangeInput?.style?.setProperty) return;
+  const parsedMin = parseFloat(rangeInput.min);
+  const parsedMax = parseFloat(rangeInput.max);
+  const parsedValue = parseFloat(rangeInput.value);
+  const sliderMin = Number.isNaN(parsedMin) ? 0 : parsedMin;
+  const sliderMax = Number.isNaN(parsedMax) ? 100 : parsedMax;
+  const sliderValue = Number.isNaN(parsedValue) ? sliderMin : parsedValue;
+  const rangeSpan = sliderMax - sliderMin;
+  const progressPercent =
+    rangeSpan > 0 ? Math.min(100, Math.max(0, ((sliderValue - sliderMin) / rangeSpan) * 100)) : 0;
+  rangeInput.style.setProperty("--slider-progress", `${progressPercent.toFixed(2)}%`);
+}
+
 function setSliderExactValue(rangeInput, numericValue) {
   const baseStep = getBaseSliderStep(rangeInput);
   const parsedMin = parseFloat(rangeInput.min);
@@ -104,6 +128,7 @@ function setSliderExactValue(rangeInput, numericValue) {
     }
   }
   rangeInput.value = String(numericValue);
+  updateSliderTrackFill(rangeInput);
 }
 
 function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
@@ -153,6 +178,8 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
       autocomplete: "off"
     });
     inlineEditor.setAttribute?.("inputmode", "decimal");
+    const editLabel = badgeElement.getAttribute?.("aria-label") || "Edit value";
+    inlineEditor.setAttribute?.("aria-label", editLabel);
 
     badgeElement.classList?.add("hidden");
     headerElement.appendChild(inlineEditor);
@@ -160,7 +187,7 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
     inlineEditor.select?.();
 
     let hasFinishedEdit = false;
-    const finishEdit = (shouldCommit) => {
+    const finishEdit = (shouldCommit, shouldRestoreFocus = false) => {
       if (hasFinishedEdit) return;
       hasFinishedEdit = true;
       if (shouldCommit) {
@@ -175,18 +202,23 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
       }
       inlineEditor.remove?.();
       badgeElement.classList?.remove("hidden");
+      if (shouldRestoreFocus) {
+        badgeElement.focus?.();
+      }
     };
 
     inlineEditor.addEventListener("keydown", (keyEvent) => {
       if (keyEvent?.key === "Enter") {
         keyEvent.preventDefault?.();
-        finishEdit(true);
+        keyEvent.stopPropagation?.();
+        finishEdit(true, true);
       } else if (keyEvent?.key === "Escape") {
         keyEvent.preventDefault?.();
-        finishEdit(false);
+        keyEvent.stopPropagation?.();
+        finishEdit(false, true);
       }
     });
-    inlineEditor.addEventListener("blur", () => finishEdit(true));
+    inlineEditor.addEventListener("blur", () => finishEdit(true, false));
   });
 }
 
@@ -206,8 +238,15 @@ function applyTheme(themeId) {
   }
 }
 
+function getDefaultThemeId() {
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  return "dark";
+}
+
 function initializeTheme() {
-  applyTheme("dark");
+  applyTheme(getDefaultThemeId());
   readChromeStorage("local", ["theme"], (storedThemeState) => {
     if (storedThemeState?.theme) {
       applyTheme(storedThemeState.theme);
@@ -320,33 +359,53 @@ function createDomElement(tagName, properties = {}, childNodes = []) {
   return element;
 }
 
+function buildUciControlId(optionName, optionIndex) {
+  const normalizedSlug = String(optionName || "option")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `uci-option-${normalizedSlug || "control"}-${optionIndex}`;
+}
+
 const uciOptionControlRenderers = {
-  spin(uciOption, currentValue, onUciOptionChange) {
-    const valueBadge = createDomElement("span", { className: "badge", textContent: currentValue });
+  spin(uciOption, currentValue, onUciOptionChange, controlId) {
+    const valueBadge = createDomElement("button", {
+      type: "button",
+      className: "badge",
+      textContent: currentValue
+    });
+    valueBadge.setAttribute?.("aria-label", `Edit ${uciOption.name} value`);
     const rangeInput = createDomElement("input", {
+      id: controlId,
       type: "range",
       className: "range-slider",
       min: uciOption.min ?? 0,
       max: uciOption.max ?? 100,
       value: currentValue
     });
+    updateSliderTrackFill(rangeInput);
     rangeInput.addEventListener("input", () => {
       valueBadge.textContent = rangeInput.value;
+      updateSliderTrackFill(rangeInput);
       onUciOptionChange?.(uciOption.name, parseInt(rangeInput.value, 10), false);
     });
     bindEditableSliderBadge(valueBadge, rangeInput, {
       onCommit: (committedNumber) => onUciOptionChange?.(uciOption.name, parseInt(committedNumber, 10), false)
     });
+    const titleLabel = createDomElement("label", {
+      className: "title",
+      htmlFor: controlId,
+      textContent: uciOption.name
+    });
+    titleLabel.setAttribute?.("for", controlId);
     return createDomElement("div", { className: "control-col" }, [
-      createDomElement("div", { className: "slider-header" }, [
-        createDomElement("span", { className: "title", textContent: uciOption.name }),
-        valueBadge
-      ]),
+      createDomElement("div", { className: "slider-header" }, [titleLabel, valueBadge]),
       rangeInput
     ]);
   },
-  check(uciOption, currentValue, onUciOptionChange) {
+  check(uciOption, currentValue, onUciOptionChange, controlId) {
     const checkboxInput = createDomElement("input", {
+      id: controlId,
       type: "checkbox",
       className: "toggle-input",
       checked: currentValue === true || currentValue === "true"
@@ -354,16 +413,20 @@ const uciOptionControlRenderers = {
     checkboxInput.addEventListener("change", () => {
       onUciOptionChange?.(uciOption.name, checkboxInput.checked, false);
     });
-    return createDomElement("label", { className: "control-row" }, [
+    const toggleVisual = createDomElement("span", { className: "toggle-slider" });
+    toggleVisual.setAttribute?.("aria-hidden", "true");
+    const rowLabel = createDomElement("label", { className: "control-row", htmlFor: controlId }, [
       createDomElement("span", { className: "control-label-text", textContent: uciOption.name }),
       checkboxInput,
-      createDomElement("span", { className: "toggle-slider" })
+      toggleVisual
     ]);
+    rowLabel.setAttribute?.("for", controlId);
+    return rowLabel;
   },
-  combo(uciOption, currentValue, onUciOptionChange) {
+  combo(uciOption, currentValue, onUciOptionChange, controlId) {
     const selectInput = createDomElement(
       "select",
-      { className: "select-input" },
+      { id: controlId, className: "select-input" },
       (uciOption.vars || []).map((optionVariant) =>
         createDomElement("option", {
           value: optionVariant,
@@ -375,13 +438,17 @@ const uciOptionControlRenderers = {
     selectInput.addEventListener("change", () => {
       onUciOptionChange?.(uciOption.name, selectInput.value, false);
     });
-    return createDomElement("div", { className: "control-col" }, [
-      createDomElement("label", { className: "control-label-text", textContent: uciOption.name }),
-      selectInput
-    ]);
+    const fieldLabel = createDomElement("label", {
+      className: "control-label-text",
+      htmlFor: controlId,
+      textContent: uciOption.name
+    });
+    fieldLabel.setAttribute?.("for", controlId);
+    return createDomElement("div", { className: "control-col" }, [fieldLabel, selectInput]);
   },
-  string(uciOption, currentValue, onUciOptionChange) {
+  string(uciOption, currentValue, onUciOptionChange, controlId) {
     const textInput = createDomElement("input", {
+      id: controlId,
       type: "text",
       className: "text-input",
       value: String(currentValue ?? ""),
@@ -391,10 +458,13 @@ const uciOptionControlRenderers = {
     textInput.addEventListener("change", () => {
       onUciOptionChange?.(uciOption.name, textInput.value.trim(), false);
     });
-    return createDomElement("div", { className: "control-col" }, [
-      createDomElement("label", { className: "control-label-text", textContent: uciOption.name }),
-      textInput
-    ]);
+    const fieldLabel = createDomElement("label", {
+      className: "control-label-text",
+      htmlFor: controlId,
+      textContent: uciOption.name
+    });
+    fieldLabel.setAttribute?.("for", controlId);
+    return createDomElement("div", { className: "control-col" }, [fieldLabel, textInput]);
   },
   button(uciOption, _currentValue, onUciOptionChange) {
     const executeButton = createDomElement("button", {
@@ -414,6 +484,7 @@ const uciOptionControlRenderers = {
 
 function renderDynamicUciOptions(uciOptionDefinitions, savedUciValues, containerElement, onUciOptionChange) {
   if (!containerElement) return;
+  containerElement.setAttribute?.("aria-busy", "false");
   containerElement.innerHTML = "";
   if (!uciOptionDefinitions || uciOptionDefinitions.length === 0) {
     containerElement.innerHTML =
@@ -421,11 +492,12 @@ function renderDynamicUciOptions(uciOptionDefinitions, savedUciValues, container
     return;
   }
 
-  uciOptionDefinitions.forEach((uciOption) => {
+  uciOptionDefinitions.forEach((uciOption, optionIndex) => {
     const renderControl = uciOptionControlRenderers[uciOption.type];
     if (!renderControl) return;
     const currentValue = savedUciValues?.[uciOption.name] ?? uciOption.default;
-    containerElement.appendChild(renderControl(uciOption, currentValue, onUciOptionChange));
+    const controlId = buildUciControlId(uciOption.name, optionIndex);
+    containerElement.appendChild(renderControl(uciOption, currentValue, onUciOptionChange, controlId));
   });
 }
 
@@ -434,13 +506,33 @@ let probeTimeoutTimerId = null;
 let lastProbedEngineUrl = null;
 let lastProbedUciOptions = [];
 
-function setEngineOptionsStatusMessage(statusMessage) {
+function setEngineOptionsStatusMessage(
+  statusMessage,
+  { isError = false, isLoading = false } = {}
+) {
   const containerElement = document.getElementById("engine-options-container");
   if (!containerElement) return;
+  containerElement.setAttribute?.("aria-busy", String(Boolean(isLoading)));
   containerElement.innerHTML = "";
-  containerElement.appendChild(
-    createDomElement("span", { className: "status-text", textContent: statusMessage })
-  );
+
+  if (isLoading) {
+    const skeletonWrapper = createDomElement("div", { className: "uci-skeleton" }, [
+      createDomElement("div", { className: "skeleton-line is-medium" }),
+      createDomElement("div", { className: "skeleton-line" }),
+      createDomElement("div", { className: "skeleton-line is-short" })
+    ]);
+    skeletonWrapper.setAttribute?.("aria-hidden", "true");
+    containerElement.appendChild(skeletonWrapper);
+  }
+
+  const statusTextElement = createDomElement("span", {
+    className: "status-text",
+    textContent: statusMessage
+  });
+  if (isError) {
+    statusTextElement.setAttribute?.("role", "alert");
+  }
+  containerElement.appendChild(statusTextElement);
 }
 
 function resetEngineProbe() {
@@ -465,15 +557,15 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
   resetEngineProbe();
 
   if (typeof WebSocket === "undefined") {
-    setEngineOptionsStatusMessage("WebSocket unavailable.");
+    setEngineOptionsStatusMessage("WebSocket unavailable.", { isError: true });
     return;
   }
   if (!engineUrl || !/^wss?:\/\//i.test(engineUrl)) {
-    setEngineOptionsStatusMessage("Invalid WebSocket URL (use ws:// or wss://).");
+    setEngineOptionsStatusMessage("Invalid WebSocket URL (use ws:// or wss://).", { isError: true });
     return;
   }
 
-  setEngineOptionsStatusMessage("Connecting to engine...");
+  setEngineOptionsStatusMessage("Connecting to engine...", { isLoading: true });
   const discoveredUciOptions = [];
   let lastErrorLine = "";
   try {
@@ -482,7 +574,7 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
     probeTimeoutTimerId = setTimeout(() => {
       if (activeProbeSocket !== probeSocket) return;
       resetEngineProbe();
-      setEngineOptionsStatusMessage("Connection timed out.");
+      setEngineOptionsStatusMessage("Connection timed out.", { isError: true });
     }, PROBE_TIMEOUT_MS);
 
     probeSocket.addEventListener("open", () => {
@@ -491,7 +583,7 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
       probeTimeoutTimerId = setTimeout(() => {
         if (activeProbeSocket !== probeSocket) return;
         resetEngineProbe();
-        setEngineOptionsStatusMessage("Engine handshake timed out.");
+        setEngineOptionsStatusMessage("Engine handshake timed out.", { isError: true });
       }, PROBE_TIMEOUT_MS);
       probeSocket.send("uci\n");
     });
@@ -522,19 +614,20 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
       if (activeProbeSocket !== probeSocket) return;
       resetEngineProbe();
       setEngineOptionsStatusMessage(
-        lastErrorLine || "Engine connection closed before handshake."
+        lastErrorLine || "Engine connection closed before handshake.",
+        { isError: true }
       );
     });
 
     probeSocket.addEventListener("error", () => {
       if (activeProbeSocket !== probeSocket) return;
       resetEngineProbe();
-      setEngineOptionsStatusMessage("Unable to connect to engine.");
+      setEngineOptionsStatusMessage("Unable to connect to engine.", { isError: true });
     });
   } catch (socketError) {
     console.warn("[BetterMint] Failed to initialize engine probe socket:", socketError);
     resetEngineProbe();
-    setEngineOptionsStatusMessage("Failed to initialize engine socket.");
+    setEngineOptionsStatusMessage("Failed to initialize engine socket.", { isError: true });
   }
 }
 
@@ -844,7 +937,10 @@ function renderSavedConfigList() {
 
   if (customConfigProfiles.length === 0) {
     listContainer.appendChild(
-      createDomElement("div", { className: "config-empty", textContent: "No saved configs yet." })
+      createDomElement("div", {
+        className: "config-empty",
+        textContent: "No saved configs yet. Name and save your current setup above."
+      })
     );
     return;
   }
@@ -865,12 +961,15 @@ function renderSavedConfigList() {
         })
       ]
     );
+    if (isActiveProfile) {
+      selectProfileButton.setAttribute?.("aria-current", "true");
+    }
     selectProfileButton.addEventListener("click", () => {
       applyConfigProfile(savedProfile.settings, savedProfile.customEngineOptions, {
         profileName: savedProfile.name,
         shouldMarkSaved: true
       });
-      setConfigPopoverOpen(false);
+      setConfigPopoverOpen(false, { shouldRestoreFocus: true });
       setConfigStatusMessage(`Loaded ${savedProfile.name}`);
     });
 
@@ -896,11 +995,18 @@ function renderSavedConfigList() {
   });
 }
 
-function setConfigPopoverOpen(shouldOpen) {
+function clearConfigSaveError() {
+  const saveErrorElement = document.getElementById("config-save-error");
+  const profileNameInput = document.getElementById("config-save-name");
+  saveErrorElement?.classList?.add("hidden");
+  profileNameInput?.removeAttribute?.("aria-invalid");
+  profileNameInput?.removeAttribute?.("aria-describedby");
+}
+
+function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
   isConfigPopoverOpen = Boolean(shouldOpen);
   const popoverElement = document.getElementById("config-popover");
   const configToggleButton = document.getElementById("config-toggle");
-  const saveErrorElement = document.getElementById("config-save-error");
 
   if (configToggleButton) {
     configToggleButton.setAttribute?.("aria-expanded", String(isConfigPopoverOpen));
@@ -908,16 +1014,19 @@ function setConfigPopoverOpen(shouldOpen) {
   if (!popoverElement) return;
 
   popoverElement.classList?.toggle("hidden", !isConfigPopoverOpen);
-  saveErrorElement?.classList?.add("hidden");
+  clearConfigSaveError();
 
   if (isConfigPopoverOpen) {
     loadConfigStorageState(() => {
       const profileNameInput = document.getElementById("config-save-name");
       if (profileNameInput) {
         profileNameInput.value = activeConfigProfileName || "";
+        profileNameInput.focus?.();
       }
       renderSavedConfigList();
     });
+  } else if (shouldRestoreFocus) {
+    configToggleButton?.focus?.();
   }
 }
 
@@ -966,16 +1075,19 @@ function handleSaveProfileSubmit() {
       saveErrorElement.textContent = "Enter a config name.";
       saveErrorElement.classList?.remove("hidden");
     }
+    profileNameInput?.setAttribute?.("aria-invalid", "true");
+    profileNameInput?.setAttribute?.("aria-describedby", "config-save-error");
     profileNameInput?.focus?.();
     return;
   }
 
+  clearConfigSaveError();
   flushPendingUciOptions();
   const extensionOptions = readExtensionOptionsFromDom();
   loadConfigStorageState((storageState) => {
     saveCustomConfigProfile(profileName, extensionOptions, storageState.customEngineOptions);
     setActiveConfigProfileName(profileName);
-    setConfigPopoverOpen(false);
+    setConfigPopoverOpen(false, { shouldRestoreFocus: true });
     setConfigStatusMessage(`Saved ${profileName}`);
   });
 }
@@ -991,11 +1103,13 @@ function initializeConfigSystem() {
   });
 
   document.getElementById("config-close")?.addEventListener("click", () => {
-    setConfigPopoverOpen(false);
+    setConfigPopoverOpen(false, { shouldRestoreFocus: true });
   });
   document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveProfileSubmit);
 
-  document.getElementById("config-save-name")?.addEventListener("keydown", (keyEvent) => {
+  const profileNameInput = document.getElementById("config-save-name");
+  profileNameInput?.addEventListener("input", clearConfigSaveError);
+  profileNameInput?.addEventListener("keydown", (keyEvent) => {
     if (keyEvent?.key === "Enter") {
       keyEvent.preventDefault?.();
       handleSaveProfileSubmit();
@@ -1015,7 +1129,7 @@ function initializeConfigSystem() {
 
   document.addEventListener?.("keydown", (keyEvent) => {
     if (keyEvent?.key === "Escape" && isConfigPopoverOpen) {
-      setConfigPopoverOpen(false);
+      setConfigPopoverOpen(false, { shouldRestoreFocus: true });
     }
   });
 }
@@ -1057,7 +1171,9 @@ function initializeOptionsPage() {
 
     if (inputElement.type === "range") {
       const badgeElement = document.getElementById("badge-" + optionKey);
+      updateSliderTrackFill(inputElement);
       inputElement.addEventListener("input", () => {
+        updateSliderTrackFill(inputElement);
         if (badgeElement) {
           badgeElement.textContent = formatSliderBadgeValue(optionKey, inputElement.value);
         }
