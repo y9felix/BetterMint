@@ -91,33 +91,33 @@
 }
 
 :root[data-theme="chesscom"] {
-    --bg-app: #2b2926;
-    --bg-rail: #23211e;
-    --bg-surface: #312e2b;
-    --bg-surface-subtle: #383531;
-    --bg-input: #1d1b19;
-    --border-subtle: #423f3a;
-    --border-strong: #635f58;
-    --divider-color: rgba(255, 255, 255, 0.09);
-    --text-primary: #f5f5f5;
-    --text-secondary: #dad6cf;
-    --text-muted: #b5b1a8;
+    --bg-app: #262522;
+    --bg-rail: #21201e;
+    --bg-surface: #262522;
+    --bg-surface-subtle: #2b2927;
+    --bg-input: #1b1a18;
+    --border-subtle: #3c3b39;
+    --border-strong: #5b5a58;
+    --divider-color: rgba(255, 255, 255, 0.08);
+    --text-primary: #e7e6e5;
+    --text-secondary: #c3c2c2;
+    --text-muted: #9e9d9b;
     --accent: #81b64c;
-    --accent-hover: #94c760;
-    --accent-contrast: #141c0c;
-    --accent-soft: rgba(129, 182, 76, 0.18);
+    --accent-hover: #95cc5e;
+    --accent-contrast: #ffffff;
+    --accent-soft: rgba(129, 182, 76, 0.16);
     --focus-ring: #a3d165;
-    --badge-bg: #36332f;
-    --badge-text: #f5f5f5;
-    --track-bg: #3d3a35;
+    --badge-bg: #484745;
+    --badge-text: #ffffff;
+    --track-bg: #3c3b39;
     --thumb-bg: #ffffff;
     --error-text: #fca5a5;
     --error-bg: rgba(239, 68, 68, 0.16);
     --error-border: rgba(248, 113, 113, 0.42);
-    --skeleton-base: #34312d;
-    --skeleton-shine: #433f3a;
-    --scrollbar-thumb: #534f49;
-    --shadow-popover: 0 12px 28px rgba(0, 0, 0, 0.48);
+    --skeleton-base: #32312e;
+    --skeleton-shine: #3e3d3a;
+    --scrollbar-thumb: #484745;
+    --shadow-popover: 0 12px 28px rgba(0, 0, 0, 0.52);
 }
 
 *,
@@ -967,6 +967,78 @@ body.is-ready .config-popover.hidden {
 .btn-primary:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+}
+
+:root[data-theme="chesscom"] .brand-title {
+    color: #ffffff;
+}
+
+:root[data-theme="chesscom"] .card:nth-child(even) {
+    background-color: var(--bg-surface-subtle);
+}
+
+:root[data-theme="chesscom"] .card + .card {
+    border-top-color: var(--divider-color);
+}
+
+:root[data-theme="chesscom"] .badge {
+    border: none;
+    border-bottom: 2px solid #353432;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+:root[data-theme="chesscom"] .slider-header .badge:hover {
+    background-color: #5b5a58;
+}
+
+:root[data-theme="chesscom"] .badge-input {
+    border-radius: 4px;
+}
+
+:root[data-theme="chesscom"] .icon-btn {
+    border-color: transparent;
+    color: #9e9d9b;
+}
+
+:root[data-theme="chesscom"] .icon-btn:hover {
+    background-color: #32312f;
+    border-color: transparent;
+    color: #ffffff;
+}
+
+:root[data-theme="chesscom"] .icon-btn[aria-expanded="true"] {
+    background-color: #32312f;
+    border-color: #484745;
+    color: #ffffff;
+}
+
+:root[data-theme="chesscom"] .btn-primary {
+    background-color: #5d8f2c;
+    border-color: #5d8f2c;
+    border-radius: 5px;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+:root[data-theme="chesscom"] .btn-primary:hover {
+    background-color: #6ea338;
+    border-color: #6ea338;
+}
+
+:root[data-theme="chesscom"] .config-popover {
+    background-color: #262522;
+    border-color: #3c3b39;
+    border-radius: 6px;
+}
+
+:root[data-theme="chesscom"] .config-panel-header {
+    background-color: #21201e;
+}
+
+:root[data-theme="chesscom"] .config-item-btn.is-active {
+    background-color: #484745;
+    border-color: #5b5a58;
 }
 
 @media (prefers-reduced-motion: reduce) {
