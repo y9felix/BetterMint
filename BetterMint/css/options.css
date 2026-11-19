@@ -157,7 +157,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--border-subtle);
     background-color: var(--bg-rail);
 }
@@ -215,10 +215,10 @@ body {
     background-color: transparent;
     border: none;
     border-radius: 0;
-    padding: 12px 16px;
+    padding: 10px 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .card + .card {
@@ -247,7 +247,7 @@ body {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    margin-top: -12px;
+    margin-top: -10px;
 }
 
 body.is-ready .sub-panel {
@@ -271,7 +271,7 @@ body.is-ready .sub-panel.hidden {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     margin: 0 -4px;
     padding: 0 4px;
 }
@@ -282,14 +282,14 @@ body.is-ready .sub-panel.hidden {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    min-height: 30px;
+    min-height: 26px;
     cursor: pointer;
 }
 
 .control-col {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
 }
 
 .control-label-text {
@@ -448,12 +448,12 @@ body.is-ready .sub-panel.hidden {
 .text-input,
 .select-input {
     width: 100%;
-    min-height: 34px;
+    min-height: 32px;
     background-color: var(--bg-input);
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
     color: var(--text-primary);
-    padding: 7px 10px;
+    padding: 6px 10px;
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -490,7 +490,7 @@ body.is-ready .sub-panel.hidden {
 details.collapse-group {
     display: block;
     border-top: 1px solid var(--divider-color);
-    padding-top: 12px;
+    padding-top: 10px;
 }
 
 details.collapse-group > summary.collapse-summary::-webkit-details-marker {
@@ -567,8 +567,8 @@ details.collapse-group > summary.collapse-summary:hover::after {
 .collapse-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding-top: 12px;
+    gap: 10px;
+    padding-top: 10px;
 }
 
 @supports not selector(::details-content) {
@@ -640,7 +640,7 @@ details.collapse-group > summary.collapse-summary:hover::after {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 10px 16px;
+    padding: 8px 16px;
     border-top: 1px solid var(--border-subtle);
     background-color: var(--bg-rail);
 }

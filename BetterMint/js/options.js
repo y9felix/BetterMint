@@ -267,6 +267,73 @@ const VISIBILITY_TOGGLE_GROUPS = [
   ["option-human-like-moves", "human-pace-group"]
 ];
 
+const EXPAND_SCROLL_DURATION_MS = 260;
+const EXPAND_SCROLL_PADDING_PX = 10;
+let activeExpandScrollFrameId = null;
+let stopActiveExpandScroll = null;
+
+function scrollExpandedElementIntoView(targetElement, anchorElement = null) {
+  if (!targetElement?.getBoundingClientRect || typeof document === "undefined") return;
+  const scrollContainer = document.querySelector?.(".settings-container");
+  if (!scrollContainer?.getBoundingClientRect) return;
+
+  stopActiveExpandScroll?.();
+
+  const topElement = anchorElement?.getBoundingClientRect ? anchorElement : targetElement;
+
+  const alignTarget = () => {
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = targetElement.getBoundingClientRect();
+    const topRect = topElement.getBoundingClientRect();
+    const overflowBottom = targetRect.bottom - containerRect.bottom + EXPAND_SCROLL_PADDING_PX;
+    if (overflowBottom <= 0) return;
+    const maxTopHeadroom = Math.max(0, topRect.top - containerRect.top - EXPAND_SCROLL_PADDING_PX);
+    const scrollDelta = Math.min(overflowBottom, maxTopHeadroom);
+    if (scrollDelta > 0) {
+      scrollContainer.scrollTop += scrollDelta;
+    }
+  };
+
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (prefersReducedMotion || typeof requestAnimationFrame !== "function") {
+    alignTarget();
+    return;
+  }
+
+  const cleanupTracking = () => {
+    if (activeExpandScrollFrameId && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(activeExpandScrollFrameId);
+      activeExpandScrollFrameId = null;
+    }
+    scrollContainer.removeEventListener?.("wheel", cleanupTracking);
+    scrollContainer.removeEventListener?.("pointerdown", cleanupTracking);
+    if (stopActiveExpandScroll === cleanupTracking) {
+      stopActiveExpandScroll = null;
+    }
+  };
+
+  stopActiveExpandScroll = cleanupTracking;
+  scrollContainer.addEventListener?.("wheel", cleanupTracking, { passive: true, once: true });
+  scrollContainer.addEventListener?.("pointerdown", cleanupTracking, { passive: true, once: true });
+
+  const startTimestamp = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const trackFrame = (nowTimestamp) => {
+    alignTarget();
+    const elapsedMs =
+      (typeof nowTimestamp === "number" ? nowTimestamp : Date.now()) - startTimestamp;
+    if (elapsedMs < EXPAND_SCROLL_DURATION_MS) {
+      activeExpandScrollFrameId = requestAnimationFrame(trackFrame);
+    } else {
+      cleanupTracking();
+    }
+  };
+  activeExpandScrollFrameId = requestAnimationFrame(trackFrame);
+}
+
 function updateDependentGroupVisibility() {
   for (const [toggleInputId, groupContainerId] of VISIBILITY_TOGGLE_GROUPS) {
     const toggleInput = document.getElementById(toggleInputId);
@@ -734,6 +801,10 @@ function loadAndRenderEngineUciOptions(engineUrl, uciOptionDefinitions, containe
       containerElement,
       engineUrl
     );
+    const engineDetailsElement = document.getElementById("engine-options-details");
+    if (engineDetailsElement?.open && document.body?.classList?.contains("is-ready")) {
+      scrollExpandedElementIntoView(engineDetailsElement);
+    }
   });
 }
 
@@ -1163,6 +1234,18 @@ function handleExtensionOptionChange(changedOptionKey) {
   updateDependentGroupVisibility();
   setActiveConfigProfileName(null);
 
+  if (changedOptionKey) {
+    const toggledGroupEntry = VISIBILITY_TOGGLE_GROUPS.find(
+      ([toggleInputId]) => toggleInputId === changedOptionKey
+    );
+    if (toggledGroupEntry && extensionOptions[changedOptionKey]) {
+      const revealedGroup = document.getElementById(toggledGroupEntry[1]);
+      if (revealedGroup) {
+        scrollExpandedElementIntoView(revealedGroup, revealedGroup.previousElementSibling);
+      }
+    }
+  }
+
   if (changedOptionKey === "option-url-api-stockfish") {
     flushPendingUciOptions({ shouldNotifyTabs: false });
     invalidateEngineProbe(extensionOptions["option-url-api-stockfish"]);
@@ -1205,6 +1288,20 @@ function initializeOptionsPage() {
     document
       .getElementById("engine-options-details")
       ?.addEventListener("toggle", probeEngineIfPanelExpanded);
+
+    const disclosureIds = [
+      "go-command-details",
+      "engine-options-details",
+      "advanced-timing-details"
+    ];
+    for (const disclosureId of disclosureIds) {
+      const detailsElement = document.getElementById(disclosureId);
+      detailsElement?.addEventListener("toggle", () => {
+        if (detailsElement.open && document.body?.classList?.contains("is-ready")) {
+          scrollExpandedElementIntoView(detailsElement);
+        }
+      });
+    }
   }
   initializeTheme();
   initializeConfigSystem();
