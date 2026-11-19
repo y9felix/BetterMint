@@ -158,34 +158,6 @@ details.collapse-group > summary.collapse-summary:hover::after {
     padding-top: 4px;
 }
 
-.go-preview-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 8px;
-    background-color: var(--bg-input, var(--bg-primary));
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-}
-
-.go-preview-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    flex-shrink: 0;
-}
-
-.go-preview-code {
-    font-family: monospace;
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .select-input {
     width: 100%;
     background-color: var(--bg-input, var(--bg-primary));
@@ -322,53 +294,16 @@ details.collapse-group > summary.collapse-summary:hover::after {
 .config-popover {
     position: absolute;
     bottom: calc(100% + 8px);
+    left: 10px;
     right: 10px;
     z-index: 20;
+    display: flex;
+    flex-direction: column;
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
     overflow: hidden;
-}
-
-.config-popover.is-wide {
-    left: 10px;
-    right: 10px;
-}
-
-.config-menu {
-    display: flex;
-    flex-direction: column;
-    min-width: 148px;
-    padding: 4px;
-}
-
-.config-menu-btn {
-    background: transparent;
-    border: none;
-    border-radius: 5px;
-    color: var(--text-primary);
-    font-size: 12px;
-    font-weight: 500;
-    text-align: left;
-    padding: 7px 10px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 0.12s ease;
-}
-
-.config-menu-btn:hover {
-    background-color: var(--track-bg);
-}
-
-.config-menu-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
-}
-
-.config-panel {
-    display: flex;
-    flex-direction: column;
 }
 
 .config-panel-header {
@@ -488,28 +423,22 @@ details.collapse-group > summary.collapse-summary:hover::after {
     padding: 6px 8px;
 }
 
-.config-save-form {
+.config-save-row {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--divider-color);
 }
 
 .config-error {
     font-size: 11px;
     color: var(--error-text);
-}
-
-.config-save-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
+    padding: 4px 10px 0;
 }
 
 .action-btn,
-.btn-primary,
-.btn-secondary {
+.btn-primary {
     border-radius: 6px;
     font-size: 12px;
     font-weight: 600;
@@ -535,15 +464,13 @@ details.collapse-group > summary.collapse-summary:hover::after {
     opacity: 1;
 }
 
-.action-btn,
-.btn-secondary {
+.action-btn {
     background-color: var(--track-bg);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
 }
 
-.action-btn:hover,
-.btn-secondary:hover {
+.action-btn:hover {
     background-color: var(--border-color);
 }
 

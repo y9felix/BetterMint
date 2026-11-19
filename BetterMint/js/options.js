@@ -33,7 +33,7 @@ const DEFAULT_EXTENSION_OPTION_VALUES =
 let activeThemeId = "dark";
 let activeConfigProfileName = null;
 let customConfigProfiles = [];
-let activePopoverMode = null;
+let isConfigPopoverOpen = false;
 let statusClearTimerId = null;
 let isThemeInitialized = false;
 let isConfigSystemInitialized = false;
@@ -71,20 +71,6 @@ const baseSliderSteps = new WeakMap();
 
 function isPlainRecord(candidate) {
   return Boolean(candidate) && typeof candidate === "object" && !Array.isArray(candidate);
-}
-
-function parseBooleanValue(rawValue) {
-  if (typeof rawValue === "boolean") return rawValue;
-  if (typeof rawValue === "string") {
-    const normalizedText = rawValue.trim().toLowerCase();
-    if (normalizedText === "false" || normalizedText === "0" || normalizedText === "off" || normalizedText === "") {
-      return false;
-    }
-    if (normalizedText === "true" || normalizedText === "1" || normalizedText === "on") {
-      return true;
-    }
-  }
-  return Boolean(rawValue);
 }
 
 function getBaseSliderStep(rangeInput) {
@@ -202,27 +188,6 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
     });
     inlineEditor.addEventListener("blur", () => finishEdit(true));
   });
-}
-
-function buildGoPreviewCommand(extensionOptions = null) {
-  const effectiveOptions = extensionOptions || readExtensionOptionsFromDom();
-  const commandParts = ["go"];
-  const depth = parseInt(effectiveOptions["option-depth"], 10) || 0;
-  const movetimeMs = parseInt(effectiveOptions["option-go-movetime"], 10) || 0;
-  const nodeLimit = parseInt(effectiveOptions["option-go-nodes"], 10) || 0;
-
-  if (depth > 0) commandParts.push("depth", String(depth));
-  if (movetimeMs > 0) commandParts.push("movetime", String(movetimeMs));
-  if (nodeLimit > 0) commandParts.push("nodes", String(nodeLimit));
-  if (commandParts.length === 1) commandParts.push("depth", "1");
-  return commandParts.join(" ");
-}
-
-function updateGoCommandPreview(extensionOptions = null) {
-  const previewElement = document.getElementById("go-command-preview");
-  if (previewElement) {
-    previewElement.textContent = buildGoPreviewCommand(extensionOptions);
-  }
 }
 
 function applyTheme(themeId) {
@@ -730,7 +695,7 @@ function normalizeExtensionOptions(rawExtensionOptions) {
         ? rawExtensionOptions[optionKey]
         : defaultValue;
     if (typeof defaultValue === "boolean") {
-      normalizedOptions[optionKey] = parseBooleanValue(incomingValue);
+      normalizedOptions[optionKey] = Boolean(incomingValue);
     } else if (typeof defaultValue === "number") {
       const parsedNumber = parseFloat(incomingValue);
       normalizedOptions[optionKey] = Number.isNaN(parsedNumber) ? defaultValue : parsedNumber;
@@ -747,7 +712,7 @@ function applyExtensionOptionsToDom(extensionOptions) {
     if (!inputElement) return;
     const optionValue = extensionOptions[optionKey] ?? DEFAULT_EXTENSION_OPTION_VALUES[optionKey];
     if (inputElement.type === "checkbox") {
-      inputElement.checked = parseBooleanValue(optionValue);
+      inputElement.checked = Boolean(optionValue);
     } else if (inputElement.type === "range") {
       setSliderExactValue(inputElement, optionValue);
       const badgeElement = document.getElementById("badge-" + optionKey);
@@ -759,7 +724,6 @@ function applyExtensionOptionsToDom(extensionOptions) {
     }
   });
   updateDependentGroupVisibility();
-  updateGoCommandPreview(extensionOptions);
 }
 
 function setActiveConfigProfileName(profileName) {
@@ -906,7 +870,7 @@ function renderSavedConfigList() {
         profileName: savedProfile.name,
         shouldMarkSaved: true
       });
-      setConfigPopoverMode(null);
+      setConfigPopoverOpen(false);
       setConfigStatusMessage(`Loaded ${savedProfile.name}`);
     });
 
@@ -932,39 +896,28 @@ function renderSavedConfigList() {
   });
 }
 
-function setConfigPopoverMode(popoverMode) {
-  activePopoverMode = popoverMode || null;
+function setConfigPopoverOpen(shouldOpen) {
+  isConfigPopoverOpen = Boolean(shouldOpen);
   const popoverElement = document.getElementById("config-popover");
   const configToggleButton = document.getElementById("config-toggle");
-  const actionMenuElement = document.getElementById("config-menu");
-  const loadPanelElement = document.getElementById("config-load-panel");
-  const savePanelElement = document.getElementById("config-save-panel");
   const saveErrorElement = document.getElementById("config-save-error");
 
   if (configToggleButton) {
-    configToggleButton.setAttribute?.("aria-expanded", String(Boolean(activePopoverMode)));
+    configToggleButton.setAttribute?.("aria-expanded", String(isConfigPopoverOpen));
   }
   if (!popoverElement) return;
 
-  popoverElement.classList?.toggle("hidden", !activePopoverMode);
-  popoverElement.classList?.toggle(
-    "is-wide",
-    activePopoverMode === "load" || activePopoverMode === "save"
-  );
-  actionMenuElement?.classList?.toggle("hidden", activePopoverMode !== "menu");
-  loadPanelElement?.classList?.toggle("hidden", activePopoverMode !== "load");
-  savePanelElement?.classList?.toggle("hidden", activePopoverMode !== "save");
+  popoverElement.classList?.toggle("hidden", !isConfigPopoverOpen);
   saveErrorElement?.classList?.add("hidden");
 
-  if (activePopoverMode === "load") {
-    loadConfigStorageState(() => renderSavedConfigList());
-  } else if (activePopoverMode === "save") {
-    const profileNameInput = document.getElementById("config-save-name");
-    if (profileNameInput) {
-      profileNameInput.value = activeConfigProfileName || "";
-      profileNameInput.focus?.();
-      profileNameInput.select?.();
-    }
+  if (isConfigPopoverOpen) {
+    loadConfigStorageState(() => {
+      const profileNameInput = document.getElementById("config-save-name");
+      if (profileNameInput) {
+        profileNameInput.value = activeConfigProfileName || "";
+      }
+      renderSavedConfigList();
+    });
   }
 }
 
@@ -1022,7 +975,7 @@ function handleSaveProfileSubmit() {
   loadConfigStorageState((storageState) => {
     saveCustomConfigProfile(profileName, extensionOptions, storageState.customEngineOptions);
     setActiveConfigProfileName(profileName);
-    setConfigPopoverMode(null);
+    setConfigPopoverOpen(false);
     setConfigStatusMessage(`Saved ${profileName}`);
   });
 }
@@ -1034,22 +987,12 @@ function initializeConfigSystem() {
 
   document.getElementById("config-toggle")?.addEventListener("click", (clickEvent) => {
     clickEvent?.stopPropagation?.();
-    setConfigPopoverMode(activePopoverMode ? null : "menu");
+    setConfigPopoverOpen(!isConfigPopoverOpen);
   });
 
-  document.getElementById("config-action-load")?.addEventListener("click", () => {
-    setConfigPopoverMode("load");
+  document.getElementById("config-close")?.addEventListener("click", () => {
+    setConfigPopoverOpen(false);
   });
-
-  document.getElementById("config-action-save")?.addEventListener("click", () => {
-    setConfigPopoverMode("save");
-  });
-
-  for (const closeButtonId of ["config-load-close", "config-save-close", "config-save-cancel"]) {
-    document
-      .getElementById(closeButtonId)
-      ?.addEventListener("click", () => setConfigPopoverMode(null));
-  }
   document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveProfileSubmit);
 
   document.getElementById("config-save-name")?.addEventListener("keydown", (keyEvent) => {
@@ -1060,19 +1003,19 @@ function initializeConfigSystem() {
   });
 
   document.addEventListener?.("click", (clickEvent) => {
-    if (!activePopoverMode) return;
+    if (!isConfigPopoverOpen) return;
     const popoverElement = document.getElementById("config-popover");
     const configToggleButton = document.getElementById("config-toggle");
     const eventTarget = clickEvent?.target;
     if (popoverElement?.contains?.(eventTarget) || configToggleButton?.contains?.(eventTarget)) {
       return;
     }
-    setConfigPopoverMode(null);
+    setConfigPopoverOpen(false);
   });
 
   document.addEventListener?.("keydown", (keyEvent) => {
-    if (keyEvent?.key === "Escape" && activePopoverMode) {
-      setConfigPopoverMode(null);
+    if (keyEvent?.key === "Escape" && isConfigPopoverOpen) {
+      setConfigPopoverOpen(false);
     }
   });
 }
@@ -1092,7 +1035,6 @@ function handleExtensionOptionChange(changedOptionKey) {
   const extensionOptions = readExtensionOptionsFromDom();
 
   updateDependentGroupVisibility();
-  updateGoCommandPreview(extensionOptions);
   setActiveConfigProfileName(null);
 
   if (changedOptionKey === "option-url-api-stockfish") {
@@ -1118,9 +1060,6 @@ function initializeOptionsPage() {
       inputElement.addEventListener("input", () => {
         if (badgeElement) {
           badgeElement.textContent = formatSliderBadgeValue(optionKey, inputElement.value);
-        }
-        if (optionKey === "option-depth" || optionKey.startsWith("option-go-")) {
-          updateGoCommandPreview();
         }
       });
       if (badgeElement) {
@@ -1160,11 +1099,10 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     THEMES,
     formatSliderBadgeValue,
-    buildGoPreviewCommand,
     applyTheme,
     applyConfigProfile,
     deleteCustomConfigProfile,
-    setConfigPopoverMode,
+    setConfigPopoverOpen,
     parseUciOptionLine,
     renderDynamicUciOptions,
     probeEngineUciOptions,
@@ -1175,7 +1113,7 @@ if (typeof module !== "undefined" && module.exports) {
       lastProbedUciOptions = [];
       activeConfigProfileName = null;
       customConfigProfiles = [];
-      activePopoverMode = null;
+      isConfigPopoverOpen = false;
     }
   };
 }

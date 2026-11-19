@@ -27,11 +27,6 @@
             <details id="go-command-details" class="collapse-group">
                 <summary class="collapse-summary">Search Options</summary>
                 <div class="collapse-content">
-                    <div class="go-preview-row">
-                        <span class="go-preview-label">Preview</span>
-                        <code id="go-command-preview" class="go-preview-code">go depth 3</code>
-                    </div>
-
                     <div class="control-col">
                         <div class="slider-header">
                             <span class="title">Search Depth</span>
@@ -189,32 +184,17 @@
             <span class="version-badge">v2.1.18</span>
             <span id="config-status" class="config-status hidden"></span>
         </div>
-        <div id="config-popover" class="config-popover hidden" role="dialog" aria-label="Configuration">
-            <div id="config-menu" class="config-menu hidden">
-                <button id="config-action-load" type="button" class="config-menu-btn">Load</button>
-                <button id="config-action-save" type="button" class="config-menu-btn">Save</button>
+        <div id="config-popover" class="config-popover hidden" role="dialog" aria-label="Configs">
+            <div class="config-panel-header">
+                <span class="config-panel-title">Configs</span>
+                <button id="config-close" type="button" class="config-close-btn" title="Close" aria-label="Close">&times;</button>
             </div>
-            <div id="config-load-panel" class="config-panel hidden">
-                <div class="config-panel-header">
-                    <span class="config-panel-title">Load Config</span>
-                    <button id="config-load-close" type="button" class="config-close-btn" title="Close" aria-label="Close">&times;</button>
-                </div>
-                <div id="config-load-list" class="config-list"></div>
+            <div class="config-save-row">
+                <input id="config-save-name" type="text" class="text-input" placeholder="Config name" spellcheck="false" autocomplete="off" />
+                <button id="config-save-confirm" type="button" class="btn-primary">Save</button>
             </div>
-            <div id="config-save-panel" class="config-panel hidden">
-                <div class="config-panel-header">
-                    <span class="config-panel-title">Save Config</span>
-                    <button id="config-save-close" type="button" class="config-close-btn" title="Close" aria-label="Close">&times;</button>
-                </div>
-                <div class="config-save-form">
-                    <input id="config-save-name" type="text" class="text-input" placeholder="Config name" spellcheck="false" autocomplete="off" />
-                    <span id="config-save-error" class="config-error hidden"></span>
-                    <div class="config-save-actions">
-                        <button id="config-save-cancel" type="button" class="btn-secondary">Cancel</button>
-                        <button id="config-save-confirm" type="button" class="btn-primary">Save</button>
-                    </div>
-                </div>
-            </div>
+            <span id="config-save-error" class="config-error hidden"></span>
+            <div id="config-load-list" class="config-list"></div>
         </div>
         <div class="footer-actions">
             <button id="config-toggle" type="button" class="icon-btn" title="Config" aria-label="Config" aria-expanded="false">

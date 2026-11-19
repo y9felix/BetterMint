@@ -330,10 +330,7 @@ async def serve_engine_websocket(
 
 async def handle_websocket_connection(websocket: ServerConnection):
     request_path = websocket.request.path if websocket.request else "/ws"
-    is_valid_path, engine_name = resolve_engine_name_from_path(request_path)
-    if not is_valid_path:
-        await websocket.close(code=1008)
-        return
+    _, engine_name = resolve_engine_name_from_path(request_path)
     engine_config = load_engine_config()
     engine_command = resolve_engine_command(engine_config, engine_name)
     book_path = resolve_book_path(engine_config, engine_name, ENGINEWS_DIR)

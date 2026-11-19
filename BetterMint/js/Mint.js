@@ -87,24 +87,17 @@ function getEvalBarOffsetPx(viewportWidth) {
 
 function formatEvaluationDisplay(scoreValue, isMateScore) {
   if (isMateScore) {
-    const shortText = "M" + String(Math.abs(scoreValue));
     return {
       percentage: scoreValue < 0 ? 100 : 0,
-      abbreviated: shortText,
-      full: (scoreValue < 0 ? "-" : "+") + shortText,
+      abbreviated: "M" + String(Math.abs(scoreValue)),
       isDark: scoreValue >= 0
     };
   }
-  const pawnAdvantage = scoreValue / 100;
-  const absPawnAdvantage = Math.abs(pawnAdvantage);
+  const absPawnAdvantage = Math.abs(scoreValue / 100);
   const percentage = Math.max(
     5,
     Math.min(95, (1 - centipawnsToWinProbability(scoreValue)) * 100)
   );
-  const full =
-    absPawnAdvantage < 0.005
-      ? "0.00"
-      : (pawnAdvantage > 0 ? "+" : "") + pawnAdvantage.toFixed(2);
   let abbreviated;
   if (absPawnAdvantage < 0.05) {
     abbreviated = "0.0";
@@ -116,7 +109,6 @@ function formatEvaluationDisplay(scoreValue, isMateScore) {
   return {
     percentage,
     abbreviated,
-    full,
     isDark: scoreValue >= 0
   };
 }
@@ -348,7 +340,6 @@ class GameController {
     this.boardOptions = this.chessComGame.getOptions();
     this.evalBarElement = null;
     this.evalBarWhiteFill = null;
-    this.evalScoreElement = null;
     this.evalScoreAbbreviatedElement = null;
     this.evalBarResizeObserver = null;
     this.evalBarSyncHandler = null;
@@ -616,7 +607,6 @@ class GameController {
       this.evalBarElement = null;
     }
     this.evalBarWhiteFill = null;
-    this.evalScoreElement = null;
     this.evalScoreAbbreviatedElement = null;
   }
 
@@ -688,12 +678,11 @@ class GameController {
 
     const evalBarElement = document.createElement("div");
     evalBarElement.className = "bettermint-evalbar";
-    evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><span class="bettermint-evalbar-score bettermint-evalbar-dark">0.00</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
     documentBody.appendChild(evalBarElement);
 
     this.evalBarElement = evalBarElement;
     this.evalBarWhiteFill = evalBarElement.querySelector(".bettermint-evalbar-white");
-    this.evalScoreElement = evalBarElement.querySelector(".bettermint-evalbar-score");
     this.evalScoreAbbreviatedElement = evalBarElement.querySelector(
       ".bettermint-evalbar-scoreAbbreviated"
     );
@@ -740,8 +729,7 @@ class GameController {
       const topPx = Math.round(boardRect.top);
       const heightPx = Math.round(boardRect.height);
       const leftPx = Math.max(4, Math.round(boardRect.left - offsetPx));
-      const isOverlappingBoard = boardRect.left < offsetPx;
-      const nextLayoutSignature = `${topPx}:${heightPx}:${leftPx}:${offsetPx}:${isOverlappingBoard ? 1 : 0}`;
+      const nextLayoutSignature = `${topPx}:${heightPx}:${leftPx}:${offsetPx}`;
       if (nextLayoutSignature === lastLayoutSignature) return;
       lastLayoutSignature = nextLayoutSignature;
 
@@ -749,7 +737,6 @@ class GameController {
       this.evalBarElement.style.top = `${topPx}px`;
       this.evalBarElement.style.height = `${heightPx}px`;
       this.evalBarElement.style.left = `${leftPx}px`;
-      this.evalBarElement.style.pointerEvents = isOverlappingBoard ? "none" : "";
     };
 
     const scheduleSyncPosition = () => {
@@ -973,15 +960,9 @@ class GameController {
 
   setEvaluationDisplay(scoreValue, isMateScore) {
     if (this.evalBarElement == null) return;
-    const { percentage, abbreviated, full, isDark } = formatEvaluationDisplay(
-      scoreValue,
-      isMateScore
-    );
+    const { percentage, abbreviated, isDark } = formatEvaluationDisplay(scoreValue, isMateScore);
     this.evalBarWhiteFill.style.transform = `translate3d(0px, ${percentage}%, 0px)`;
-    this.evalScoreElement.textContent = full;
     this.evalScoreAbbreviatedElement.textContent = abbreviated;
-    this.evalScoreElement.classList.toggle("bettermint-evalbar-dark", isDark);
-    this.evalScoreElement.classList.toggle("bettermint-evalbar-light", !isDark);
     this.evalScoreAbbreviatedElement.classList.toggle("bettermint-evalbar-dark", isDark);
     this.evalScoreAbbreviatedElement.classList.toggle("bettermint-evalbar-light", !isDark);
   }
@@ -1040,72 +1021,34 @@ class UciEngineClient {
   static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
 
   static parseUciOptionLine(uciLine) {
-    if (!uciLine || typeof uciLine !== "string" || !uciLine.startsWith("option name ")) return null;
-    const declarationBody = uciLine.slice(12);
-    const typeDelimiterIndex = declarationBody.indexOf(" type ");
-    if (typeDelimiterIndex === -1) return null;
-    const optionName = declarationBody.slice(0, typeDelimiterIndex).trim();
+    if (typeof uciLine !== "string") return null;
+    const headerMatch = uciLine.match(/^option name (.+?) type (\S+)(?:\s+(.*))?$/);
+    if (!headerMatch) return null;
+    const optionName = headerMatch[1].trim();
+    const optionType = headerMatch[2];
+    const attributes = (headerMatch[3] || "").trim();
     if (!optionName) return null;
-
-    const typeAndAttributes = declarationBody.slice(typeDelimiterIndex + 6).trim();
-    const attributeTokens = typeAndAttributes.split(/\s+/);
-    const optionType = attributeTokens[0];
-    if (!optionType) return null;
-
     if (optionType === "button") {
       return { name: optionName, type: optionType, hasDefault: false, default: null };
     }
-
-    if (optionType === "string") {
-      const stringDefaultMatch = typeAndAttributes.match(/^string\s+default\s*(.*)$/);
-      if (!stringDefaultMatch) {
-        return { name: optionName, type: optionType, hasDefault: false, default: null };
-      }
-      const rawDefaultText = stringDefaultMatch[1].trim();
-      return {
-        name: optionName,
-        type: optionType,
-        hasDefault: true,
-        default: rawDefaultText === "<empty>" ? "" : rawDefaultText
-      };
+    const defaultMatch =
+      optionType === "string"
+        ? attributes.match(/^default(?:\s+(.*))?$/)
+        : attributes.match(/(?:^|\s)default(?:\s+(.*?))?(?=\s+(?:min|max|var)\b|$)/);
+    if (!defaultMatch) {
+      return { name: optionName, type: optionType, hasDefault: false, default: null };
     }
-
-    const uciKeywords = new Set(["default", "min", "max", "var"]);
-    let activeAttributeKeyword = null;
-    let collectedValueWords = [];
-    let hasDefault = false;
-    let defaultValue = "";
-
-    const commitActiveAttribute = () => {
-      if (activeAttributeKeyword === "default") {
-        hasDefault = true;
-        defaultValue = collectedValueWords.join(" ").trim();
-      }
-      collectedValueWords = [];
-    };
-
-    for (let tokenIndex = 1; tokenIndex < attributeTokens.length; tokenIndex++) {
-      const token = attributeTokens[tokenIndex];
-      if (uciKeywords.has(token)) {
-        commitActiveAttribute();
-        activeAttributeKeyword = token;
-      } else if (activeAttributeKeyword) {
-        collectedValueWords.push(token);
-      }
-    }
-    commitActiveAttribute();
-
+    const rawDefault = (defaultMatch[1] || "").trim();
     return {
       name: optionName,
       type: optionType,
-      hasDefault,
-      default: hasDefault ? defaultValue : null
+      hasDefault: true,
+      default: optionType === "string" && rawDefault === "<empty>" ? "" : rawDefault
     };
   }
 
   constructor(extension) {
     this.extension = extension;
-    this.infiniteSearchTimeoutId = null;
     this.stopFallbackTimeoutId = null;
     this.candidateMoves = [];
     this.hasUnsortedCandidateMoves = false;
