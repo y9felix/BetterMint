@@ -973,10 +973,6 @@ body.is-ready .config-popover.hidden {
     color: #ffffff;
 }
 
-:root[data-theme="chesscom"] .card:nth-child(even) {
-    background-color: var(--bg-surface-subtle);
-}
-
 :root[data-theme="chesscom"] .card + .card {
     border-top-color: var(--divider-color);
 }
