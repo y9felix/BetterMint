@@ -4,97 +4,26 @@ const PROBE_TIMEOUT_MS = 4000;
 const UCI_OPTIONS_SYNC_DEBOUNCE_MS = 150;
 const CONFIG_STATUS_DURATION_MS = 2600;
 
-const THEME_COLOR_CSS_VARS = [
-  "--bg-primary",
-  "--bg-card",
-  "--border-color",
-  "--divider-color",
-  "--text-primary",
-  "--text-muted",
-  "--accent",
-  "--badge-bg",
-  "--badge-text",
-  "--track-bg",
-  "--thumb-bg",
-  "--error-text"
-];
-
 const THEMES = {
   dark: {
     label: "Dark",
     nextThemeId: "light",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>',
-    colors: {
-      "--bg-primary": "#18181b",
-      "--bg-card": "#27272a",
-      "--border-color": "#3f3f46",
-      "--divider-color": "rgba(255, 255, 255, 0.06)",
-      "--text-primary": "#f4f4f5",
-      "--text-muted": "#a1a1aa",
-      "--accent": "#6366f1",
-      "--badge-bg": "#3f3f46",
-      "--badge-text": "#e4e4f7",
-      "--track-bg": "#3f3f46",
-      "--thumb-bg": "#ffffff",
-      "--error-text": "#f87171"
-    }
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>'
   },
   light: {
     label: "Light",
     nextThemeId: "black",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>',
-    colors: {
-      "--bg-primary": "#f4f4f5",
-      "--bg-card": "#ffffff",
-      "--border-color": "#d4d4d8",
-      "--divider-color": "rgba(0, 0, 0, 0.08)",
-      "--text-primary": "#18181b",
-      "--text-muted": "#52525b",
-      "--accent": "#4f46e5",
-      "--badge-bg": "#e4e4e7",
-      "--badge-text": "#27272a",
-      "--track-bg": "#d4d4d8",
-      "--thumb-bg": "#4f46e5",
-      "--error-text": "#dc2626"
-    }
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>'
   },
   black: {
     label: "Black",
     nextThemeId: "chesscom",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>',
-    colors: {
-      "--bg-primary": "#000000",
-      "--bg-card": "#0a0a0c",
-      "--border-color": "#222228",
-      "--divider-color": "rgba(255, 255, 255, 0.08)",
-      "--text-primary": "#f4f4f5",
-      "--text-muted": "#8e8e98",
-      "--accent": "#6366f1",
-      "--badge-bg": "#18181d",
-      "--badge-text": "#e4e4f7",
-      "--track-bg": "#27272c",
-      "--thumb-bg": "#ffffff",
-      "--error-text": "#f87171"
-    }
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>'
   },
   chesscom: {
     label: "Chess.com",
     nextThemeId: "dark",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>',
-    colors: {
-      "--bg-primary": "#302e2b",
-      "--bg-card": "#272522",
-      "--border-color": "#45423e",
-      "--divider-color": "rgba(255, 255, 255, 0.08)",
-      "--text-primary": "#f5f5f5",
-      "--text-muted": "#a6a39e",
-      "--accent": "#81b64c",
-      "--badge-bg": "#383531",
-      "--badge-text": "#f5f5f5",
-      "--track-bg": "#383531",
-      "--thumb-bg": "#ffffff",
-      "--error-text": "#f87171"
-    }
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>'
   }
 };
 
@@ -185,7 +114,6 @@ const DEFAULT_CONFIG_PRESETS = [
 ];
 
 let activeThemeId = "dark";
-let activeThemeCustomColors = null;
 let activeConfigProfileName = null;
 let customConfigProfiles = [];
 let activePopoverMode = null;
@@ -425,47 +353,12 @@ function updateGoCommandPreview(extensionOptions = null) {
   }
 }
 
-function getActiveThemeColors() {
-  const palette = Object.assign({}, THEMES[activeThemeId]?.colors || THEMES.dark.colors);
-  const rootElement = document.documentElement;
-  if (rootElement) {
-    const computedStyle =
-      typeof window !== "undefined" && typeof window.getComputedStyle === "function"
-        ? window.getComputedStyle(rootElement)
-        : null;
-    for (const cssVarName of THEME_COLOR_CSS_VARS) {
-      const overrideColor =
-        activeThemeCustomColors?.[cssVarName] || rootElement.style?.getPropertyValue?.(cssVarName);
-      const resolvedColor = (overrideColor || computedStyle?.getPropertyValue?.(cssVarName) || "").trim();
-      if (resolvedColor) palette[cssVarName] = resolvedColor;
-    }
-  }
-  return palette;
-}
-
-function applyTheme(themeId, customColors = null) {
+function applyTheme(themeId) {
   const resolvedThemeId = THEMES[themeId] ? themeId : "dark";
   activeThemeId = resolvedThemeId;
   const rootElement = document.documentElement;
   if (rootElement) {
     rootElement.dataset.theme = resolvedThemeId;
-    if (isPlainRecord(customColors)) {
-      const sanitizedColors = {};
-      for (const cssVarName of THEME_COLOR_CSS_VARS) {
-        if (typeof customColors[cssVarName] === "string" && customColors[cssVarName].trim()) {
-          sanitizedColors[cssVarName] = customColors[cssVarName].trim();
-          rootElement.style?.setProperty?.(cssVarName, sanitizedColors[cssVarName]);
-        } else {
-          rootElement.style?.removeProperty?.(cssVarName);
-        }
-      }
-      activeThemeCustomColors = Object.keys(sanitizedColors).length ? sanitizedColors : null;
-    } else {
-      activeThemeCustomColors = null;
-      for (const cssVarName of THEME_COLOR_CSS_VARS) {
-        rootElement.style?.removeProperty?.(cssVarName);
-      }
-    }
   }
   const themeToggleButton = document.getElementById("theme-toggle");
   if (themeToggleButton) {
@@ -478,18 +371,17 @@ function applyTheme(themeId, customColors = null) {
 
 function initializeTheme() {
   applyTheme("dark");
-  const localStorageArea = typeof chrome !== "undefined" ? chrome.storage?.local : null;
-  localStorageArea?.get?.(["theme", "themeColors"], (storedThemeState) => {
-    if (storedThemeState?.theme || storedThemeState?.themeColors) {
-      applyTheme(storedThemeState.theme || "dark", storedThemeState.themeColors || null);
+  readChromeStorage("local", ["theme"], (storedThemeState) => {
+    if (storedThemeState?.theme) {
+      applyTheme(storedThemeState.theme);
     }
   });
   if (isThemeInitialized) return;
   isThemeInitialized = true;
   document.getElementById("theme-toggle")?.addEventListener("click", () => {
     const nextThemeId = THEMES[activeThemeId]?.nextThemeId || "dark";
-    applyTheme(nextThemeId, null);
-    writeChromeStorage("local", { theme: nextThemeId, themeColors: null });
+    applyTheme(nextThemeId);
+    writeChromeStorage("local", { theme: nextThemeId });
   });
 }
 
@@ -524,10 +416,11 @@ function parseUciOptionLine(uciLine) {
 
   if (optionType === "string") {
     const defaultMatch = typeAndAttributes.match(/^string\s+default\s*(.*)$/);
+    const rawDefault = defaultMatch ? defaultMatch[1].trim() : "";
     return {
       name: optionName,
       type: optionType,
-      default: defaultMatch ? defaultMatch[1].trim() : "",
+      default: rawDefault === "<empty>" ? "" : rawDefault,
       min: null,
       max: null,
       vars: []
@@ -824,6 +717,24 @@ function invalidateEngineProbe(engineUrl) {
 let uciOptionsSyncTimerId = null;
 let pendingUciOptionsWrite = null;
 
+function readChromeStorage(storageArea, storageKeys, onLoaded) {
+  const storageHandle = typeof chrome !== "undefined" ? chrome.storage?.[storageArea] : null;
+  if (!storageHandle?.get) {
+    onLoaded?.(null);
+    return;
+  }
+  storageHandle.get(storageKeys, (storedResult) => {
+    const runtimeError = typeof chrome !== "undefined" ? chrome.runtime?.lastError : null;
+    if (runtimeError) {
+      console.warn(
+        `[BetterMint] Failed to read ${storageArea} storage:`,
+        runtimeError.message || runtimeError
+      );
+    }
+    onLoaded?.(storedResult || {});
+  });
+}
+
 function writeChromeStorage(storageArea, storagePayload) {
   const storageHandle = typeof chrome !== "undefined" ? chrome.storage?.[storageArea] : null;
   if (!storageHandle?.set) return;
@@ -881,12 +792,12 @@ function bindDynamicUciOptionControls(
 }
 
 function loadAndRenderEngineUciOptions(engineUrl, uciOptionDefinitions, containerElement) {
-  if (typeof chrome === "undefined" || !chrome.storage?.local) {
-    renderDynamicUciOptions(uciOptionDefinitions, {}, containerElement, null);
-    return;
-  }
   const storageKey = getEngineOptionsStorageKey(engineUrl);
-  chrome.storage.local.get([storageKey], (storedResult) => {
+  readChromeStorage("local", [storageKey], (storedResult) => {
+    if (storedResult === null) {
+      renderDynamicUciOptions(uciOptionDefinitions, {}, containerElement, null);
+      return;
+    }
     if (lastProbedEngineUrl !== engineUrl) return;
     bindDynamicUciOptionControls(
       storageKey,
@@ -1234,23 +1145,22 @@ function loadConfigStorageState(onLoaded) {
   const storageKeys = ["customConfigs", "activeConfigName"];
   if (engineStorageKey) storageKeys.push(engineStorageKey);
 
-  if (typeof chrome === "undefined" || !chrome.storage?.local) {
-    onLoaded?.({
-      customConfigs: customConfigProfiles,
-      activeConfigName: activeConfigProfileName,
-      customEngineOptions: {}
-    });
-    return;
-  }
-
-  chrome.storage.local.get(storageKeys, (storedState) => {
-    if (Array.isArray(storedState?.customConfigs)) {
+  readChromeStorage("local", storageKeys, (storedState) => {
+    if (storedState === null) {
+      onLoaded?.({
+        customConfigs: customConfigProfiles,
+        activeConfigName: activeConfigProfileName,
+        customEngineOptions: {}
+      });
+      return;
+    }
+    if (Array.isArray(storedState.customConfigs)) {
       customConfigProfiles = storedState.customConfigs;
     }
-    if (Object.prototype.hasOwnProperty.call(storedState || {}, "activeConfigName")) {
+    if (Object.prototype.hasOwnProperty.call(storedState, "activeConfigName")) {
       activeConfigProfileName = storedState.activeConfigName || null;
     }
-    const storedUciOptions = engineStorageKey ? storedState?.[engineStorageKey] || {} : {};
+    const storedUciOptions = engineStorageKey ? storedState[engineStorageKey] || {} : {};
     const liveUciOptions =
       pendingUciOptionsWrite && pendingUciOptionsWrite.storageKey === engineStorageKey
         ? pendingUciOptionsWrite.uciOptions
@@ -1273,16 +1183,7 @@ function buildConfigExportSnapshot(onSnapshotReady) {
       exportedAt: new Date().toISOString(),
       settings: extensionOptions,
       customEngineOptions: storageState.customEngineOptions || {},
-      theme: {
-        id: activeThemeId,
-        colors: getActiveThemeColors()
-      },
-      presets: DEFAULT_CONFIG_PRESETS.map((presetProfile) => ({
-        id: presetProfile.id,
-        name: presetProfile.name,
-        settings: presetProfile.settings,
-        customEngineOptions: presetProfile.customEngineOptions || {}
-      })),
+      theme: activeThemeId,
       customConfigs: storageState.customConfigs.map((savedProfile) => ({
         name: savedProfile.name,
         settings: savedProfile.settings,
@@ -1385,12 +1286,8 @@ function importMintConfigText(rawJsonText, filename = "config.mint") {
   if (parsedSnapshot.theme) {
     const importedThemeId =
       typeof parsedSnapshot.theme === "string" ? parsedSnapshot.theme : parsedSnapshot.theme.id;
-    const importedThemeColors =
-      isPlainRecord(parsedSnapshot.theme) && isPlainRecord(parsedSnapshot.theme.colors)
-        ? parsedSnapshot.theme.colors
-        : null;
-    applyTheme(importedThemeId || activeThemeId, importedThemeColors);
-    writeChromeStorage("local", { theme: activeThemeId, themeColors: activeThemeCustomColors });
+    applyTheme(importedThemeId || activeThemeId);
+    writeChromeStorage("local", { theme: activeThemeId });
   }
 
   const importedProfileName =
@@ -1411,9 +1308,6 @@ function importMintConfigText(rawJsonText, filename = "config.mint") {
 }
 
 function initializeConfigSystem() {
-  if (typeof chrome !== "undefined") {
-    chrome.storage?.local?.remove?.("presetOverrides");
-  }
   loadConfigStorageState();
   if (isConfigSystemInitialized) return;
   isConfigSystemInitialized = true;
@@ -1494,12 +1388,12 @@ function initializeConfigSystem() {
 }
 
 function restoreExtensionOptions() {
-  if (typeof chrome === "undefined" || !chrome.storage?.sync) {
-    updateDependentGroupVisibility();
-    return;
-  }
-  chrome.storage.sync.get(DEFAULT_EXTENSION_OPTION_VALUES, (storedExtensionOptions) => {
-    applyExtensionOptionsToDom(storedExtensionOptions || {});
+  readChromeStorage("sync", DEFAULT_EXTENSION_OPTION_VALUES, (storedExtensionOptions) => {
+    if (storedExtensionOptions === null) {
+      updateDependentGroupVisibility();
+      return;
+    }
+    applyExtensionOptionsToDom(storedExtensionOptions);
     probeEngineIfPanelExpanded();
   });
 }
@@ -1585,7 +1479,6 @@ if (typeof module !== "undefined" && module.exports) {
     formatSliderBadgeValue,
     buildGoPreviewCommand,
     applyTheme,
-    getActiveThemeColors,
     getExportConfigFilename,
     applyConfigProfile,
     buildConfigExportSnapshot,
@@ -1603,7 +1496,6 @@ if (typeof module !== "undefined" && module.exports) {
       activeConfigProfileName = null;
       customConfigProfiles = [];
       activePopoverMode = null;
-      activeThemeCustomColors = null;
     }
   };
 }

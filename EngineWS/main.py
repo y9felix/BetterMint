@@ -89,11 +89,29 @@ def validate_websocket_handshake(connection: ServerConnection, request):
         return connection.respond(HTTPStatus.FORBIDDEN, "Forbidden\n")
     return None
 
+def iter_uci_lines(uci_payload: str):
+    for raw_line in uci_payload.replace("\r", "\n").split("\n"):
+        clean_line = raw_line.strip()
+        if clean_line:
+            yield clean_line
+
 class EngineProcess:
     def __init__(self, command: list[str]):
         self.command = command
         self._process = None
         self._has_sent_quit = False
+
+    @property
+    def has_sent_quit(self) -> bool:
+        return self._has_sent_quit
+
+    @property
+    def exit_code(self) -> int | None:
+        return self._process.returncode if self._process else None
+
+    @property
+    def stderr(self):
+        return self._process.stderr if self._process else None
 
     async def start(self):
         self._process = await asyncio.create_subprocess_exec(
@@ -104,14 +122,13 @@ class EngineProcess:
         )
         return self
 
-    def _write_uci_lines(self, uci_payload: str) -> bool:
+    def _write_uci_lines(self, uci_lines) -> bool:
         if not self._process or not self._process.stdin or self._process.returncode is not None or self._has_sent_quit:
             return False
         has_written = False
-        for raw_line in uci_payload.replace("\r", "\n").split("\n"):
-            clean_line = raw_line.strip()
-            if not clean_line or self._has_sent_quit:
-                continue
+        for clean_line in uci_lines:
+            if self._has_sent_quit:
+                break
             lower_line = " ".join(clean_line.lower().split())
             if lower_line.startswith("setoption ") and ("debug log file" in lower_line or "logfile" in lower_line):
                 continue
@@ -125,7 +142,7 @@ class EngineProcess:
         return has_written
 
     async def send_uci(self, uci_payload: str):
-        if self._write_uci_lines(uci_payload):
+        if self._write_uci_lines(iter_uci_lines(uci_payload)):
             try:
                 await self._process.stdin.drain()
             except OSError:
@@ -144,7 +161,7 @@ class EngineProcess:
             return
         try:
             if not self._has_sent_quit:
-                self._write_uci_lines("quit")
+                self._write_uci_lines(("quit",))
             if self._process.returncode is None:
                 self._process.terminate()
         except OSError:
@@ -222,10 +239,7 @@ async def serve_engine_websocket(
                     if IS_VERBOSE_UCI_LOGGING:
                         escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
                         print(f"[UCI IN] {escaped_message}", flush=True)
-                    for raw_line in uci_message.replace("\r", "\n").split("\n"):
-                        clean_line = raw_line.strip()
-                        if not clean_line:
-                            continue
+                    for clean_line in iter_uci_lines(uci_message):
                         lower_line = " ".join(clean_line.lower().split())
                         if lower_line == "ucinewgame":
                             board_state.reset()
@@ -267,10 +281,10 @@ async def serve_engine_websocket(
         async def log_engine_stderr():
             nonlocal last_stderr_line
             try:
-                subprocess_handle = getattr(engine_process, "_process", None)
-                if not subprocess_handle or not subprocess_handle.stderr:
+                stderr_stream = engine_process.stderr
+                if not stderr_stream:
                     return
-                while stderr_bytes := await subprocess_handle.stderr.readline():
+                while stderr_bytes := await stderr_stream.readline():
                     stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
                     if stderr_text:
                         last_stderr_line = stderr_text
@@ -297,11 +311,10 @@ async def serve_engine_websocket(
                 if not task.done():
                     task.cancel()
             await asyncio.gather(ingress_task, egress_task, stderr_task, return_exceptions=True)
-            had_sent_quit = getattr(engine_process, "_has_sent_quit", False)
+            had_sent_quit = engine_process.has_sent_quit
             engine_process.terminate()
             await engine_process.wait_until_closed()
-            subprocess_handle = getattr(engine_process, "_process", None)
-            exit_code = getattr(subprocess_handle, "returncode", None) if subprocess_handle else None
+            exit_code = engine_process.exit_code
             if (
                 isinstance(exit_code, int)
                 and exit_code != 0

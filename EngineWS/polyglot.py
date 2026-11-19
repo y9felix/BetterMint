@@ -268,17 +268,12 @@ class PolyglotBoard:
         if len(tokens) < 2 or tokens[0].lower() != "position":
             return False
         mode = tokens[1].lower()
-        moves_index = None
-        for index in range(2, len(tokens)):
-            if tokens[index].lower() == "moves":
-                moves_index = index
-                break
+        moves_index = next((i for i in range(2, len(tokens)) if tokens[i].lower() == "moves"), None)
 
         if mode == "startpos":
             self.set_fen(STARTPOS_FEN)
         elif mode == "fen":
-            fen_end = moves_index if moves_index is not None else len(tokens)
-            fen_text = " ".join(tokens[2:fen_end])
+            fen_text = " ".join(tokens[2:moves_index])
             if not self.set_fen(fen_text):
                 return False
         else:
@@ -326,10 +321,10 @@ class PolyglotBoard:
         promotion_code = (raw_move >> 12) & 0x7
 
         from_square = from_rank * 8 + from_file
-        if self.squares[from_square] in ("K", "k") and from_file == 4 and from_rank == to_rank:
-            if (from_rank == 0 or from_rank == 7) and to_file == 7:
+        if self.squares[from_square] in ("K", "k") and from_file == 4 and from_rank == to_rank and from_rank in (0, 7):
+            if to_file == 7:
                 to_file = 6
-            elif (from_rank == 0 or from_rank == 7) and to_file == 0:
+            elif to_file == 0:
                 to_file = 2
 
         promotion_suffix = PROMOTION_PIECES[promotion_code] if promotion_code < len(PROMOTION_PIECES) else ""

@@ -11,7 +11,9 @@ const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
 const ENGINE_STOP_TIMEOUT_MS = 1000;
 const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
+const DEFAULT_SEARCH_DEPTH = 3;
 const STANDARD_STARTPOS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const UCI_MOVE_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
 let nextOptionsRequestId = 0;
 
@@ -229,7 +231,7 @@ function isStandardStartposFen(fen) {
 function formatMoveToUci(moveRecord) {
   if (typeof moveRecord === "string") {
     const uciToken = moveRecord.trim().toLowerCase();
-    return /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uciToken) ? uciToken : null;
+    return UCI_MOVE_RE.test(uciToken) ? uciToken : null;
   }
   if (!moveRecord || typeof moveRecord !== "object") return null;
   const fromSquare =
@@ -1141,35 +1143,19 @@ class UciEngineClient {
 
   constructor(extension) {
     this.extension = extension;
-    this.isEngineLoaded = false;
-    this.isEngineReady = false;
-    this.isEvaluating = false;
-    this.hasRequestedStop = false;
-    this.isFinishingSearch = false;
     this.infiniteSearchTimeoutId = null;
-    this.isInfiniteSearchActive = false;
-    this.evalStabilityHistory = [];
-    this.readyCallbacks = [];
-    this.stopCompletionCallbacks = [];
     this.stopFallbackTimeoutId = null;
     this.candidateMoves = [];
     this.hasUnsortedCandidateMoves = false;
     this.previousPositionCandidateMoves = [];
-    this.currentPositionBookMoves = new Set();
-    this.previousPositionBookMoves = new Set();
-    this.hasCurrentPositionBookHit = false;
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
-    this.searchDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
     this.currentEngineUrl = getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl);
     this.targetEngineUrl = this.currentEngineUrl;
     this.isSwitchingEngine = false;
     this.onEngineSwitchedCallback = null;
     this.supportedUciOptions = new Set();
     this.uciOptionDefaults = new Map();
-    this.appliedUciOptions = {};
-    this.pendingReadyCount = 0;
-    this.hasSentIsReady = false;
     this.uciOptionOverrides = Object.assign(
       {},
       extension?.extensionOptions?.customEngineOptions
@@ -1179,8 +1165,7 @@ class UciEngineClient {
     this.reconnectAttempts = 0;
     this.reconnectTimerId = null;
     this.fatalErrorMessage = null;
-    this.staleBestMovesToIgnore = 0;
-    this.pendingPositionUpdate = null;
+    this.resetSessionState();
 
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("focus", () => this.reconnectNow());
@@ -1196,6 +1181,31 @@ class UciEngineClient {
     this.initializeWebSocket(this.currentEngineUrl);
   }
 
+  resetSessionState({ clearCallbacks = true } = {}) {
+    this.clearInfiniteSearchGuards();
+    this.isEngineLoaded = false;
+    this.isEngineReady = false;
+    this.pendingReadyCount = 0;
+    this.hasSentIsReady = false;
+    this.appliedUciOptions = {};
+    this.isEvaluating = false;
+    this.hasRequestedStop = false;
+    this.isFinishingSearch = false;
+    this.staleBestMovesToIgnore = 0;
+    this.currentPositionBookMoves = new Set();
+    this.previousPositionBookMoves = new Set();
+    this.hasCurrentPositionBookHit = false;
+    if (clearCallbacks) {
+      this.pendingPositionUpdate = null;
+      this.readyCallbacks = [];
+      this.stopCompletionCallbacks = [];
+      if (this.stopFallbackTimeoutId !== null) {
+        clearTimeout(this.stopFallbackTimeoutId);
+        this.stopFallbackTimeoutId = null;
+      }
+    }
+  }
+
   initializeWebSocket(engineUrl) {
     try {
       this.websocket = new WebSocket(engineUrl);
@@ -1208,15 +1218,7 @@ class UciEngineClient {
     const activeSocket = this.websocket;
     activeSocket.addEventListener("open", () => {
       if (this.websocket !== activeSocket) return;
-      this.isEngineLoaded = false;
-      this.isEngineReady = false;
-      this.pendingReadyCount = 0;
-      this.hasSentIsReady = false;
-      this.appliedUciOptions = {};
-      this.staleBestMovesToIgnore = 0;
-      this.currentPositionBookMoves = new Set();
-      this.previousPositionBookMoves = new Set();
-      this.hasCurrentPositionBookHit = false;
+      this.resetSessionState({ clearCallbacks: false });
       this.sendUciCommand("uci");
       this.onReady(() => {
         this.isEngineReady = false;
@@ -1286,27 +1288,12 @@ class UciEngineClient {
           console.warn("[BetterMint] Failed to close previous engine WebSocket:", closeError);
         }
       }
-      this.clearInfiniteSearchGuards();
       this.currentEngineUrl = nextEngineUrl;
-      this.isEvaluating = false;
-      this.hasRequestedStop = false;
-      this.isFinishingSearch = false;
-      this.isEngineReady = false;
-      this.isEngineLoaded = false;
-      this.pendingReadyCount = 0;
-      this.hasSentIsReady = false;
       this.fatalErrorMessage = null;
-      this.staleBestMovesToIgnore = 0;
-      this.pendingPositionUpdate = null;
-      this.readyCallbacks = [];
-      this.stopCompletionCallbacks = [];
       this.isSwitchingEngine = false;
-      this.currentPositionBookMoves = new Set();
-      this.previousPositionBookMoves = new Set();
-      this.hasCurrentPositionBookHit = false;
+      this.resetSessionState();
       this.supportedUciOptions = new Set();
       this.uciOptionDefaults = new Map();
-      this.appliedUciOptions = {};
       this.onEngineSwitchedCallback = () => {
         const gameController = this.extension?.gameController;
         if (gameController && gameController.chessComGame?.getMode?.() !== "gameOver") {
@@ -1350,7 +1337,7 @@ class UciEngineClient {
       const seenMoves = new Set();
       const legalMoves = this.extension?.gameController?.chessComGame?.getLegalMoves?.();
       for (const moveToken of rawSearchMovesText.toLowerCase().split(/\s+/)) {
-        if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(moveToken) || seenMoves.has(moveToken)) {
+        if (!UCI_MOVE_RE.test(moveToken) || seenMoves.has(moveToken)) {
           continue;
         }
         if (Array.isArray(legalMoves)) {
@@ -1375,10 +1362,7 @@ class UciEngineClient {
     }
 
     const commandParts = ["go"];
-    const depth =
-      this.searchDepth !== undefined
-        ? this.searchDepth
-        : getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
+    const depth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, DEFAULT_SEARCH_DEPTH);
     const movetimeMs = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMovetime, 0);
     const nodeLimit = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoNodes, 0);
     const mateDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMate, 0);
@@ -1511,26 +1495,7 @@ class UciEngineClient {
   }
 
   handleDisconnect() {
-    this.clearInfiniteSearchGuards();
-    this.isEngineReady = false;
-    this.isEngineLoaded = false;
-    this.pendingReadyCount = 0;
-    this.hasSentIsReady = false;
-    this.appliedUciOptions = {};
-    this.isEvaluating = false;
-    this.hasRequestedStop = false;
-    this.isFinishingSearch = false;
-    this.staleBestMovesToIgnore = 0;
-    this.pendingPositionUpdate = null;
-    this.currentPositionBookMoves = new Set();
-    this.previousPositionBookMoves = new Set();
-    this.hasCurrentPositionBookHit = false;
-    this.readyCallbacks = [];
-    this.stopCompletionCallbacks = [];
-    if (this.stopFallbackTimeoutId !== null) {
-      clearTimeout(this.stopFallbackTimeoutId);
-      this.stopFallbackTimeoutId = null;
-    }
+    this.resetSessionState();
     this.attemptReconnect();
   }
 
@@ -1724,10 +1689,6 @@ class UciEngineClient {
   }
 
   applyExtensionOptions(optionUpdates = {}) {
-    if (Object.prototype.hasOwnProperty.call(optionUpdates, EXTENSION_OPTION_KEY.Depth)) {
-      this.searchDepth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 15);
-    }
-
     const nextEngineUrl = optionUpdates[EXTENSION_OPTION_KEY.EngineWebSocketUrl];
     if (nextEngineUrl && nextEngineUrl !== (this.targetEngineUrl || this.currentEngineUrl)) {
       this.uciOptionOverrides =
@@ -1883,7 +1844,7 @@ class UciEngineClient {
         .toLowerCase()
         .split(/\s+/);
       for (const bookMoveToken of bookMoveTokens) {
-        if (/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(bookMoveToken)) {
+        if (UCI_MOVE_RE.test(bookMoveToken)) {
           this.currentPositionBookMoves.add(bookMoveToken);
         }
       }
