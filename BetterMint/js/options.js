@@ -573,16 +573,6 @@ function setEngineOptionsStatusMessage(
   containerElement.setAttribute?.("aria-busy", String(Boolean(isLoading)));
   containerElement.innerHTML = "";
 
-  if (isLoading) {
-    const skeletonWrapper = createDomElement("div", { className: "uci-skeleton" }, [
-      createDomElement("div", { className: "skeleton-line is-medium" }),
-      createDomElement("div", { className: "skeleton-line" }),
-      createDomElement("div", { className: "skeleton-line is-short" })
-    ]);
-    skeletonWrapper.setAttribute?.("aria-hidden", "true");
-    containerElement.appendChild(skeletonWrapper);
-  }
-
   const statusTextElement = createDomElement("span", {
     className: "status-text",
     textContent: statusMessage
@@ -1057,12 +1047,11 @@ function renderSavedConfigList() {
   });
 }
 
-function clearConfigSaveError() {
-  const saveErrorElement = document.getElementById("config-save-error");
+function updateConfigSaveButtonState() {
+  const saveButton = document.getElementById("config-save-confirm");
   const profileNameInput = document.getElementById("config-save-name");
-  saveErrorElement?.classList?.add("hidden");
-  profileNameInput?.removeAttribute?.("aria-invalid");
-  profileNameInput?.removeAttribute?.("aria-describedby");
+  if (!saveButton) return;
+  saveButton.disabled = !profileNameInput?.value?.trim();
 }
 
 function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
@@ -1076,7 +1065,6 @@ function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
   if (!popoverElement) return;
 
   popoverElement.classList?.toggle("hidden", !isConfigPopoverOpen);
-  clearConfigSaveError();
 
   if (isConfigPopoverOpen) {
     loadConfigStorageState(() => {
@@ -1085,6 +1073,7 @@ function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
         profileNameInput.value = activeConfigProfileName || "";
         profileNameInput.focus?.();
       }
+      updateConfigSaveButtonState();
       renderSavedConfigList();
     });
   } else if (shouldRestoreFocus) {
@@ -1130,20 +1119,9 @@ function loadConfigStorageState(onLoaded) {
 
 function handleSaveProfileSubmit() {
   const profileNameInput = document.getElementById("config-save-name");
-  const saveErrorElement = document.getElementById("config-save-error");
   const profileName = profileNameInput?.value?.trim() || "";
-  if (!profileName) {
-    if (saveErrorElement) {
-      saveErrorElement.textContent = "Enter a config name.";
-      saveErrorElement.classList?.remove("hidden");
-    }
-    profileNameInput?.setAttribute?.("aria-invalid", "true");
-    profileNameInput?.setAttribute?.("aria-describedby", "config-save-error");
-    profileNameInput?.focus?.();
-    return;
-  }
+  if (!profileName) return;
 
-  clearConfigSaveError();
   flushPendingUciOptions();
   const extensionOptions = readExtensionOptionsFromDom();
   loadConfigStorageState((storageState) => {
@@ -1170,13 +1148,14 @@ function initializeConfigSystem() {
   document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveProfileSubmit);
 
   const profileNameInput = document.getElementById("config-save-name");
-  profileNameInput?.addEventListener("input", clearConfigSaveError);
+  profileNameInput?.addEventListener("input", updateConfigSaveButtonState);
   profileNameInput?.addEventListener("keydown", (keyEvent) => {
     if (keyEvent?.key === "Enter") {
       keyEvent.preventDefault?.();
       handleSaveProfileSubmit();
     }
   });
+  updateConfigSaveButtonState();
 
   document.addEventListener?.("click", (clickEvent) => {
     if (!isConfigPopoverOpen) return;
