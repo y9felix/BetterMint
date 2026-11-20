@@ -1067,6 +1067,7 @@ function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
 
   if (isConfigPopoverOpen) {
     loadConfigStorageState(() => {
+      if (!isConfigPopoverOpen) return;
       const profileNameInput = document.getElementById("config-save-name");
       if (profileNameInput) {
         profileNameInput.value = activeConfigProfileName || "";

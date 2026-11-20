@@ -151,14 +151,16 @@ function getNonNegativeIntOption(optionKey, fallbackValue = 0) {
 
 function resolveLegalMove(legalMoves, candidateMove) {
   if (!Array.isArray(legalMoves) || !candidateMove) return null;
+  const candidatePromotion =
+    typeof candidateMove.promotion === "string" ? candidateMove.promotion.toLowerCase() : "";
   return (
     legalMoves.find(
       (legalMove) =>
         legalMove.from === candidateMove.from &&
         legalMove.to === candidateMove.to &&
-        (!candidateMove.promotion ||
+        (!candidatePromotion ||
           !legalMove.promotion ||
-          legalMove.promotion === candidateMove.promotion)
+          String(legalMove.promotion).toLowerCase() === candidatePromotion)
     ) || null
   );
 }
@@ -378,6 +380,7 @@ class GameController {
         }, 100);
       } else if (modeEvent?.data === "gameOver") {
         this.clearAutoMoveTimer();
+        this.extension?.engineClient?.stopEvaluation?.();
         this.removeCurrentHintMarkings();
         this.handleGameOver();
       }
@@ -500,15 +503,16 @@ class GameController {
   }
 
   setupAutoQueueObserver() {
-    if (this.autoQueueMutationObserver) {
-      if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) {
+      this.clearGameOverRetryInterval();
+      if (this.autoQueueMutationObserver) {
         this.autoQueueMutationObserver.disconnect();
         this.autoQueueMutationObserver = null;
       }
       return;
     }
 
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return;
+    if (this.autoQueueMutationObserver) return;
     const observeRoot =
       typeof document !== "undefined" ? document.body || document.documentElement : null;
     if (!observeRoot) return;
@@ -707,7 +711,14 @@ class GameController {
 
     let lastLayoutSignature = "";
     const syncEvalBarPosition = () => {
-      if (!this.evalBarElement || !this.chessboardElement?.isConnected) return;
+      if (!this.evalBarElement) return;
+      if (!this.chessboardElement?.isConnected) {
+        if (lastLayoutSignature !== "none") {
+          this.evalBarElement.style.display = "none";
+          lastLayoutSignature = "none";
+        }
+        return;
+      }
       const boardRect = measureBoardRect();
       if (
         boardRect.width < 50 ||
@@ -1017,7 +1028,7 @@ class UciEngineClient {
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
   static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
   static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
-  static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\))/;
+  static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\)|0000)/;
 
   static parseUciOptionLine(uciLine) {
     if (typeof uciLine !== "string") return null;
@@ -1053,7 +1064,9 @@ class UciEngineClient {
     this.previousPositionCandidateMoves = [];
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
-    this.currentEngineUrl = getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl);
+    this.currentEngineUrl =
+      extension?.extensionOptions?.[EXTENSION_OPTION_KEY.EngineWebSocketUrl] ||
+      getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl);
     this.targetEngineUrl = this.currentEngineUrl;
     this.isSwitchingEngine = false;
     this.supportedUciOptions = new Map();
@@ -1087,6 +1100,7 @@ class UciEngineClient {
     this.isEngineReady = false;
     this.pendingReadyCount = 0;
     this.hasSentIsReady = false;
+    this.supportedUciOptions.clear();
     this.appliedUciOptions = {};
     this.isEvaluating = false;
     this.hasRequestedStop = false;
@@ -1106,8 +1120,15 @@ class UciEngineClient {
   }
 
   initializeWebSocket(engineUrl) {
+    const trimmedUrl = typeof engineUrl === "string" ? engineUrl.trim() : "";
+    if (!/^wss?:\/\//i.test(trimmedUrl)) {
+      if (trimmedUrl) {
+        console.error("Failed to initialize WebSocket: Invalid WebSocket URL:", trimmedUrl);
+      }
+      return;
+    }
     try {
-      this.websocket = new WebSocket(engineUrl);
+      this.websocket = new WebSocket(trimmedUrl);
     } catch (socketError) {
       console.error("Failed to initialize WebSocket:", socketError);
       this.handleDisconnect();
@@ -1176,7 +1197,6 @@ class UciEngineClient {
       this.fatalErrorMessage = null;
       this.isSwitchingEngine = false;
       this.resetSessionState();
-      this.supportedUciOptions = new Map();
       this.initializeWebSocket(nextEngineUrl);
     });
   }
@@ -1414,7 +1434,12 @@ class UciEngineClient {
 
     if (typeof optionUpdates.uciButton === "string" && optionUpdates.uciButton.length > 0) {
       const buttonOptionName = optionUpdates.uciButton;
-      this.stopEvaluation(() => {
+      const applyButtonWhenIdle = () => {
+        if (this.isSwitchingEngine) return;
+        if (this.isEvaluating) {
+          this.stopEvaluation(applyButtonWhenIdle);
+          return;
+        }
         if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(buttonOptionName)) {
           this.sendUciCommand(`setoption name ${buttonOptionName}`);
           this.markEngineUnready();
@@ -1422,19 +1447,26 @@ class UciEngineClient {
         if (this.extension && this.extension.gameController) {
           this.extension.gameController.updateEnginePosition(false);
         }
-      });
+      };
+      this.stopEvaluation(applyButtonWhenIdle);
       return;
     }
 
     const incomingUciOverrides = optionUpdates.customEngineOptions;
     if (incomingUciOverrides && typeof incomingUciOverrides === "object") {
       this.uciOptionOverrides = Object.assign({}, incomingUciOverrides);
-      this.stopEvaluation(() => {
+      const applyOverridesWhenIdle = () => {
+        if (this.isSwitchingEngine) return;
+        if (this.isEvaluating) {
+          this.stopEvaluation(applyOverridesWhenIdle);
+          return;
+        }
         this.applyUciOptions(this.uciOptionOverrides);
         if (this.extension && this.extension.gameController) {
           this.extension.gameController.updateEnginePosition(false);
         }
-      });
+      };
+      this.stopEvaluation(applyOverridesWhenIdle);
       return;
     }
 
@@ -1610,7 +1642,11 @@ class UciEngineClient {
         completionCallbacks.forEach((completionCallback) => completionCallback());
 
         const bestUciMove = bestMoveMatch[1];
-        if (!hadRequestedStop && bestUciMove !== "(none)") {
+        const isNullBestMove =
+          bestUciMove === "(none)" ||
+          bestUciMove === "0000" ||
+          bestUciMove.slice(0, 2) === bestUciMove.slice(2, 4);
+        if (!hadRequestedStop && !isNullBestMove) {
           const existingIndex = this.candidateMoves.findIndex(
             (candidate) => candidate.uciMove === bestUciMove
           );
@@ -1826,8 +1862,15 @@ class UciEngineClient {
 class BetterMintExtension {
   constructor(chessboardElement, initialExtensionOptions) {
     this.extensionOptions = Object.assign({}, initialExtensionOptions);
-    this.gameController = new GameController(this, chessboardElement);
-    this.engineClient = new UciEngineClient(this);
+    const previousExtension = activeExtension;
+    activeExtension = this;
+    try {
+      this.gameController = new GameController(this, chessboardElement);
+      this.engineClient = new UciEngineClient(this);
+    } catch (initError) {
+      activeExtension = previousExtension;
+      throw initError;
+    }
     window.addEventListener(
       "BetterMintUpdateOptions",
       (optionsEvent) => {
@@ -1919,6 +1962,13 @@ if (typeof document !== "undefined") {
     scheduleScan(() => {
       isBoardScanScheduled = false;
       if (activeBoardElement?.isConnected) return;
+      const hadDisconnectedBoard = Boolean(activeBoardElement && !activeBoardElement.isConnected);
+      if (hadDisconnectedBoard) {
+        activeBoardElement = null;
+        activeExtension?.gameController?.evalBarSyncHandler?.();
+        activeExtension?.gameController?.clearAutoMoveTimer?.();
+        activeExtension?.engineClient?.stopEvaluation?.();
+      }
       const detectedBoard = document.querySelector("wc-chess-board, chess-board");
       if (detectedBoard && detectedBoard !== activeBoardElement) {
         watchForBoardGameReady(detectedBoard);
@@ -1927,7 +1977,8 @@ if (typeof document !== "undefined") {
   };
 
   const boardObserver = new MutationObserver((mutationRecords) => {
-    if (activeBoardElement?.isConnected || !hasAddedElementMutation(mutationRecords)) return;
+    if (activeBoardElement?.isConnected) return;
+    if (!activeBoardElement && !hasAddedElementMutation(mutationRecords)) return;
     scheduleBoardScan();
   });
 
@@ -1943,6 +1994,7 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    BetterMintExtension,
     UciEngineClient,
     GameController,
     CandidateMove,
@@ -1954,6 +2006,7 @@ if (typeof module !== "undefined" && module.exports) {
     formatEvaluationDisplay,
     getEvalBarOffsetPx,
     setExtensionOptionsForTesting: (extensionOptions) => {
+      activeExtension = undefined;
       fallbackExtensionOptions = extensionOptions;
     }
   };

@@ -228,6 +228,7 @@ async def serve_engine_websocket(
                 print(f"[CONFIG WARN] Polyglot book '{book_path}' not found; running without opening book", flush=True)
 
         board_state = PolyglotBoard() if active_book_path else None
+        is_board_synced = True
         websocket_send_lock = asyncio.Lock()
 
         async def send_ws_line(text: str):
@@ -235,6 +236,7 @@ async def serve_engine_websocket(
                 await websocket.send(text)
 
         async def forward_websocket_to_engine():
+            nonlocal is_board_synced
             try:
                 async for raw_message in websocket:
                     uci_message = (
@@ -252,16 +254,18 @@ async def serve_engine_websocket(
                         lower_line = " ".join(clean_line.lower().split())
                         if lower_line == "ucinewgame":
                             board_state.reset()
+                            is_board_synced = True
                         elif lower_line.startswith("position "):
-                            board_state.apply_position_command(clean_line)
+                            is_board_synced = board_state.apply_position_command(clean_line)
                         elif lower_line == "go" or lower_line.startswith("go "):
-                            book_entries = lookup_polyglot_moves(board_state, active_book_path)
-                            book_selection = pick_book_moves(book_entries)
-                            if book_selection:
-                                selected_move, ordered_moves = book_selection
-                                await send_ws_line(f"info string book {' '.join(ordered_moves)}")
-                                await send_ws_line(f"bestmove {selected_move}")
-                                continue
+                            if is_board_synced:
+                                book_entries = lookup_polyglot_moves(board_state, active_book_path)
+                                book_selection = pick_book_moves(book_entries)
+                                if book_selection:
+                                    selected_move, ordered_moves = book_selection
+                                    await send_ws_line(f"info string book {' '.join(ordered_moves)}")
+                                    await send_ws_line(f"bestmove {selected_move}")
+                                    continue
                         await engine_process.send_uci(clean_line)
             except ConnectionClosed:
                 pass
