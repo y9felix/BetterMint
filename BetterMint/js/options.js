@@ -18,12 +18,12 @@ const THEMES = {
   black: {
     label: "Black",
     nextThemeId: "chesscom",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm1.1 1.5a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4Z"/></svg>'
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 15A7 7 0 1 0 8 1zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16"/></svg>'
   },
   chesscom: {
     label: "Chess.com",
     nextThemeId: "dark",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 1.2a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5M5.5 6.5a.65.65 0 0 0 0 1.3h.85c-.15 1.85-.8 3.35-2.05 4.45h7.4c-1.25-1.1-1.9-2.6-2.05-4.45h.85a.65.65 0 0 0 0-1.3zM3.6 13h8.8a.8.8 0 0 1 .8.8v.4a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8v-.4a.8.8 0 0 1 .8-.8"/></svg>'
+    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6.5 6.38A2.9 2.9 0 1 1 9.5 6.38C11.1 6.45 11.2 7.65 9.7 7.8C9.9 10.1 10.9 11.7 12.3 12.6C13.1 13 13.4 13.6 13.4 14.3C13.4 14.75 13.05 15 12.6 15H3.4C2.95 15 2.6 14.75 2.6 14.3C2.6 13.6 2.9 13 3.7 12.6C5.1 11.7 6.1 10.1 6.3 7.8C4.8 7.65 4.9 6.45 6.5 6.38Z"/></svg>'
   }
 };
 
