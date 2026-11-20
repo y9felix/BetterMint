@@ -1028,7 +1028,7 @@ class UciEngineClient {
   static INFO_DEPTH_RE = /\bdepth (\d+)/;
   static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
   static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
-  static BESTMOVE_RE = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?|\(none\)|0000)/;
+  static BESTMOVE_RE = /^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?|\(none\)|0000)/i;
 
   static parseUciOptionLine(uciLine) {
     if (typeof uciLine !== "string") return null;
@@ -1641,7 +1641,7 @@ class UciEngineClient {
         this.stopCompletionCallbacks = [];
         completionCallbacks.forEach((completionCallback) => completionCallback());
 
-        const bestUciMove = bestMoveMatch[1];
+        const bestUciMove = bestMoveMatch[1].toLowerCase();
         const isNullBestMove =
           bestUciMove === "(none)" ||
           bestUciMove === "0000" ||
@@ -1652,11 +1652,6 @@ class UciEngineClient {
           );
 
           if (existingIndex < 0) {
-            if (!this.hasCurrentPositionBookHit) {
-              console.warn(
-                `The engine returned the best move "${bestUciMove}" but it's not in the top move list.`
-              );
-            }
             const fallbackBestCandidate = new CandidateMove(
               bestUciMove,
               getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 1) || 1,
