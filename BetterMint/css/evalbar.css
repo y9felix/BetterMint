@@ -1,6 +1,5 @@
 .bettermint-evalbar {
     border-radius: 3px;
-    flex-shrink: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Helvetica, Arial, sans-serif;
     isolation: isolate;
     pointer-events: none;
@@ -26,7 +25,8 @@
     z-index: 0;
 }
 
-.bettermint-evalbar .bettermint-evalbar-color {
+.bettermint-evalbar .bettermint-evalbar-white {
+    background-color: #ffffff;
     bottom: 0;
     height: 100%;
     left: 0;
@@ -35,23 +35,12 @@
     width: 100%;
 }
 
-.bettermint-evalbar .bettermint-evalbar-white {
-    background-color: #ffffff;
-    z-index: 2;
-}
-
-.bettermint-evalbar .bettermint-evalbar-black {
-    background-color: #403d39;
-    z-index: 1;
-}
-
 .bettermint-evalbar .bettermint-evalbar-scoreAbbreviated {
     box-sizing: border-box;
     font-size: 8.5px;
     font-weight: 600;
     line-height: 1;
     padding: 4px 0;
-    pointer-events: none;
     position: absolute;
     text-align: center;
     white-space: pre;

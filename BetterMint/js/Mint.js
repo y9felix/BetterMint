@@ -677,7 +677,7 @@ class GameController {
 
     const evalBarElement = document.createElement("div");
     evalBarElement.className = "bettermint-evalbar";
-    evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-color bettermint-evalbar-black"></div><div class="bettermint-evalbar-color bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
     documentBody.appendChild(evalBarElement);
 
     this.evalBarElement = evalBarElement;
@@ -696,7 +696,6 @@ class GameController {
         const horizontalInset = (boundingRect.width - boardSideLength) / 2;
         return {
           left: boundingRect.left + horizontalInset,
-          right: boundingRect.right - horizontalInset,
           top: boundingRect.top,
           bottom: boundingRect.bottom,
           width: boardSideLength,
@@ -1164,10 +1163,6 @@ class UciEngineClient {
     this.reconnectAttempts = 0;
     this.stopEvaluation(() => {
       if (this.targetEngineUrl !== nextEngineUrl) return;
-      if (this.stopFallbackTimeoutId !== null) {
-        clearTimeout(this.stopFallbackTimeoutId);
-        this.stopFallbackTimeoutId = null;
-      }
       if (this.websocket) {
         const previousSocket = this.websocket;
         this.websocket = null;
@@ -1869,13 +1864,10 @@ function initializeBetterMintExtension(chessboardElement) {
   if (!pendingOptionsPromise) {
     pendingOptionsPromise = requestExtensionOptions().then((loadedOptions) => {
       pendingOptionsPromise = null;
-      const targetBoardElement = pendingBoardElement || chessboardElement;
+      const targetBoardElement = pendingBoardElement;
+      pendingBoardElement = null;
       try {
-        if (activeExtension) {
-          attachBoardController(targetBoardElement);
-        } else {
-          activeExtension = new BetterMintExtension(targetBoardElement, loadedOptions);
-        }
+        activeExtension = new BetterMintExtension(targetBoardElement, loadedOptions);
       } catch (initError) {
         console.error("Failed to initialize BetterMint:", initError);
       }

@@ -126,8 +126,6 @@ class EngineProcess:
             return False
         has_written = False
         for clean_line in uci_lines:
-            if self._has_sent_quit:
-                break
             lower_line = " ".join(clean_line.lower().split())
             if lower_line.startswith("setoption ") and ("debug log file" in lower_line or "logfile" in lower_line):
                 continue
@@ -136,6 +134,7 @@ class EngineProcess:
                 has_written = True
                 if lower_line == "quit":
                     self._has_sent_quit = True
+                    break
             except OSError:
                 break
         return has_written
@@ -253,10 +252,8 @@ async def serve_engine_websocket(
                         lower_line = " ".join(clean_line.lower().split())
                         if lower_line == "ucinewgame":
                             board_state.reset()
-                            await engine_process.send_uci(clean_line)
                         elif lower_line.startswith("position "):
                             board_state.apply_position_command(clean_line)
-                            await engine_process.send_uci(clean_line)
                         elif lower_line == "go" or lower_line.startswith("go "):
                             book_entries = lookup_polyglot_moves(board_state, active_book_path)
                             book_selection = pick_book_moves(book_entries)
@@ -264,10 +261,8 @@ async def serve_engine_websocket(
                                 selected_move, ordered_moves = book_selection
                                 await send_ws_line(f"info string book {' '.join(ordered_moves)}")
                                 await send_ws_line(f"bestmove {selected_move}")
-                            else:
-                                await engine_process.send_uci(clean_line)
-                        else:
-                            await engine_process.send_uci(clean_line)
+                                continue
+                        await engine_process.send_uci(clean_line)
             except ConnectionClosed:
                 pass
             except Exception as ingress_error:

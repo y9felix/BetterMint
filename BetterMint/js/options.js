@@ -51,8 +51,7 @@ const SLIDER_VALUE_SPECS = {
   "option-clock-threshold": { offValue: 0 }
 };
 
-const EXTENSION_OPTION_KEYS =
-  typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? Object.keys(DEFAULT_EXTENSION_OPTIONS) : [];
+const EXTENSION_OPTION_KEYS = Object.keys(DEFAULT_EXTENSION_OPTION_VALUES);
 const extensionOptionInputs = {};
 
 function formatSliderBadgeValue(optionKey, rawValue) {
@@ -1091,11 +1090,7 @@ function loadConfigStorageState(onLoaded) {
 
   readChromeStorage("local", storageKeys, (storedState) => {
     if (storedState === null) {
-      onLoaded?.({
-        customConfigs: customConfigProfiles,
-        activeConfigName: activeConfigProfileName,
-        customEngineOptions: {}
-      });
+      onLoaded?.({ customEngineOptions: {} });
       return;
     }
     if (Array.isArray(storedState.customConfigs)) {
@@ -1109,11 +1104,7 @@ function loadConfigStorageState(onLoaded) {
       pendingUciOptionsWrite && pendingUciOptionsWrite.storageKey === engineStorageKey
         ? pendingUciOptionsWrite.uciOptions
         : storedUciOptions;
-    onLoaded?.({
-      customConfigs: customConfigProfiles,
-      activeConfigName: activeConfigProfileName,
-      customEngineOptions: Object.assign({}, liveUciOptions)
-    });
+    onLoaded?.({ customEngineOptions: Object.assign({}, liveUciOptions) });
   });
 }
 

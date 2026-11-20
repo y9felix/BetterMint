@@ -305,7 +305,6 @@ body.is-ready .sub-panel {
     padding: 2px 8px;
     outline: none;
     box-shadow: 0 0 0 2px var(--accent-soft);
-    user-select: text;
 }
 
 .range-slider {

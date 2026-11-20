@@ -50,9 +50,8 @@ function dispatchOptionsWithEngineSettings(extensionOptions, onReady) {
   const engineUrl = extensionOptions?.["option-url-api-stockfish"];
   const engineOptionsStorageKey = getEngineOptionsStorageKey(engineUrl);
   if (
-    engineUrl &&
-    !extensionOptions.customEngineOptions &&
     engineOptionsStorageKey &&
+    !extensionOptions.customEngineOptions &&
     chrome.runtime?.id &&
     chrome.storage?.local
   ) {
