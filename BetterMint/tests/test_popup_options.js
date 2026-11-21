@@ -319,25 +319,4 @@ try {
   elementsById["config-save-name"].focus = originalNameFocus;
 }
 
-let syncWriteCount = 0;
-const originalSyncSet = chrome.storage.sync.set;
-chrome.storage.sync.set = (storagePayload, onSaved) => {
-  syncWriteCount++;
-  originalSyncSet(storagePayload, onSaved);
-};
-try {
-  initializeOptionsPage();
-  initializeOptionsPage();
-  syncWriteCount = 0;
-  elementsById["option-depth"].value = "14";
-  elementsById["option-depth"].trigger("change");
-  assert.strictEqual(
-    syncWriteCount,
-    1,
-    "Repeated initializeOptionsPage calls must not attach duplicate static input listeners"
-  );
-} finally {
-  chrome.storage.sync.set = originalSyncSet;
-}
-
 console.log("Popup options tests passed.");

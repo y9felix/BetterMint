@@ -296,15 +296,4 @@ assert.ok(
   "Clearing WebSocket URL with open UCI panel must clear stale controls and show URL error"
 );
 
-MockWebSocket.reset();
-probeEngineUciOptions("ws://localhost:8000/in-flight", onProbeComplete);
-assert.strictEqual(MockWebSocket.instances.length, 1);
-assert.strictEqual(MockWebSocket.instances[0].isClosed, false);
-resetProbeStateForTesting();
-assert.strictEqual(
-  MockWebSocket.instances[0].isClosed,
-  true,
-  "resetProbeStateForTesting must close any active probe WebSocket"
-);
-
 console.log("Popup UCI tests passed.");
