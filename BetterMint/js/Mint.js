@@ -14,7 +14,6 @@ const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_SEARCH_DEPTH = 3;
 const STANDARD_STARTPOS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const UCI_MOVE_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
-const SQUARE_RE = /^[a-h][1-8]$/;
 
 let nextOptionsRequestId = 0;
 
@@ -176,8 +175,9 @@ function hasAddedElementMutation(mutationRecords) {
 }
 
 function isStandardStartposFen(fen) {
-  const trimmed = typeof fen === "string" ? fen.trim() : "";
-  return trimmed === "startpos" || trimmed === STANDARD_STARTPOS_FEN;
+  if (typeof fen !== "string") return false;
+  const trimmedFen = fen.trim();
+  return trimmedFen === "startpos" || trimmedFen === STANDARD_STARTPOS_FEN;
 }
 
 function formatMoveToUci(moveRecord) {
@@ -186,37 +186,57 @@ function formatMoveToUci(moveRecord) {
     return UCI_MOVE_RE.test(uciToken) ? uciToken : null;
   }
   if (!moveRecord || typeof moveRecord !== "object") return null;
-  const from = typeof moveRecord.from === "string" ? moveRecord.from.trim().toLowerCase() : "";
-  const to = typeof moveRecord.to === "string" ? moveRecord.to.trim().toLowerCase() : "";
-  const promo =
-    typeof moveRecord.promotion === "string" ? moveRecord.promotion.trim().toLowerCase() : "";
-  const uciMove = `${from}${to}${/^[qrbn]$/.test(promo) ? promo : ""}`;
-  return UCI_MOVE_RE.test(uciMove) ? uciMove : null;
+  const fromSquare =
+    typeof moveRecord.from === "string" ? moveRecord.from.trim().toLowerCase() : "";
+  const toSquare =
+    typeof moveRecord.to === "string" ? moveRecord.to.trim().toLowerCase() : "";
+  if (!/^[a-h][1-8]$/.test(fromSquare) || !/^[a-h][1-8]$/.test(toSquare)) {
+    return null;
+  }
+  let promotionPiece = "";
+  if (typeof moveRecord.promotion === "string") {
+    const trimmedPromotion = moveRecord.promotion.trim().toLowerCase();
+    if (/^[qrbn]$/.test(trimmedPromotion)) {
+      promotionPiece = trimmedPromotion;
+    }
+  }
+  return `${fromSquare}${toSquare}${promotionPiece}`;
 }
 
 function getFenPlyIndex(fen) {
   if (typeof fen !== "string") return null;
-  const trimmed = fen.trim();
-  if (trimmed === "startpos") return 0;
-  const fields = trimmed.split(/\s+/);
-  const fullMove = parseInt(fields[5], 10);
-  if (fields.length < 6 || (fields[1] !== "w" && fields[1] !== "b") || fullMove < 1 || Number.isNaN(fullMove)) {
+  const trimmedFen = fen.trim();
+  if (trimmedFen === "startpos") return 0;
+  const fenFields = trimmedFen.split(/\s+/);
+  if (fenFields.length < 6) return null;
+  const activeColor = fenFields[1];
+  const fullMoveNumber = parseInt(fenFields[5], 10);
+  if (
+    (activeColor !== "w" && activeColor !== "b") ||
+    !Number.isInteger(fullMoveNumber) ||
+    fullMoveNumber < 1
+  ) {
     return null;
   }
-  return (fullMove - 1) * 2 + (fields[1] === "b" ? 1 : 0);
+  return (fullMoveNumber - 1) * 2 + (activeColor === "b" ? 1 : 0);
 }
 
 function getFenPlyDelta(fromFen, toFen) {
   const fromPly = getFenPlyIndex(fromFen);
   const toPly = getFenPlyIndex(toFen);
-  return fromPly !== null && toPly !== null ? toPly - fromPly : null;
+  if (fromPly === null || toPly === null) return null;
+  return toPly - fromPly;
 }
 
 function extractBoardMoveHistory(chessComGame, currentFen) {
   if (!chessComGame || typeof currentFen !== "string") return null;
-  const rawMoves =
-    (typeof chessComGame.getHistory === "function" && chessComGame.getHistory()) ||
-    (typeof chessComGame.getMoves === "function" && chessComGame.getMoves());
+  let rawMoves = null;
+  if (typeof chessComGame.getHistory === "function") {
+    rawMoves = chessComGame.getHistory();
+  }
+  if (!Array.isArray(rawMoves) && typeof chessComGame.getMoves === "function") {
+    rawMoves = chessComGame.getMoves();
+  }
   if (!Array.isArray(rawMoves)) return null;
 
   const startingFen =
@@ -237,12 +257,17 @@ function extractBoardMoveHistory(chessComGame, currentFen) {
     uciMoves.push(uciMove);
   }
   const lastEntry = rawMoves[rawMoves.length - 1];
-  if (lastEntry && typeof lastEntry.fen === "string" && lastEntry.fen !== currentFen) {
+  if (
+    lastEntry &&
+    typeof lastEntry === "object" &&
+    typeof lastEntry.fen === "string" &&
+    lastEntry.fen !== currentFen
+  ) {
     return null;
   }
-  return getFenPlyDelta(startingFen, currentFen) === uciMoves.length
-    ? { anchorFen: startingFen, uciMoves }
-    : null;
+  const expectedPlyDelta = getFenPlyDelta(startingFen, currentFen);
+  if (expectedPlyDelta !== uciMoves.length) return null;
+  return { anchorFen: startingFen, uciMoves };
 }
 
 function buildUciPositionCommand(anchorFen, uciMoves = []) {
@@ -250,7 +275,9 @@ function buildUciPositionCommand(anchorFen, uciMoves = []) {
   const basePosition = isStandardStartposFen(anchorFen)
     ? "position startpos"
     : `position fen ${anchorFen.trim()}`;
-  return uciMoves.length > 0 ? `${basePosition} moves ${uciMoves.join(" ")}` : basePosition;
+  return Array.isArray(uciMoves) && uciMoves.length > 0
+    ? `${basePosition} moves ${uciMoves.join(" ")}`
+    : basePosition;
 }
 
 class CandidateMove {
@@ -270,8 +297,15 @@ class GameController {
   static AUTO_QUEUE_SELECTORS = [
     ".game-over-button-primary",
     ".game-over-button-button",
+    ".game-over-buttons-playAgain",
     '[data-action="next-game"]',
     '[data-testid="next-game"]',
+    "button.game-over-button",
+    ".game-over-modal-container button",
+    ".board-modal-container button",
+    ".game-over-modal button",
+    ".game-over-dialog button",
+    ".game-over-buttons-component button",
     ".ui_v5-button-component.ui_v5-button-primary",
     ".cc-button-primary"
   ].join(", ");
@@ -348,7 +382,7 @@ class GameController {
         this.clearAutoMoveTimer();
         this.extension?.engineClient?.stopEvaluation?.();
         this.removeCurrentHintMarkings();
-        this.syncAutoQueue(true);
+        this.handleGameOver();
       }
     });
 
@@ -377,10 +411,10 @@ class GameController {
           Boolean(this.boardOptions?.flipped)
         );
       }
-      this.syncAutoQueue();
+      this.setupAutoQueueObserver();
     });
 
-    this.syncAutoQueue();
+    this.setupAutoQueueObserver();
     this.syncPositionHistory(true);
   }
 
@@ -398,6 +432,22 @@ class GameController {
     }
   }
 
+  dispatchSimulatedClick(targetElement) {
+    const boundingRect = targetElement.getBoundingClientRect();
+    const pointerEventOptions = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: boundingRect.left + boundingRect.width / 2,
+      clientY: boundingRect.top + boundingRect.height / 2
+    };
+    targetElement.dispatchEvent(new PointerEvent("pointerdown", pointerEventOptions));
+    targetElement.dispatchEvent(new MouseEvent("mousedown", pointerEventOptions));
+    targetElement.dispatchEvent(new PointerEvent("pointerup", pointerEventOptions));
+    targetElement.dispatchEvent(new MouseEvent("mouseup", pointerEventOptions));
+    targetElement.click();
+  }
+
   triggerAutoQueue() {
     if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return false;
     if (this.chessComGame?.getMode?.() === "playing") return false;
@@ -407,48 +457,83 @@ class GameController {
     }
 
     const matchesQueueKeyword = (buttonText, shouldMatchLeadingNew) =>
-      GameController.AUTO_QUEUE_KEYWORDS.some((keyword) =>
-        keyword === "new"
-          ? (shouldMatchLeadingNew ? /^new\b/ : /\bnew\b/).test(buttonText)
-          : buttonText.includes(keyword)
-      );
+      GameController.AUTO_QUEUE_KEYWORDS.some((keyword) => {
+        if (keyword === "new") {
+          return shouldMatchLeadingNew ? /^new\b/.test(buttonText) : /\bnew\b/.test(buttonText);
+        }
+        return buttonText.includes(keyword);
+      });
 
-    const findAndClick = (selector, predicate) => {
-      for (const button of document.querySelectorAll(selector)) {
-        if (button.disabled || button.offsetWidth <= 0 || button.offsetHeight <= 0) continue;
-        const label = button.textContent?.trim().toLowerCase();
-        if (label && predicate(label)) {
+    const findAndClickMatchingButton = (buttonSelector, labelPredicate) => {
+      const candidateButtons = document.querySelectorAll(buttonSelector);
+      for (const candidateButton of candidateButtons) {
+        if (candidateButton.disabled) continue;
+        const buttonText = candidateButton.textContent?.trim().toLowerCase();
+        if (!buttonText || !labelPredicate(buttonText)) {
+          continue;
+        }
+        if (candidateButton.offsetWidth > 0 && candidateButton.offsetHeight > 0) {
           this.lastAutoQueueClickMs = nowMs;
-          button.click();
+          this.dispatchSimulatedClick(candidateButton);
           return true;
         }
       }
       return false;
     };
 
-    const genericSelector = "button:not([disabled]), [role='button']:not([disabled])";
+    const genericButtonSelector = "button:not([disabled]), [role='button']:not([disabled])";
     if (getExtensionOption(EXTENSION_OPTION_KEY.RematchFirst)) {
-      const isRematch = (text) => text.includes("rematch");
-      if (findAndClick(GameController.AUTO_QUEUE_SELECTORS, isRematch)) return true;
-      if (findAndClick(genericSelector, isRematch)) return true;
+      const isRematchButton = (buttonText) => buttonText.includes("rematch");
+      if (findAndClickMatchingButton(GameController.AUTO_QUEUE_SELECTORS, isRematchButton)) {
+        return true;
+      }
+      if (findAndClickMatchingButton(genericButtonSelector, isRematchButton)) return true;
     }
 
-    return (
-      findAndClick(GameController.AUTO_QUEUE_SELECTORS, (text) => matchesQueueKeyword(text, false)) ||
-      findAndClick(genericSelector, (text) => matchesQueueKeyword(text, true))
+    if (
+      findAndClickMatchingButton(GameController.AUTO_QUEUE_SELECTORS, (buttonText) =>
+        matchesQueueKeyword(buttonText, false)
+      )
+    ) {
+      return true;
+    }
+    return findAndClickMatchingButton(genericButtonSelector, (buttonText) =>
+      matchesQueueKeyword(buttonText, true)
     );
   }
 
-  syncAutoQueue(isGameOverEvent = false) {
+  setupAutoQueueObserver() {
     if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) {
       this.clearGameOverRetryInterval();
+      if (this.autoQueueMutationObserver) {
+        this.autoQueueMutationObserver.disconnect();
+        this.autoQueueMutationObserver = null;
+      }
       return;
     }
-    if (!isGameOverEvent && this.chessComGame?.getMode?.() !== "gameOver") return;
-    if (this.triggerAutoQueue()) {
-      this.clearGameOverRetryInterval();
-      return;
-    }
+
+    if (this.autoQueueMutationObserver) return;
+    const observeRoot =
+      typeof document !== "undefined" ? document.body || document.documentElement : null;
+    if (!observeRoot) return;
+
+    let lastScanTimestampMs = 0;
+    this.autoQueueMutationObserver = new MutationObserver((mutationRecords) => {
+      if (this.chessComGame?.getMode?.() === "playing") return;
+      if (Array.isArray(mutationRecords) && !hasAddedElementMutation(mutationRecords)) return;
+      const nowMs = Date.now();
+      if (nowMs - lastScanTimestampMs < 250) return;
+      lastScanTimestampMs = nowMs;
+      this.triggerAutoQueue();
+    });
+
+    this.autoQueueMutationObserver.observe(observeRoot, { childList: true, subtree: true });
+    this.triggerAutoQueue();
+  }
+
+  handleGameOver() {
+    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return;
+    this.setupAutoQueueObserver();
     this.clearGameOverRetryInterval();
     let attemptCount = 0;
     this.gameOverRetryIntervalId = setInterval(() => {
@@ -503,7 +588,11 @@ class GameController {
   }
 
   removeEvaluationBar() {
-    if (this.evalBarAnimationFrameId && typeof cancelAnimationFrame === "function") {
+    if (
+      this.evalBarAnimationFrameId !== null &&
+      this.evalBarAnimationFrameId !== undefined &&
+      typeof cancelAnimationFrame === "function"
+    ) {
       cancelAnimationFrame(this.evalBarAnimationFrameId);
       this.evalBarAnimationFrameId = null;
     }
@@ -538,7 +627,7 @@ class GameController {
       this.removeEvaluationBar();
     }
 
-    this.syncAutoQueue();
+    this.setupAutoQueueObserver();
     if (!getExtensionOption(EXTENSION_OPTION_KEY.ShowHints)) {
       this.removeCurrentHintMarkings();
     }
@@ -567,6 +656,10 @@ class GameController {
     }
     this.clearAutoMoveTimer();
     this.clearGameOverRetryInterval();
+    if (this.autoQueueMutationObserver) {
+      this.autoQueueMutationObserver.disconnect();
+      this.autoQueueMutationObserver = null;
+    }
   }
 
   updateEvaluationFromMove(candidateMove) {
@@ -598,14 +691,15 @@ class GameController {
     );
 
     const measureBoardRect = () => {
-      const innerBoardElement = this.chessboardElement.querySelector?.(
-        ".board, chess-board, svg.coordinates"
-      );
+      const innerBoardElement =
+        this.chessboardElement.querySelector?.(".board, chess-board, svg.coordinates") ||
+        this.chessboardElement.shadowRoot?.querySelector?.(".board, svg.coordinates");
       const boundingRect = (innerBoardElement || this.chessboardElement).getBoundingClientRect();
       if (boundingRect.width > boundingRect.height + 2 && boundingRect.height >= 50) {
         const boardSideLength = boundingRect.height;
+        const horizontalInset = (boundingRect.width - boardSideLength) / 2;
         return {
-          left: boundingRect.left + (boundingRect.width - boardSideLength) / 2,
+          left: boundingRect.left + horizontalInset,
           top: boundingRect.top,
           bottom: boundingRect.bottom,
           width: boardSideLength,
@@ -618,9 +712,15 @@ class GameController {
     let lastLayoutSignature = "";
     const syncEvalBarPosition = () => {
       if (!this.evalBarElement) return;
-      const boardRect = this.chessboardElement?.isConnected ? measureBoardRect() : null;
+      if (!this.chessboardElement?.isConnected) {
+        if (lastLayoutSignature !== "none") {
+          this.evalBarElement.style.display = "none";
+          lastLayoutSignature = "none";
+        }
+        return;
+      }
+      const boardRect = measureBoardRect();
       if (
-        !boardRect ||
         boardRect.width < 50 ||
         boardRect.height < 50 ||
         boardRect.bottom <= 0 ||
@@ -632,7 +732,9 @@ class GameController {
         }
         return;
       }
-      const offsetPx = getEvalBarOffsetPx(window.innerWidth);
+      const offsetPx = getEvalBarOffsetPx(
+        typeof window !== "undefined" ? window.innerWidth : undefined
+      );
       const topPx = Math.round(boardRect.top);
       const heightPx = Math.round(boardRect.height);
       const leftPx = Math.max(4, Math.round(boardRect.left - offsetPx));
@@ -651,7 +753,9 @@ class GameController {
         syncEvalBarPosition();
         return;
       }
-      if (this.evalBarAnimationFrameId) return;
+      if (this.evalBarAnimationFrameId !== null && this.evalBarAnimationFrameId !== undefined) {
+        return;
+      }
       this.evalBarAnimationFrameId = requestAnimationFrame(() => {
         this.evalBarAnimationFrameId = null;
         syncEvalBarPosition();
@@ -662,7 +766,12 @@ class GameController {
     if (typeof ResizeObserver !== "undefined") {
       this.evalBarResizeObserver = new ResizeObserver(scheduleSyncPosition);
       this.evalBarResizeObserver.observe(this.chessboardElement);
-      if (document.body) this.evalBarResizeObserver.observe(document.body);
+      if (this.chessboardElement.parentElement) {
+        this.evalBarResizeObserver.observe(this.chessboardElement.parentElement);
+      }
+      if (document.body) {
+        this.evalBarResizeObserver.observe(document.body);
+      }
     }
     this.evalBarSyncHandler = scheduleSyncPosition;
     window.addEventListener("scroll", scheduleSyncPosition, { passive: true, capture: true });
@@ -701,22 +810,35 @@ class GameController {
     if (boardHistory) {
       this.anchorPositionFen = boardHistory.anchorFen;
       this.recordedUciMoves = boardHistory.uciMoves;
-    } else if (!isNewGame && this.anchorPositionFen !== null) {
-      if (currentFen !== this.lastObservedFen) {
-        const plyDelta = getFenPlyDelta(this.lastObservedFen, currentFen);
-        const lastPlayedUciMove = formatMoveToUci(this.chessComGame?.getLastMove?.());
-        if (plyDelta === 1 && lastPlayedUciMove) {
-          this.recordedUciMoves.push(lastPlayedUciMove);
-        } else {
-          this.anchorPositionFen = currentFen;
-          this.recordedUciMoves = [];
-        }
-      }
-    } else {
-      this.anchorPositionFen = currentFen;
-      this.recordedUciMoves = [];
+      this.lastObservedFen = currentFen;
+      return {
+        fen: currentFen,
+        positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+      };
     }
 
+    if (!isNewGame && this.anchorPositionFen !== null && currentFen === this.lastObservedFen) {
+      return {
+        fen: currentFen,
+        positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+      };
+    }
+
+    if (!isNewGame && this.anchorPositionFen !== null && this.lastObservedFen !== null) {
+      const plyDelta = getFenPlyDelta(this.lastObservedFen, currentFen);
+      const lastPlayedUciMove = formatMoveToUci(this.chessComGame?.getLastMove?.());
+      if (plyDelta === 1 && lastPlayedUciMove) {
+        this.recordedUciMoves.push(lastPlayedUciMove);
+        this.lastObservedFen = currentFen;
+        return {
+          fen: currentFen,
+          positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
+        };
+      }
+    }
+
+    this.anchorPositionFen = currentFen;
+    this.recordedUciMoves = [];
     this.lastObservedFen = currentFen;
     return {
       fen: currentFen,
@@ -770,6 +892,8 @@ class GameController {
       if (Array.isArray(legalMoves) && legalMoves.length === 0) {
         this.removeCurrentHintMarkings();
       } else {
+        const isSquareCoordinate = (squareName) =>
+          typeof squareName === "string" && /^[a-h][1-8]$/.test(squareName);
         const arrowColors = this.boardOptions?.arrowColors || {};
         const seenMateEffectSquares = new Set();
         const nextMarkings = [];
@@ -780,10 +904,8 @@ class GameController {
           const fromSquare = resolvedMove ? resolvedMove.from : candidateMove.from;
           const toSquare = resolvedMove ? resolvedMove.to : candidateMove.to;
           if (
-            typeof fromSquare !== "string" ||
-            typeof toSquare !== "string" ||
-            !SQUARE_RE.test(fromSquare) ||
-            !SQUARE_RE.test(toSquare) ||
+            !isSquareCoordinate(fromSquare) ||
+            !isSquareCoordinate(toSquare) ||
             fromSquare === toSquare
           ) {
             return;
@@ -1299,18 +1421,6 @@ class UciEngineClient {
     });
   }
 
-  runWhenIdle(action) {
-    const executeIfIdle = () => {
-      if (this.isSwitchingEngine) return;
-      if (this.isEvaluating) {
-        this.stopEvaluation(executeIfIdle);
-        return;
-      }
-      action();
-    };
-    this.stopEvaluation(executeIfIdle);
-  }
-
   applyExtensionOptions(optionUpdates = {}) {
     const nextEngineUrl = optionUpdates[EXTENSION_OPTION_KEY.EngineWebSocketUrl];
     if (nextEngineUrl && nextEngineUrl !== (this.targetEngineUrl || this.currentEngineUrl)) {
@@ -1324,28 +1434,48 @@ class UciEngineClient {
 
     if (typeof optionUpdates.uciButton === "string" && optionUpdates.uciButton.length > 0) {
       const buttonOptionName = optionUpdates.uciButton;
-      this.runWhenIdle(() => {
+      const applyButtonWhenIdle = () => {
+        if (this.isSwitchingEngine) return;
+        if (this.isEvaluating) {
+          this.stopEvaluation(applyButtonWhenIdle);
+          return;
+        }
         if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(buttonOptionName)) {
           this.sendUciCommand(`setoption name ${buttonOptionName}`);
           this.markEngineUnready();
         }
-        this.extension?.gameController?.updateEnginePosition(false);
-      });
+        if (this.extension && this.extension.gameController) {
+          this.extension.gameController.updateEnginePosition(false);
+        }
+      };
+      this.stopEvaluation(applyButtonWhenIdle);
       return;
     }
 
     const incomingUciOverrides = optionUpdates.customEngineOptions;
     if (incomingUciOverrides && typeof incomingUciOverrides === "object") {
       this.uciOptionOverrides = Object.assign({}, incomingUciOverrides);
-      this.runWhenIdle(() => {
+      const applyOverridesWhenIdle = () => {
+        if (this.isSwitchingEngine) return;
+        if (this.isEvaluating) {
+          this.stopEvaluation(applyOverridesWhenIdle);
+          return;
+        }
         this.applyUciOptions(this.uciOptionOverrides);
-        this.extension?.gameController?.updateEnginePosition(false);
-      });
+        if (this.extension && this.extension.gameController) {
+          this.extension.gameController.updateEnginePosition(false);
+        }
+      };
+      this.stopEvaluation(applyOverridesWhenIdle);
       return;
     }
 
-    if (Object.keys(optionUpdates).some((optionKey) => SEARCH_GO_OPTION_KEYS.has(optionKey))) {
-      this.extension?.gameController?.updateEnginePosition(false);
+    const hasGoSettingsChanged = Object.keys(optionUpdates).some((optionKey) =>
+      SEARCH_GO_OPTION_KEYS.has(optionKey)
+    );
+
+    if (hasGoSettingsChanged && this.extension && this.extension.gameController) {
+      this.extension.gameController.updateEnginePosition(false);
       return;
     }
 
@@ -1354,9 +1484,11 @@ class UciEngineClient {
     } else if (
       getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
       !this.isEvaluating &&
-      this.isWebSocketOpen()
+      this.isWebSocketOpen() &&
+      this.extension &&
+      this.extension.gameController
     ) {
-      this.extension?.gameController?.updateEnginePosition(false);
+      this.extension.gameController.updateEnginePosition(false);
     }
   }
 
@@ -1608,6 +1740,7 @@ class UciEngineClient {
   }
 
   handleCandidateMoveUpdate(candidateMove = null, isBestMove = false) {
+    let hasSelectedBestMove = false;
     let hasChangedCandidates = false;
     if (candidateMove !== null) {
       const existingIndex = this.candidateMoves.findIndex(
@@ -1623,15 +1756,24 @@ class UciEngineClient {
         this.candidateMoves[existingIndex] = candidateMove;
         hasChangedCandidates = true;
       }
+      if (isBestMove) hasSelectedBestMove = true;
+    } else if (isBestMove && this.candidateMoves.length > 0) {
+      hasSelectedBestMove = true;
     }
 
     if (hasChangedCandidates) {
       this.candidateMoves.sort(UciEngineClient.compareCandidateMoves);
     }
 
-    const hasSelectedBestMove = Boolean(
-      isBestMove && (candidateMove !== null || this.candidateMoves.length > 0)
-    );
+    const multiPvCount = Math.max(1, parseInt(this.uciOptionOverrides?.["MultiPV"], 10) || 1);
+
+    if (!hasSelectedBestMove && candidateMove !== null) {
+      if (this.extension?.gameController?.renderMoveHints) {
+        this.extension.gameController.renderMoveHints(this.candidateMoves.slice(0, multiPvCount));
+      }
+      return;
+    }
+
     if (hasSelectedBestMove && candidateMove !== null) {
       const bestMoveIndex = this.candidateMoves.indexOf(candidateMove);
       if (bestMoveIndex > 0) {
@@ -1639,19 +1781,19 @@ class UciEngineClient {
         this.candidateMoves.unshift(candidateMove);
       }
     }
-
-    const multiPvCount = Math.max(1, parseInt(this.uciOptionOverrides?.["MultiPV"], 10) || 1);
     const topCandidateMoves = this.candidateMoves.slice(0, multiPvCount);
 
     if (topCandidateMoves.length > 0) {
-      this.extension?.gameController?.renderMoveHints?.(topCandidateMoves);
-    }
-    if (!hasSelectedBestMove || topCandidateMoves.length === 0) return;
+      this.extension.gameController.renderMoveHints(topCandidateMoves);
 
-    if (getExtensionOption(EXTENSION_OPTION_KEY.MoveAnalysis)) {
-      this.analyzeLastMove();
+      if (hasSelectedBestMove && getExtensionOption(EXTENSION_OPTION_KEY.MoveAnalysis)) {
+        this.analyzeLastMove();
+      }
     }
-    this.scheduleAutoMove(topCandidateMoves[0]);
+
+    if (hasSelectedBestMove && topCandidateMoves[0]) {
+      this.scheduleAutoMove(topCandidateMoves[0]);
+    }
   }
 
   scheduleAutoMove(bestCandidateMove) {

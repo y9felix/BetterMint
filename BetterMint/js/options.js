@@ -30,6 +30,15 @@ const THEMES = {
 const DEFAULT_EXTENSION_OPTION_VALUES =
   typeof DEFAULT_EXTENSION_OPTIONS !== "undefined" ? DEFAULT_EXTENSION_OPTIONS : {};
 
+let activeThemeId = "dark";
+let activeConfigProfileName = null;
+let customConfigProfiles = [];
+let isConfigPopoverOpen = false;
+let statusClearTimerId = null;
+let isThemeInitialized = false;
+let isConfigSystemInitialized = false;
+let isEnginePanelInitialized = false;
+
 const SLIDER_VALUE_SPECS = {
   "option-depth": { offValue: 0 },
   "option-go-movetime": { offValue: 0 },
@@ -42,30 +51,8 @@ const SLIDER_VALUE_SPECS = {
   "option-clock-threshold": { offValue: 0 }
 };
 
-const VISIBILITY_TOGGLE_GROUPS = [
-  ["option-auto-queue", "auto-queue-group"],
-  ["option-legit-auto-move", "pacing-group"],
-  ["option-human-like-moves", "human-pace-group"]
-];
-
-const UCI_OPTION_KEYWORDS = new Set(["default", "min", "max", "var"]);
 const EXTENSION_OPTION_KEYS = Object.keys(DEFAULT_EXTENSION_OPTION_VALUES);
-
 const extensionOptionInputs = {};
-const boundEditableBadges = new WeakSet();
-
-let activeThemeId = "dark";
-let activeConfigProfileName = null;
-let customConfigProfiles = [];
-let isConfigPopoverOpen = false;
-let statusClearTimerId = null;
-let isPageInitialized = false;
-let activeProbeSocket = null;
-let probeTimeoutTimerId = null;
-let lastProbedEngineUrl = null;
-let lastProbedUciOptions = [];
-let uciOptionsSyncTimerId = null;
-let pendingUciOptionsWrite = null;
 
 function formatSliderBadgeValue(optionKey, rawValue) {
   const numericValue = Number(rawValue);
@@ -79,15 +66,62 @@ function formatSliderBadgeValue(optionKey, rawValue) {
   return rawValue;
 }
 
+const boundEditableBadges = new WeakSet();
+const baseSliderSteps = new WeakMap();
+
+function isPlainRecord(candidate) {
+  return Boolean(candidate) && typeof candidate === "object" && !Array.isArray(candidate);
+}
+
+function getBaseSliderStep(rangeInput) {
+  if (baseSliderSteps.has(rangeInput)) return baseSliderSteps.get(rangeInput);
+  const baseStep =
+    rangeInput.step !== null && rangeInput.step !== undefined && rangeInput.step !== ""
+      ? String(rangeInput.step)
+      : "";
+  baseSliderSteps.set(rangeInput, baseStep);
+  return baseStep;
+}
+
+function restoreBaseSliderStep(rangeInput) {
+  const baseStep = getBaseSliderStep(rangeInput);
+  if (baseStep && rangeInput.step !== baseStep) {
+    rangeInput.step = baseStep;
+  }
+}
+
 function updateSliderTrackFill(rangeInput) {
-  const sliderMin = Number.isNaN(parseFloat(rangeInput.min)) ? 0 : parseFloat(rangeInput.min);
-  const sliderMax = Number.isNaN(parseFloat(rangeInput.max)) ? 100 : parseFloat(rangeInput.max);
+  if (!rangeInput?.style?.setProperty) return;
+  const parsedMin = parseFloat(rangeInput.min);
+  const parsedMax = parseFloat(rangeInput.max);
   const parsedValue = parseFloat(rangeInput.value);
+  const sliderMin = Number.isNaN(parsedMin) ? 0 : parsedMin;
+  const sliderMax = Number.isNaN(parsedMax) ? 100 : parsedMax;
   const sliderValue = Number.isNaN(parsedValue) ? sliderMin : parsedValue;
   const rangeSpan = sliderMax - sliderMin;
   const progressPercent =
     rangeSpan > 0 ? Math.min(100, Math.max(0, ((sliderValue - sliderMin) / rangeSpan) * 100)) : 0;
   rangeInput.style.setProperty("--slider-progress", `${progressPercent.toFixed(2)}%`);
+}
+
+function setSliderExactValue(rangeInput, numericValue) {
+  const baseStep = getBaseSliderStep(rangeInput);
+  const parsedMin = parseFloat(rangeInput.min);
+  const sliderMin = Number.isNaN(parsedMin) ? 0 : parsedMin;
+  const targetNumber = Number(numericValue);
+  const stepNumber = parseFloat(baseStep);
+
+  if (baseStep && Number.isFinite(targetNumber) && Number.isFinite(stepNumber) && stepNumber > 0) {
+    const stepOffset = (targetNumber - sliderMin) / stepNumber;
+    const isStepAligned = Math.abs(stepOffset - Math.round(stepOffset)) < 1e-9;
+    if (isStepAligned) {
+      rangeInput.step = baseStep;
+    } else {
+      rangeInput.step = Number.isInteger(targetNumber) && Number.isInteger(sliderMin) ? "1" : "any";
+    }
+  }
+  rangeInput.value = String(numericValue);
+  updateSliderTrackFill(rangeInput);
 }
 
 function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
@@ -103,30 +137,30 @@ function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
     if (!Number.isFinite(parsedNumber)) return null;
   }
 
-  const sliderMin = Number.isNaN(parseFloat(rangeInput.min)) ? 0 : parseFloat(rangeInput.min);
-  const sliderMax = Number.isNaN(parseFloat(rangeInput.max)) ? 100 : parseFloat(rangeInput.max);
-  const clamped = Math.min(sliderMax, Math.max(sliderMin, parsedNumber));
+  const parsedMin = parseFloat(rangeInput.min);
+  const parsedMax = parseFloat(rangeInput.max);
+  const sliderMin = Number.isNaN(parsedMin) ? 0 : parsedMin;
+  const sliderMax = Number.isNaN(parsedMax) ? 100 : parsedMax;
+  const clampedNumber = Math.min(sliderMax, Math.max(sliderMin, parsedNumber));
 
-  const stepText = String(rangeInput.step || "");
-  const stepNumber = parseFloat(stepText);
-  const snapped =
-    Number.isFinite(stepNumber) && stepNumber > 0
-      ? Math.min(sliderMax, Math.max(sliderMin, sliderMin + Math.round((clamped - sliderMin) / stepNumber) * stepNumber))
-      : clamped;
-  const decimalIndex = stepText.indexOf(".");
-  const decimals = decimalIndex === -1 ? 0 : stepText.length - decimalIndex - 1;
-  return decimals > 0 ? Number(snapped.toFixed(decimals)) : Math.round(snapped);
+  const stepText = getBaseSliderStep(rangeInput);
+  const decimalPointIndex = stepText.indexOf(".");
+  const decimalPlaces = decimalPointIndex === -1 ? 0 : stepText.length - decimalPointIndex - 1;
+  return decimalPlaces > 0 ? Number(clampedNumber.toFixed(decimalPlaces)) : Math.round(clampedNumber);
 }
 
 function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, onCommit } = {}) {
   if (!badgeElement || !rangeInput || boundEditableBadges.has(badgeElement)) return;
   boundEditableBadges.add(badgeElement);
+  getBaseSliderStep(rangeInput);
+  rangeInput.addEventListener("pointerdown", () => restoreBaseSliderStep(rangeInput));
+  rangeInput.addEventListener("keydown", () => restoreBaseSliderStep(rangeInput));
   badgeElement.title = "Click to edit";
 
   badgeElement.addEventListener("click", (clickEvent) => {
-    clickEvent.stopPropagation?.();
+    clickEvent?.stopPropagation?.();
     const headerElement = badgeElement.parentNode;
-    if (!headerElement || badgeElement.classList.contains("hidden")) return;
+    if (!headerElement || badgeElement.classList?.contains("hidden")) return;
 
     const inlineEditor = createDomElement("input", {
       type: "text",
@@ -135,13 +169,14 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
       spellcheck: false,
       autocomplete: "off"
     });
-    inlineEditor.setAttribute("inputmode", "decimal");
-    inlineEditor.setAttribute("aria-label", badgeElement.getAttribute("aria-label") || "Edit value");
+    inlineEditor.setAttribute?.("inputmode", "decimal");
+    const editLabel = badgeElement.getAttribute?.("aria-label") || "Edit value";
+    inlineEditor.setAttribute?.("aria-label", editLabel);
 
-    badgeElement.classList.add("hidden");
+    badgeElement.classList?.add("hidden");
     headerElement.appendChild(inlineEditor);
-    inlineEditor.focus();
-    inlineEditor.select();
+    inlineEditor.focus?.();
+    inlineEditor.select?.();
 
     let hasFinishedEdit = false;
     const finishEdit = (shouldCommit, shouldRestoreFocus = false) => {
@@ -150,25 +185,26 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
       if (shouldCommit) {
         const committedNumber = parseAndClampSliderInput(rangeInput, inlineEditor.value, optionKey);
         if (committedNumber !== null) {
-          rangeInput.value = String(committedNumber);
-          updateSliderTrackFill(rangeInput);
+          setSliderExactValue(rangeInput, committedNumber);
           badgeElement.textContent = optionKey
             ? formatSliderBadgeValue(optionKey, rangeInput.value)
             : String(rangeInput.value);
           onCommit?.(committedNumber);
         }
       }
-      inlineEditor.remove();
-      badgeElement.classList.remove("hidden");
-      if (shouldRestoreFocus) badgeElement.focus();
+      inlineEditor.remove?.();
+      badgeElement.classList?.remove("hidden");
+      if (shouldRestoreFocus) {
+        badgeElement.focus?.();
+      }
     };
 
     inlineEditor.addEventListener("keydown", (keyEvent) => {
-      if (keyEvent.key === "Enter") {
+      if (keyEvent?.key === "Enter") {
         keyEvent.preventDefault?.();
         keyEvent.stopPropagation?.();
         finishEdit(true, true);
-      } else if (keyEvent.key === "Escape") {
+      } else if (keyEvent?.key === "Escape") {
         keyEvent.preventDefault?.();
         keyEvent.stopPropagation?.();
         finishEdit(false, true);
@@ -181,15 +217,16 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
 function applyTheme(themeId) {
   const resolvedThemeId = THEMES[themeId] ? themeId : "dark";
   activeThemeId = resolvedThemeId;
-  if (document.documentElement) {
-    document.documentElement.dataset.theme = resolvedThemeId;
+  const rootElement = document.documentElement;
+  if (rootElement) {
+    rootElement.dataset.theme = resolvedThemeId;
   }
   const themeToggleButton = document.getElementById("theme-toggle");
   if (themeToggleButton) {
     const themeMetadata = THEMES[resolvedThemeId];
     themeToggleButton.innerHTML = themeMetadata.iconSvg;
     themeToggleButton.title = `Theme: ${themeMetadata.label}`;
-    themeToggleButton.setAttribute("aria-label", `Theme: ${themeMetadata.label}`);
+    themeToggleButton.setAttribute?.("aria-label", `Theme: ${themeMetadata.label}`);
   }
 }
 
@@ -200,8 +237,93 @@ function getDefaultThemeId() {
   return "dark";
 }
 
-function scrollExpandedElementIntoView(targetElement) {
-  targetElement?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+function initializeTheme() {
+  applyTheme(getDefaultThemeId());
+  readChromeStorage("local", ["theme"], (storedThemeState) => {
+    if (storedThemeState?.theme) {
+      applyTheme(storedThemeState.theme);
+    }
+  });
+  if (isThemeInitialized) return;
+  isThemeInitialized = true;
+  document.getElementById("theme-toggle")?.addEventListener("click", () => {
+    const nextThemeId = THEMES[activeThemeId]?.nextThemeId || "dark";
+    applyTheme(nextThemeId);
+    writeChromeStorage("local", { theme: nextThemeId });
+  });
+}
+
+const VISIBILITY_TOGGLE_GROUPS = [
+  ["option-auto-queue", "auto-queue-group"],
+  ["option-legit-auto-move", "pacing-group"],
+  ["option-human-like-moves", "human-pace-group"]
+];
+
+const EXPAND_SCROLL_DURATION_MS = 260;
+const EXPAND_SCROLL_PADDING_PX = 10;
+let activeExpandScrollFrameId = null;
+let stopActiveExpandScroll = null;
+
+function scrollExpandedElementIntoView(targetElement, anchorElement = null) {
+  if (!targetElement?.getBoundingClientRect || typeof document === "undefined") return;
+  const scrollContainer = document.querySelector?.(".settings-container");
+  if (!scrollContainer?.getBoundingClientRect) return;
+
+  stopActiveExpandScroll?.();
+
+  const topElement = anchorElement?.getBoundingClientRect ? anchorElement : targetElement;
+
+  const alignTarget = () => {
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = targetElement.getBoundingClientRect();
+    const topRect = topElement.getBoundingClientRect();
+    const overflowBottom = targetRect.bottom - containerRect.bottom + EXPAND_SCROLL_PADDING_PX;
+    if (overflowBottom <= 0) return;
+    const maxTopHeadroom = Math.max(0, topRect.top - containerRect.top - EXPAND_SCROLL_PADDING_PX);
+    const scrollDelta = Math.min(overflowBottom, maxTopHeadroom);
+    if (scrollDelta > 0) {
+      scrollContainer.scrollTop += scrollDelta;
+    }
+  };
+
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (prefersReducedMotion || typeof requestAnimationFrame !== "function") {
+    alignTarget();
+    return;
+  }
+
+  const cleanupTracking = () => {
+    if (activeExpandScrollFrameId && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(activeExpandScrollFrameId);
+      activeExpandScrollFrameId = null;
+    }
+    scrollContainer.removeEventListener?.("wheel", cleanupTracking);
+    scrollContainer.removeEventListener?.("pointerdown", cleanupTracking);
+    if (stopActiveExpandScroll === cleanupTracking) {
+      stopActiveExpandScroll = null;
+    }
+  };
+
+  stopActiveExpandScroll = cleanupTracking;
+  scrollContainer.addEventListener?.("wheel", cleanupTracking, { passive: true, once: true });
+  scrollContainer.addEventListener?.("pointerdown", cleanupTracking, { passive: true, once: true });
+
+  const startTimestamp = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const trackFrame = (nowTimestamp) => {
+    alignTarget();
+    const elapsedMs =
+      (typeof nowTimestamp === "number" ? nowTimestamp : Date.now()) - startTimestamp;
+    if (elapsedMs < EXPAND_SCROLL_DURATION_MS) {
+      activeExpandScrollFrameId = requestAnimationFrame(trackFrame);
+    } else {
+      cleanupTracking();
+    }
+  };
+  activeExpandScrollFrameId = requestAnimationFrame(trackFrame);
 }
 
 function updateDependentGroupVisibility() {
@@ -213,6 +335,8 @@ function updateDependentGroupVisibility() {
     }
   }
 }
+
+const UCI_OPTION_KEYWORDS = new Set(["default", "min", "max", "var"]);
 
 function parseUciOptionLine(uciLine) {
   if (!uciLine || typeof uciLine !== "string" || !uciLine.startsWith("option name ")) return null;
@@ -242,34 +366,35 @@ function parseUciOptionLine(uciLine) {
   let minValue = null;
   let maxValue = null;
   const allowedVariants = [];
-  let activeKeyword = null;
-  let collectedWords = [];
 
-  const commitAttribute = () => {
-    if (!activeKeyword) return;
-    const attributeValue = collectedWords.join(" ").trim();
-    if (activeKeyword === "default") {
+  let activeAttributeKeyword = null;
+  let collectedValueWords = [];
+
+  const commitActiveAttribute = () => {
+    if (!activeAttributeKeyword) return;
+    const attributeValue = collectedValueWords.join(" ").trim();
+    if (activeAttributeKeyword === "default") {
       defaultValue = attributeValue;
-    } else if (activeKeyword === "min") {
+    } else if (activeAttributeKeyword === "min") {
       minValue = attributeValue ? parseInt(attributeValue, 10) : null;
-    } else if (activeKeyword === "max") {
+    } else if (activeAttributeKeyword === "max") {
       maxValue = attributeValue ? parseInt(attributeValue, 10) : null;
-    } else if (activeKeyword === "var" && attributeValue) {
-      allowedVariants.push(attributeValue);
+    } else if (activeAttributeKeyword === "var") {
+      if (attributeValue) allowedVariants.push(attributeValue);
     }
-    collectedWords = [];
+    collectedValueWords = [];
   };
 
-  for (let i = 1; i < attributeTokens.length; i++) {
-    const token = attributeTokens[i];
+  for (let tokenIndex = 1; tokenIndex < attributeTokens.length; tokenIndex++) {
+    const token = attributeTokens[tokenIndex];
     if (UCI_OPTION_KEYWORDS.has(token)) {
-      commitAttribute();
-      activeKeyword = token;
-    } else if (activeKeyword) {
-      collectedWords.push(token);
+      commitActiveAttribute();
+      activeAttributeKeyword = token;
+    } else if (activeAttributeKeyword) {
+      collectedValueWords.push(token);
     }
   }
-  commitAttribute();
+  commitActiveAttribute();
 
   return {
     name: optionName,
@@ -295,11 +420,11 @@ function createDomElement(tagName, properties = {}, childNodes = []) {
 }
 
 function buildUciControlId(optionName, optionIndex) {
-  const slug = String(optionName || "option")
+  const normalizedSlug = String(optionName || "option")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `uci-option-${slug || "control"}-${optionIndex}`;
+  return `uci-option-${normalizedSlug || "control"}-${optionIndex}`;
 }
 
 const uciOptionControlRenderers = {
@@ -309,7 +434,7 @@ const uciOptionControlRenderers = {
       className: "badge",
       textContent: currentValue
     });
-    valueBadge.setAttribute("aria-label", `Edit ${uciOption.name} value`);
+    valueBadge.setAttribute?.("aria-label", `Edit ${uciOption.name} value`);
     const rangeInput = createDomElement("input", {
       id: controlId,
       type: "range",
@@ -327,8 +452,11 @@ const uciOptionControlRenderers = {
     bindEditableSliderBadge(valueBadge, rangeInput, {
       onCommit: (committedNumber) => onUciOptionChange?.(uciOption.name, parseInt(committedNumber, 10), false)
     });
-    const titleLabel = createDomElement("label", { className: "title", textContent: uciOption.name });
-    titleLabel.setAttribute("for", controlId);
+    const titleLabel = createDomElement("label", {
+      className: "title",
+      textContent: uciOption.name
+    });
+    titleLabel.setAttribute?.("for", controlId);
     return createDomElement("div", { className: "control-col" }, [
       createDomElement("div", { className: "slider-header" }, [titleLabel, valueBadge]),
       rangeInput
@@ -345,13 +473,13 @@ const uciOptionControlRenderers = {
       onUciOptionChange?.(uciOption.name, checkboxInput.checked, false);
     });
     const toggleVisual = createDomElement("span", { className: "toggle-slider" });
-    toggleVisual.setAttribute("aria-hidden", "true");
+    toggleVisual.setAttribute?.("aria-hidden", "true");
     const rowLabel = createDomElement("label", { className: "control-row" }, [
       createDomElement("span", { className: "control-label-text", textContent: uciOption.name }),
       checkboxInput,
       toggleVisual
     ]);
-    rowLabel.setAttribute("for", controlId);
+    rowLabel.setAttribute?.("for", controlId);
     return rowLabel;
   },
   combo(uciOption, currentValue, onUciOptionChange, controlId) {
@@ -373,7 +501,7 @@ const uciOptionControlRenderers = {
       className: "control-label-text",
       textContent: uciOption.name
     });
-    fieldLabel.setAttribute("for", controlId);
+    fieldLabel.setAttribute?.("for", controlId);
     return createDomElement("div", { className: "control-col" }, [fieldLabel, selectInput]);
   },
   string(uciOption, currentValue, onUciOptionChange, controlId) {
@@ -392,7 +520,7 @@ const uciOptionControlRenderers = {
       className: "control-label-text",
       textContent: uciOption.name
     });
-    fieldLabel.setAttribute("for", controlId);
+    fieldLabel.setAttribute?.("for", controlId);
     return createDomElement("div", { className: "control-col" }, [fieldLabel, textInput]);
   },
   button(uciOption, _currentValue, onUciOptionChange) {
@@ -413,7 +541,7 @@ const uciOptionControlRenderers = {
 
 function renderDynamicUciOptions(uciOptionDefinitions, savedUciValues, containerElement, onUciOptionChange) {
   if (!containerElement) return;
-  containerElement.setAttribute("aria-busy", "false");
+  containerElement.setAttribute?.("aria-busy", "false");
   containerElement.innerHTML = "";
   if (!uciOptionDefinitions || uciOptionDefinitions.length === 0) {
     containerElement.innerHTML =
@@ -430,17 +558,27 @@ function renderDynamicUciOptions(uciOptionDefinitions, savedUciValues, container
   });
 }
 
-function setEngineOptionsStatusMessage(statusMessage, { isError = false, isLoading = false } = {}) {
+let activeProbeSocket = null;
+let probeTimeoutTimerId = null;
+let lastProbedEngineUrl = null;
+let lastProbedUciOptions = [];
+
+function setEngineOptionsStatusMessage(
+  statusMessage,
+  { isError = false, isLoading = false } = {}
+) {
   const containerElement = document.getElementById("engine-options-container");
   if (!containerElement) return;
-  containerElement.setAttribute("aria-busy", String(Boolean(isLoading)));
+  containerElement.setAttribute?.("aria-busy", String(Boolean(isLoading)));
   containerElement.innerHTML = "";
 
   const statusTextElement = createDomElement("span", {
     className: "status-text",
     textContent: statusMessage
   });
-  if (isError) statusTextElement.setAttribute("role", "alert");
+  if (isError) {
+    statusTextElement.setAttribute?.("role", "alert");
+  }
   containerElement.appendChild(statusTextElement);
 }
 
@@ -488,7 +626,7 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
 
     probeSocket.addEventListener("open", () => {
       if (activeProbeSocket !== probeSocket) return;
-      clearTimeout(probeTimeoutTimerId);
+      if (probeTimeoutTimerId) clearTimeout(probeTimeoutTimerId);
       probeTimeoutTimerId = setTimeout(() => {
         if (activeProbeSocket !== probeSocket) return;
         resetEngineProbe();
@@ -498,8 +636,10 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
     });
 
     probeSocket.addEventListener("message", (messageEvent) => {
-      if (activeProbeSocket !== probeSocket || !messageEvent.data) return;
-      for (const uciLine of String(messageEvent.data).split("\n")) {
+      if (activeProbeSocket !== probeSocket) return;
+      if (!messageEvent.data) return;
+      const uciLines = String(messageEvent.data).split("\n");
+      for (const uciLine of uciLines) {
         const trimmedLine = uciLine.trim();
         if (trimmedLine.startsWith("info string Error:")) {
           lastErrorLine = trimmedLine.slice("info string ".length);
@@ -549,6 +689,9 @@ function invalidateEngineProbe(engineUrl) {
   }
 }
 
+let uciOptionsSyncTimerId = null;
+let pendingUciOptionsWrite = null;
+
 function readChromeStorage(storageArea, storageKeys, onLoaded) {
   const storageHandle = typeof chrome !== "undefined" ? chrome.storage?.[storageArea] : null;
   if (!storageHandle?.get) {
@@ -556,7 +699,7 @@ function readChromeStorage(storageArea, storageKeys, onLoaded) {
     return;
   }
   storageHandle.get(storageKeys, (storedResult) => {
-    const runtimeError = chrome.runtime?.lastError;
+    const runtimeError = typeof chrome !== "undefined" ? chrome.runtime?.lastError : null;
     if (runtimeError) {
       console.warn(
         `[BetterMint] Failed to read ${storageArea} storage:`,
@@ -571,7 +714,7 @@ function writeChromeStorage(storageArea, storagePayload) {
   const storageHandle = typeof chrome !== "undefined" ? chrome.storage?.[storageArea] : null;
   if (!storageHandle?.set) return;
   storageHandle.set(storagePayload, () => {
-    const runtimeError = chrome.runtime?.lastError;
+    const runtimeError = typeof chrome !== "undefined" ? chrome.runtime?.lastError : null;
     if (runtimeError) {
       console.error(
         `[BetterMint] Failed to write ${storageArea} storage:`,
@@ -591,7 +734,7 @@ function flushPendingUciOptions({ shouldNotifyTabs = true } = {}) {
   const { storageKey, engineUrl, uciOptions } = pendingUciOptionsWrite;
   pendingUciOptionsWrite = null;
   writeChromeStorage("local", { [storageKey]: uciOptions });
-  const activeEngineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value.trim();
+  const activeEngineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value?.trim();
   if (shouldNotifyTabs && (!engineUrl || !activeEngineUrl || engineUrl === activeEngineUrl)) {
     notifyActiveChessComTabs({ customEngineOptions: uciOptions });
   }
@@ -634,12 +777,12 @@ function loadAndRenderEngineUciOptions(engineUrl, uciOptionDefinitions, containe
     bindDynamicUciOptionControls(
       storageKey,
       uciOptionDefinitions,
-      storedResult[storageKey],
+      storedResult?.[storageKey],
       containerElement,
       engineUrl
     );
     const engineDetailsElement = document.getElementById("engine-options-details");
-    if (engineDetailsElement?.open && document.body.classList.contains("is-ready")) {
+    if (engineDetailsElement?.open && document.body?.classList?.contains("is-ready")) {
       scrollExpandedElementIntoView(engineDetailsElement);
     }
   });
@@ -661,7 +804,7 @@ function notifyActiveChessComTabs(extensionOptions) {
 function probeEngineIfPanelExpanded() {
   const engineDetailsElement = document.getElementById("engine-options-details");
   if (!engineDetailsElement?.open) return;
-  const engineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value.trim();
+  const engineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value?.trim();
   if (lastProbedEngineUrl !== engineUrl) {
     probeEngineUciOptions(engineUrl);
   }
@@ -715,8 +858,7 @@ function applyExtensionOptionsToDom(extensionOptions) {
     if (inputElement.type === "checkbox") {
       inputElement.checked = Boolean(optionValue);
     } else if (inputElement.type === "range") {
-      inputElement.value = String(optionValue);
-      updateSliderTrackFill(inputElement);
+      setSliderExactValue(inputElement, optionValue);
       const badgeElement = document.getElementById("badge-" + optionKey);
       if (badgeElement) {
         badgeElement.textContent = formatSliderBadgeValue(optionKey, optionValue);
@@ -743,12 +885,12 @@ function setConfigStatusMessage(statusMessage, isError = false) {
     statusClearTimerId = null;
   }
   statusElement.textContent = statusMessage || "";
-  statusElement.classList.toggle("is-error", Boolean(isError));
-  statusElement.classList.toggle("hidden", !statusMessage);
+  statusElement.classList?.toggle("is-error", Boolean(isError));
+  statusElement.classList?.toggle("hidden", !statusMessage);
   if (statusMessage) {
     statusClearTimerId = setTimeout(() => {
       statusElement.textContent = "";
-      statusElement.classList.add("hidden");
+      statusElement.classList?.add("hidden");
       statusClearTimerId = null;
     }, CONFIG_STATUS_DURATION_MS);
   }
@@ -759,12 +901,11 @@ function applyConfigProfile(
   uciOptionOverrides = {},
   { profileName = null, shouldMarkSaved = false } = {}
 ) {
-  const previousEngineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value.trim();
+  const previousEngineUrl = extensionOptionInputs["option-url-api-stockfish"]?.value?.trim();
   const normalizedExtensionOptions = normalizeExtensionOptions(rawExtensionOptions);
-  const sanitizedUciOptions =
-    uciOptionOverrides && typeof uciOptionOverrides === "object" && !Array.isArray(uciOptionOverrides)
-      ? Object.assign({}, uciOptionOverrides)
-      : {};
+  const sanitizedUciOptions = isPlainRecord(uciOptionOverrides)
+    ? Object.assign({}, uciOptionOverrides)
+    : {};
 
   pendingUciOptionsWrite = null;
   if (uciOptionsSyncTimerId) {
@@ -814,10 +955,10 @@ function saveCustomConfigProfile(profileName, extensionOptions, uciOptionOverrid
     customEngineOptions: Object.assign({}, uciOptionOverrides || {}),
     updatedAt: Date.now()
   };
-  customConfigProfiles = [
-    savedProfile,
-    ...customConfigProfiles.filter((profile) => profile.name.toLowerCase() !== trimmedName.toLowerCase())
-  ];
+  const remainingProfiles = customConfigProfiles.filter(
+    (profile) => profile.name.toLowerCase() !== trimmedName.toLowerCase()
+  );
+  customConfigProfiles = [savedProfile, ...remainingProfiles];
   writeChromeStorage("local", { customConfigs: customConfigProfiles });
   return savedProfile;
 }
@@ -871,7 +1012,9 @@ function renderSavedConfigList() {
         })
       ]
     );
-    if (isActiveProfile) selectProfileButton.setAttribute("aria-current", "true");
+    if (isActiveProfile) {
+      selectProfileButton.setAttribute?.("aria-current", "true");
+    }
     selectProfileButton.addEventListener("click", () => {
       applyConfigProfile(savedProfile.settings, savedProfile.customEngineOptions, {
         profileName: savedProfile.name,
@@ -887,9 +1030,9 @@ function renderSavedConfigList() {
       title: `Delete ${savedProfile.name}`,
       textContent: "×"
     });
-    deleteProfileButton.setAttribute("aria-label", `Delete ${savedProfile.name}`);
+    deleteProfileButton.setAttribute?.("aria-label", `Delete ${savedProfile.name}`);
     deleteProfileButton.addEventListener("click", (clickEvent) => {
-      clickEvent.stopPropagation?.();
+      clickEvent?.stopPropagation?.();
       deleteCustomConfigProfile(savedProfile.name);
       renderSavedConfigList();
     });
@@ -907,7 +1050,7 @@ function updateConfigSaveButtonState() {
   const saveButton = document.getElementById("config-save-confirm");
   const profileNameInput = document.getElementById("config-save-name");
   if (!saveButton) return;
-  saveButton.disabled = !profileNameInput?.value.trim();
+  saveButton.disabled = !profileNameInput?.value?.trim();
 }
 
 function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
@@ -916,11 +1059,11 @@ function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
   const configToggleButton = document.getElementById("config-toggle");
 
   if (configToggleButton) {
-    configToggleButton.setAttribute("aria-expanded", String(isConfigPopoverOpen));
+    configToggleButton.setAttribute?.("aria-expanded", String(isConfigPopoverOpen));
   }
   if (!popoverElement) return;
 
-  popoverElement.classList.toggle("hidden", !isConfigPopoverOpen);
+  popoverElement.classList?.toggle("hidden", !isConfigPopoverOpen);
 
   if (isConfigPopoverOpen) {
     loadConfigStorageState(() => {
@@ -928,19 +1071,19 @@ function setConfigPopoverOpen(shouldOpen, { shouldRestoreFocus = false } = {}) {
       const profileNameInput = document.getElementById("config-save-name");
       if (profileNameInput) {
         profileNameInput.value = activeConfigProfileName || "";
-        profileNameInput.focus();
+        profileNameInput.focus?.();
       }
       updateConfigSaveButtonState();
       renderSavedConfigList();
     });
   } else if (shouldRestoreFocus) {
-    configToggleButton?.focus();
+    configToggleButton?.focus?.();
   }
 }
 
 function loadConfigStorageState(onLoaded) {
   const engineUrl =
-    extensionOptionInputs["option-url-api-stockfish"]?.value.trim() ||
+    extensionOptionInputs["option-url-api-stockfish"]?.value?.trim() ||
     DEFAULT_EXTENSION_OPTION_VALUES["option-url-api-stockfish"];
   const engineStorageKey = getEngineOptionsStorageKey(engineUrl);
   const storageKeys = ["customConfigs", "activeConfigName"];
@@ -968,7 +1111,7 @@ function loadConfigStorageState(onLoaded) {
 
 function handleSaveProfileSubmit() {
   const profileNameInput = document.getElementById("config-save-name");
-  const profileName = profileNameInput?.value.trim() || "";
+  const profileName = profileNameInput?.value?.trim() || "";
   if (!profileName) return;
 
   flushPendingUciOptions();
@@ -981,11 +1124,54 @@ function handleSaveProfileSubmit() {
   });
 }
 
+function initializeConfigSystem() {
+  loadConfigStorageState();
+  if (isConfigSystemInitialized) return;
+  isConfigSystemInitialized = true;
+
+  document.getElementById("config-toggle")?.addEventListener("click", (clickEvent) => {
+    clickEvent?.stopPropagation?.();
+    setConfigPopoverOpen(!isConfigPopoverOpen);
+  });
+
+  document.getElementById("config-close")?.addEventListener("click", () => {
+    setConfigPopoverOpen(false, { shouldRestoreFocus: true });
+  });
+  document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveProfileSubmit);
+
+  const profileNameInput = document.getElementById("config-save-name");
+  profileNameInput?.addEventListener("input", updateConfigSaveButtonState);
+  profileNameInput?.addEventListener("keydown", (keyEvent) => {
+    if (keyEvent?.key === "Enter") {
+      keyEvent.preventDefault?.();
+      handleSaveProfileSubmit();
+    }
+  });
+  updateConfigSaveButtonState();
+
+  document.addEventListener?.("click", (clickEvent) => {
+    if (!isConfigPopoverOpen) return;
+    const popoverElement = document.getElementById("config-popover");
+    const configToggleButton = document.getElementById("config-toggle");
+    const eventTarget = clickEvent?.target;
+    if (popoverElement?.contains?.(eventTarget) || configToggleButton?.contains?.(eventTarget)) {
+      return;
+    }
+    setConfigPopoverOpen(false);
+  });
+
+  document.addEventListener?.("keydown", (keyEvent) => {
+    if (keyEvent?.key === "Escape" && isConfigPopoverOpen) {
+      setConfigPopoverOpen(false, { shouldRestoreFocus: true });
+    }
+  });
+}
+
 function enableInteractiveTransitions() {
   if (typeof requestAnimationFrame === "function") {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        document.body.classList.add("is-ready");
+        document.body?.classList?.add("is-ready");
       });
     });
   }
@@ -1014,7 +1200,10 @@ function handleExtensionOptionChange(changedOptionKey) {
     ([toggleInputId]) => toggleInputId === changedOptionKey
   );
   if (toggledGroupEntry && extensionOptions[changedOptionKey]) {
-    scrollExpandedElementIntoView(document.getElementById(toggledGroupEntry[1]));
+    const revealedGroup = document.getElementById(toggledGroupEntry[1]);
+    if (revealedGroup) {
+      scrollExpandedElementIntoView(revealedGroup, revealedGroup.previousElementSibling);
+    }
   }
 
   if (changedOptionKey === "option-url-api-stockfish") {
@@ -1032,7 +1221,6 @@ function initializeOptionsPage() {
     const inputElement = document.getElementById(optionKey);
     if (!inputElement) return;
     extensionOptionInputs[optionKey] = inputElement;
-    if (isPageInitialized) return;
 
     if (inputElement.type === "range") {
       const badgeElement = document.getElementById("badge-" + optionKey);
@@ -1053,82 +1241,39 @@ function initializeOptionsPage() {
     inputElement.addEventListener("change", () => handleExtensionOptionChange(optionKey));
   });
 
-  if (!isPageInitialized) {
-    isPageInitialized = true;
+  if (!isEnginePanelInitialized) {
+    isEnginePanelInitialized = true;
     document
       .getElementById("engine-options-details")
       ?.addEventListener("toggle", probeEngineIfPanelExpanded);
 
-    for (const disclosureId of [
+    const disclosureIds = [
       "go-command-details",
       "engine-options-details",
       "advanced-timing-details"
-    ]) {
+    ];
+    for (const disclosureId of disclosureIds) {
       const detailsElement = document.getElementById(disclosureId);
       detailsElement?.addEventListener("toggle", () => {
-        if (detailsElement.open && document.body.classList.contains("is-ready")) {
+        if (detailsElement.open && document.body?.classList?.contains("is-ready")) {
           scrollExpandedElementIntoView(detailsElement);
         }
       });
     }
-
-    document.getElementById("theme-toggle")?.addEventListener("click", () => {
-      const nextThemeId = THEMES[activeThemeId]?.nextThemeId || "dark";
-      applyTheme(nextThemeId);
-      writeChromeStorage("local", { theme: nextThemeId });
-    });
-
-    document.getElementById("config-toggle")?.addEventListener("click", (clickEvent) => {
-      clickEvent.stopPropagation?.();
-      setConfigPopoverOpen(!isConfigPopoverOpen);
-    });
-    document.getElementById("config-close")?.addEventListener("click", () => {
-      setConfigPopoverOpen(false, { shouldRestoreFocus: true });
-    });
-    document.getElementById("config-save-confirm")?.addEventListener("click", handleSaveProfileSubmit);
-
-    const profileNameInput = document.getElementById("config-save-name");
-    profileNameInput?.addEventListener("input", updateConfigSaveButtonState);
-    profileNameInput?.addEventListener("keydown", (keyEvent) => {
-      if (keyEvent.key === "Enter") {
-        keyEvent.preventDefault?.();
-        handleSaveProfileSubmit();
-      }
-    });
-    updateConfigSaveButtonState();
-
-    document.addEventListener?.("click", (clickEvent) => {
-      if (!isConfigPopoverOpen) return;
-      const popoverElement = document.getElementById("config-popover");
-      const configToggleButton = document.getElementById("config-toggle");
-      const eventTarget = clickEvent?.target;
-      if (popoverElement?.contains(eventTarget) || configToggleButton?.contains(eventTarget)) {
-        return;
-      }
-      setConfigPopoverOpen(false);
-    });
-
-    document.addEventListener?.("keydown", (keyEvent) => {
-      if (keyEvent.key === "Escape" && isConfigPopoverOpen) {
-        setConfigPopoverOpen(false, { shouldRestoreFocus: true });
-      }
-    });
   }
-
-  applyTheme(getDefaultThemeId());
-  readChromeStorage("local", ["theme"], (storedThemeState) => {
-    if (storedThemeState?.theme) applyTheme(storedThemeState.theme);
-  });
-  loadConfigStorageState();
+  initializeTheme();
+  initializeConfigSystem();
   restoreExtensionOptions();
 }
 
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPendingUciOptions);
+
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("github-link")?.addEventListener("click", () => {
       chrome.tabs?.create({ url: "https://github.com/y9felix/BetterMint" });
     });
+
     initializeOptionsPage();
   });
 }
