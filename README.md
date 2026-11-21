@@ -6,9 +6,7 @@
 
 [![Version](https://img.shields.io/badge/version-2.2.6-7a5cff?style=for-the-badge)](https://github.com/y9felix/BetterMint/releases/tag/v2.2.6)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4ade80?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](EngineWS)
 [![Wiki](https://img.shields.io/badge/Docs-Wiki-6366f1?style=for-the-badge)](https://github.com/y9felix/BetterMint/wiki)
-[![License: RPL-1.5](https://img.shields.io/badge/License-RPL%201.5-22c55e?style=for-the-badge)](LICENSE)
 
 </div>
 
@@ -73,6 +71,6 @@ Start the server on `127.0.0.1:8000`:
 - [thedemons](https://github.com/thedemons), original extension creator.
 - [BotSolvers/BetterMint](https://github.com/BotSolvers/BetterMint), upstream V2.
 - [ProtonDev](https://github.com/ProtonDev-sys), public engine sockets.
-- [y9felix](https://github.com/y9felix), architecture refactor, dynamic Universal Chess Interface pipeline, and maintenance.
+- [y9felix](https://github.com/y9felix), architecture refactor and maintenance.
 
 Licensed under the Reciprocal Public License 1.5. See [LICENSE](LICENSE) for details.
