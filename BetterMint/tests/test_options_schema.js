@@ -79,11 +79,16 @@ const mockWindow = {
   },
   dispatchEvent: () => {}
 };
+let onMessageListener = null;
 const mockChrome = {
   runtime: {
     id: "test-extension-id",
     getURL: (relativePath) => "chrome-extension://test-extension-id/" + relativePath,
-    onMessage: { addListener: () => {} }
+    onMessage: {
+      addListener: (listener) => {
+        onMessageListener = listener;
+      }
+    }
   },
   storage: {
     sync: { get: (_defaults, cb) => cb({}) },
@@ -111,6 +116,31 @@ assert.strictEqual(
   1,
   "loader.js must register BetterMintGetOptions listener on Chess.com pages"
 );
+assert.strictEqual(typeof onMessageListener, "function", "loader.js must register runtime.onMessage listener");
+
+let receivedAck = null;
+onMessageListener(
+  { type: "UpdateOptions", extensionOptions: { "option-depth": 5 } },
+  {},
+  (response) => {
+    receivedAck = response;
+  }
+);
+assert.strictEqual(
+  receivedAck?.ok,
+  true,
+  "loader.js must acknowledge UpdateOptions messages synchronously via sendResponse"
+);
+
+let unrelatedAckCalled = false;
+onMessageListener({ type: "OtherMessage" }, {}, () => {
+  unrelatedAckCalled = true;
+});
+assert.strictEqual(
+  unrelatedAckCalled,
+  false,
+  "loader.js must ignore non-UpdateOptions runtime messages"
+);
 
 delete mockChrome.storage;
 delete mockChrome.runtime.id;
@@ -121,6 +151,48 @@ assert.strictEqual(
   (windowListeners["BetterMintGetOptions"] || []).length,
   0,
   "loader.js must detach its BetterMintGetOptions listener once context is invalidated"
+);
+
+const dnrRules = JSON.parse(
+  fs.readFileSync(path.join(extensionRootDir, "rules.json"), "utf8")
+);
+assert.ok(Array.isArray(dnrRules) && dnrRules.length >= 4, "rules.json must define all DNR rules");
+const ruleIds = new Set(dnrRules.map((rule) => rule.id));
+assert.strictEqual(ruleIds.size, dnrRules.length, "rules.json must have unique rule IDs");
+
+const stripCspRule = dnrRules.find((rule) => rule.action?.type === "modifyHeaders");
+assert.ok(stripCspRule, "rules.json must include a modifyHeaders rule to strip report-only CSP headers");
+const removedHeaders = (stripCspRule.action.responseHeaders || [])
+  .filter((entry) => entry.operation === "remove")
+  .map((entry) => entry.header.toLowerCase());
+assert.ok(
+  removedHeaders.includes("content-security-policy-report-only"),
+  "modifyHeaders rule must remove content-security-policy-report-only"
+);
+assert.ok(
+  removedHeaders.includes("report-to") && removedHeaders.includes("reporting-endpoints"),
+  "modifyHeaders rule must remove report-to and reporting-endpoints"
+);
+assert.ok(
+  stripCspRule.condition?.requestDomains?.includes("chess.com"),
+  "modifyHeaders rule must scope to chess.com"
+);
+assert.ok(
+  ["main_frame", "sub_frame", "script"].every((type) =>
+    stripCspRule.condition?.resourceTypes?.includes(type)
+  ),
+  "modifyHeaders rule must cover main_frame, sub_frame, and script responses"
+);
+
+const blockCspReportRule = dnrRules.find(
+  (rule) =>
+    rule.action?.type === "block" &&
+    rule.condition?.resourceTypes?.includes("csp_report")
+);
+assert.ok(blockCspReportRule, "rules.json must block csp_report requests");
+assert.ok(
+  blockCspReportRule.condition?.initiatorDomains?.includes("chess.com"),
+  "csp_report block rule must scope to chess.com initiators"
 );
 
 console.log("Options schema tests passed.");
