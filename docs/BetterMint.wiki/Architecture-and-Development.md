@@ -49,48 +49,6 @@ flowchart LR
 - `GameController.syncPositionHistory` builds `position startpos moves ...` or `position fen <anchor> moves ...` commands from Chess.com move history or incremental ply tracking so engines and `PolyglotBoard` receive complete game history. If a position command cannot be tracked by `PolyglotBoard`, EngineWS clears the tracked board state so book lookups fall back to the engine.
 - Before starting a new search, switching engines, or applying Universal Chess Interface options, `UciEngineClient` sends `stop` and waits up to 1000 milliseconds for `bestmove`. If the timeout expires, it resumes queued callbacks and increments a stale-move counter to discard late `bestmove` lines. Active searches are also stopped on `gameOver` and single-page app board detachment, and null bestmoves (`(none)`, `0000`, or same-square moves) are ignored cleanly.
 
-## Running tests
-
-Both the extension and EngineWS include headless unit test suites.
-
-### Extension syntax and Node.js tests
-
-Run syntax validation and all 11 Node.js test suites from the repository root with `npm test`, or directly:
-
-```bash
-node --check BetterMint/js/*.js
-for t in BetterMint/tests/test_*.js; do node "$t" || exit 1; done
-```
-
-Test coverage in `BetterMint/tests/`:
-
-- `test_book_moves.js` tests book move handling and Book classification.
-- `test_disclosure_css.js` tests disclosure animation and slider CSS rules.
-- `test_dynamic_uci_ui.js` tests dynamic Universal Chess Interface probing, rendering, debounced writes, editable slider badges, the Configs popover, and auto-scroll.
-- `test_engine_pipeline.js` tests Universal Chess Interface parsing, candidate ranking, move analysis, and auto-move dispatch guards.
-- `test_evalbar.js` tests evaluation bar formatting, flip state, and viewport offsets.
-- `test_live_engine_switching.js` tests live WebSocket switching, backoff reconnects, and fatal error handling.
-- `test_options_html.js` tests popup HTML structure, accessibility attributes, and control ordering.
-- `test_options_schema.js` tests option default keys, script load order, and `loader.js` context invalidation guards.
-- `test_position_history.js` tests Universal Chess Interface `position` command reconstruction from startpos and FEN anchors.
-- `test_stop_evaluation.js` tests stop synchronization and stale `bestmove` discarding.
-- `test_timing.js` tests Box-Muller log-normal timing, reflex and opening priority, and clock scaling.
-
-### EngineWS Python tests
-
-Run the 3 Python test files from `EngineWS`:
-
-```bash
-cd EngineWS
-python3 -m unittest discover -s tests
-```
-
-Test coverage in `EngineWS/tests/`:
-
-- `test_config_engine.py` tests config loading, path routing, origin checks, and command resolution.
-- `test_polyglot.py` tests Polyglot board moves, Zobrist hashing, binary lookup, and weighted selection.
-- `test_server_logging.py` tests Universal Chess Interface command logging, blocked debug log options, and crash handling.
-
 ## Publishing docs/BetterMint.wiki to GitHub Wiki
 
 1. Enable Wikis in your GitHub repository settings and create an initial `Home` page in the GitHub web interface once to initialize the wiki repository.

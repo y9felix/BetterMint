@@ -22,4 +22,4 @@ It also automates move execution with configurable deliberation delays and queue
 - [Settings and popup guide](Settings-and-Popup-Guide) walks through every control in the Engine, Display, and Automation sections, saved configs, and popup themes.
 - [Human-like timing guide](Human-like-Timing-Guide) explains how each Auto Move timing slider works and lists starting values for Bullet, Blitz, and Rapid.
 - [Troubleshooting](Troubleshooting) lists common connection, engine launch, and browser reload errors with their fixes.
-- [Architecture and development](Architecture-and-Development) documents the extension modules, WebSocket bridge, declarative network rules, and unit test suites.
+- [Architecture and development](Architecture-and-Development) documents the extension modules, WebSocket bridge, and declarative network rules.
