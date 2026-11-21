@@ -249,18 +249,33 @@ class CdpSession:
         await self.call("Page.navigate", {"url": url}, timeout=timeout)
         await self.wait_for("document.readyState === 'complete'", timeout=timeout, label=f"load {url}")
 
-    async def click(self, selector):
-        point = await self.eval_js(
-            f"(() => {{"
-            f"  const el = document.querySelector({json.dumps(selector)});"
-            f"  if (!el) return null;"
-            f"  el.scrollIntoView({{ block: 'center', inline: 'nearest' }});"
-            f"  const r = el.getBoundingClientRect();"
-            f"  return {{ x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }};"
-            f"}})()"
-        )
-        if not point or point["w"] <= 0 or point["h"] <= 0:
-            raise AssertionError(f"Element not clickable or invisible: {selector}")
+    async def click(self, selector, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        point = None
+        last_point = None
+        while time.monotonic() < deadline:
+            candidate = await self.eval_js(
+                f"(() => {{"
+                f"  const el = document.querySelector({json.dumps(selector)});"
+                f"  if (!el) return null;"
+                f"  el.scrollIntoView({{ block: 'center', inline: 'nearest' }});"
+                f"  const r = el.getBoundingClientRect();"
+                f"  if (r.width <= 0 || r.height <= 0) return null;"
+                f"  const x = r.left + r.width / 2;"
+                f"  const y = r.top + r.height / 2;"
+                f"  const hit = document.elementFromPoint(x, y);"
+                f"  if (!hit || (hit !== el && !el.contains(hit))) return null;"
+                f"  return {{ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }};"
+                f"}})()"
+            )
+            if candidate and last_point == candidate:
+                point = candidate
+                break
+            last_point = candidate
+            await asyncio.sleep(0.05)
+
+        if not point:
+            raise AssertionError(f"Element not clickable or occluded after {timeout}s: {selector}")
         for event_type in ("mouseMoved", "mousePressed", "mouseReleased"):
             params = {
                 "type": event_type,
@@ -427,6 +442,7 @@ async def run_popup_checks(cdp, ext_id, engine_ws_url):
     report_step("Real Chromium <input type='range'> inline badge editing, persistence, Escape, and step restoration")
 
     await cdp.click("#go-command-details > summary")
+    await asyncio.sleep(0.28)
     await cdp.click("label[for='option-auto-queue']")
     await asyncio.sleep(0.35)
     scroll_check = await cdp.eval_js(
