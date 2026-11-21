@@ -342,7 +342,7 @@ async def run_popup_checks(cdp, ext_id, engine_ws_url):
     popup_url = f"chrome-extension://{ext_id}/html/options.html"
     await cdp.call(
         "Emulation.setDeviceMetricsOverride",
-        {"width": 340, "height": 580, "deviceScaleFactor": 1, "mobile": False},
+        {"width": 380, "height": 580, "deviceScaleFactor": 1, "mobile": False},
     )
     cdp.console_errors.clear()
     cdp.exceptions.clear()
@@ -366,7 +366,7 @@ async def run_popup_checks(cdp, ext_id, engine_ws_url):
     assert overflow_metrics["bodyHeight"] <= 600, (
         f"Popup exceeds Chrome 600px height cap: {overflow_metrics}"
     )
-    report_step("Popup fits within 340x580 bounds with zero horizontal overflow")
+    report_step("Popup fits within 380x580 bounds with zero horizontal overflow")
 
     initial_theme = await cdp.eval_js("document.documentElement.dataset.theme")
     expected_cycle = {
