@@ -1,5 +1,3 @@
-tests/
-test/
 _metadata/
 __pycache__/
 *.py[cod]
@@ -7,8 +5,6 @@ __pycache__/
 venv/
 env/
 .superpowers/
-docs/
-scripts/
 config.json
 books/
 *.bin
