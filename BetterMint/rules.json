@@ -25,5 +25,51 @@
         "xmlhttprequest"
       ]
     }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        {
+          "header": "content-security-policy-report-only",
+          "operation": "remove"
+        },
+        {
+          "header": "report-to",
+          "operation": "remove"
+        },
+        {
+          "header": "reporting-endpoints",
+          "operation": "remove"
+        }
+      ]
+    },
+    "condition": {
+      "requestDomains": [
+        "chess.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "initiatorDomains": [
+        "chess.com"
+      ],
+      "resourceTypes": [
+        "csp_report"
+      ]
+    }
   }
 ]

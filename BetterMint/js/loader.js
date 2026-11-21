@@ -79,11 +79,12 @@ function dispatchOptionsWithEngineSettings(extensionOptions, onReady) {
 }
 
 if (typeof window !== "undefined" && !isExtensionPage && typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-  chrome.runtime.onMessage.addListener((message) => {
-    if (!message?.extensionOptions) return;
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== "UpdateOptions" || !message?.extensionOptions) return;
     dispatchOptionsWithEngineSettings(message.extensionOptions, (mergedExtensionOptions) => {
       window.dispatchEvent(new CustomEvent("BetterMintUpdateOptions", { detail: mergedExtensionOptions }));
     });
+    sendResponse?.({ ok: true });
   });
 
   const handleGetOptionsRequest = (requestEvent) => {
