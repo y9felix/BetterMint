@@ -216,9 +216,17 @@ class PolyglotBoard:
         to_rank = int(cleaned_move[3]) - 1
         from_square = from_rank * 8 + from_file
         to_square = to_rank * 8 + to_file
+        if from_square == to_square:
+            return False
 
         moving_piece = self.squares[from_square]
         if moving_piece is None:
+            return False
+        if moving_piece.isupper() != (self.turn == "w"):
+            return False
+
+        target_piece = self.squares[to_square]
+        if target_piece is not None and target_piece.isupper() == moving_piece.isupper():
             return False
 
         if moving_piece in ("K", "k") and from_file == 4 and abs(to_file - from_file) == 2 and from_rank == to_rank:

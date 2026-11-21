@@ -58,7 +58,7 @@
     top: 0;
 }
 
-@media all and (min-width: 60em) {
+@media all and (min-width: 960px) {
     .bettermint-evalbar {
         width: 30px;
     }
