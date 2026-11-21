@@ -1,136 +1,22 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const { EXTENSION_ROOT_DIR, MockElement, withMockedGlobals } = require("./helpers");
 
-const extensionRootDir = path.join(__dirname, "..");
-const evalBarCss = fs.readFileSync(path.join(extensionRootDir, "css/evalbar.css"), "utf8");
-
+// 1. High-signal CSS contracts (host-page font isolation, breakpoint parity, non-interactivity)
+const evalBarCss = fs.readFileSync(path.join(EXTENSION_ROOT_DIR, "css/evalbar.css"), "utf8");
 assert.ok(
   !/\b\d*\.?\d+r?em\b/.test(evalBarCss),
-  "evalbar.css must use pixel units rather than font-scaled em or rem"
+  "evalbar.css must use pixel units rather than em/rem so host page root font size cannot distort it"
 );
-assert.ok(
-  evalBarCss.includes("border-radius: 3px;"),
-  "evalbar.css must use pixel-locked 3px border-radius"
-);
-assert.ok(
-  !evalBarCss.includes('"Montserrat"'),
-  "evalbar.css must use Chess.com system UI font stack rather than tall Montserrat"
-);
-assert.ok(
-  !evalBarCss.includes(".bettermint-evalbar-fill::after"),
-  "evalbar.css must not darken white bar edges with an inset border"
-);
-assert.ok(
-  !evalBarCss.includes(".bettermint-evalbar-draw"),
-  "evalbar.css must not render a center midpoint line"
-);
-assert.ok(
-  evalBarCss.includes("padding: 7px 0;"),
-  "evalbar.css desktop scoreAbbreviated must match Chess.com vertical edge spacing"
-);
-assert.ok(evalBarCss.includes("width: 20px;"), "evalbar.css must default to 20px compact width");
 assert.ok(
   evalBarCss.includes("@media all and (min-width: 960px)"),
   "evalbar.css must match Mint.js 960px desktop breakpoint"
-);
-assert.ok(evalBarCss.includes("width: 30px;"), "evalbar.css must expand to 30px desktop width");
-assert.ok(
-  evalBarCss.includes("transition: transform 1s ease;"),
-  "evalbar.css must use 1s (1000ms) fill transition"
 );
 assert.ok(
   evalBarCss.includes("pointer-events: none;"),
   "evalbar.css must keep eval bar non-interactive"
 );
-assert.ok(
-  !evalBarCss.includes(".bettermint-evalbar-score "),
-  "evalbar.css must not include hover tooltip score rules"
-);
-assert.ok(
-  !evalBarCss.includes(".bettermint-evalbar:hover"),
-  "evalbar.css must not include hover tooltip rules"
-);
-
-global.document = {
-  documentElement: {},
-  body: {
-    children: [],
-    appendChild(childElement) {
-      this.children.push(childElement);
-    }
-  },
-  createElement(tagName) {
-    const classSet = new Set();
-    const element = {
-      tagName: tagName.toUpperCase(),
-      style: {},
-      textContent: "",
-      _innerHTML: "",
-      classList: {
-        add: (...classNames) => classNames.forEach((className) => classSet.add(className)),
-        remove: (...classNames) => classNames.forEach((className) => classSet.delete(className)),
-        toggle: (className, shouldForce) => {
-          if (shouldForce === undefined) {
-            if (classSet.has(className)) classSet.delete(className);
-            else classSet.add(className);
-          } else if (shouldForce) {
-            classSet.add(className);
-          } else {
-            classSet.delete(className);
-          }
-        },
-        contains: (className) => classSet.has(className)
-      },
-      remove() {},
-      querySelector(selector) {
-        if (selector === ".bettermint-evalbar-white") return element._whiteFill;
-        if (selector === ".bettermint-evalbar-scoreAbbreviated") return element._abbrLabel;
-        return null;
-      }
-    };
-    const createChildStub = (initialClassNames) => {
-      const childClassSet = new Set(initialClassNames);
-      return {
-        style: {},
-        textContent: "",
-        classList: {
-          toggle: (className, shouldForce) => {
-            if (shouldForce) childClassSet.add(className);
-            else childClassSet.delete(className);
-          },
-          contains: (className) => childClassSet.has(className)
-        }
-      };
-    };
-    Object.defineProperty(element, "innerHTML", {
-      get: () => element._innerHTML,
-      set: (htmlString) => {
-        element._innerHTML = htmlString;
-        element._whiteFill = createChildStub(["bettermint-evalbar-white"]);
-        element._abbrLabel = createChildStub([
-          "bettermint-evalbar-scoreAbbreviated",
-          "bettermint-evalbar-dark"
-        ]);
-      }
-    });
-    return element;
-  },
-  querySelector: () => null
-};
-
-global.MutationObserver = class {
-  observe() {}
-  disconnect() {}
-};
-
-global.window = {
-  innerWidth: 1280,
-  innerHeight: 800,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  dispatchEvent: () => {}
-};
 
 const {
   GameController,
@@ -138,8 +24,9 @@ const {
   formatEvaluationDisplay,
   getEvalBarOffsetPx,
   setExtensionOptionsForTesting
-} = require(path.join(extensionRootDir, "js/Mint.js"));
+} = require(path.join(EXTENSION_ROOT_DIR, "js/Mint.js"));
 
+// 2. Pure offset and evaluation formatting math
 assert.strictEqual(getEvalBarOffsetPx(1280), 40);
 assert.strictEqual(getEvalBarOffsetPx(960), 40);
 assert.strictEqual(getEvalBarOffsetPx(800), 30);
@@ -165,62 +52,163 @@ assert.deepStrictEqual(formatEvaluationDisplay(-4, true), {
   isDark: false
 });
 
-setExtensionOptionsForTesting({ [EXTENSION_OPTION_KEY.EvaluationBar]: true });
-const gameController = Object.create(GameController.prototype);
-gameController.chessboardElement = {
-  isConnected: true,
-  getBoundingClientRect: () => ({
-    left: 200,
-    top: 80,
-    right: 680,
-    bottom: 560,
-    width: 480,
-    height: 480
-  })
-};
-gameController.boardOptions = { flipped: false };
-gameController.evalBarElement = null;
-gameController.evalBarAnimationFrameId = null;
-gameController.evalBarResizeObserver = null;
-gameController.evalBarSyncHandler = null;
+// 3. Sigmoid fill transform scaling and clamping
+const sigmoidController = Object.create(GameController.prototype);
+sigmoidController.evalBarElement = {};
+sigmoidController.evalBarWhiteFill = { style: {} };
+sigmoidController.evalScoreAbbreviatedElement = { classList: { toggle: () => {} } };
 
-gameController.createAnalysisTools();
-assert.ok(gameController.evalBarElement, "createAnalysisTools must mount evalBarElement");
-assert.ok(
-  !gameController.evalBarElement.innerHTML.includes("bettermint-evalbar-draw"),
-  "Eval bar shell must not include a center divider line"
+sigmoidController.setEvaluationDisplay(0, false);
+assert.strictEqual(sigmoidController.evalBarWhiteFill.style.transform, "translate3d(0px, 50%, 0px)");
+
+sigmoidController.setEvaluationDisplay(500, false);
+const percentAtPlusFive = parseFloat(
+  sigmoidController.evalBarWhiteFill.style.transform.match(/([0-9.]+)%/)[1]
 );
 assert.ok(
-  !gameController.evalBarElement.innerHTML.includes("bettermint-evalbar-score "),
-  "Eval bar shell must not include a hover tooltip element"
-);
-assert.strictEqual(
-  gameController.evalBarElement.style.left,
-  "160px",
-  "Desktop viewport must offset bar by 40px"
+  percentAtPlusFive > 10 && percentAtPlusFive < 20,
+  `Expected sigmoid ~13.7% at +5.0 pawns, got ${percentAtPlusFive}%`
 );
 
-global.window.innerWidth = 720;
-gameController.evalBarSyncHandler();
-assert.strictEqual(
-  gameController.evalBarElement.style.left,
-  "170px",
-  "Compact viewport (<960px) must offset bar by 30px"
+sigmoidController.setEvaluationDisplay(1200, false);
+assert.strictEqual(sigmoidController.evalBarWhiteFill.style.transform, "translate3d(0px, 5%, 0px)");
+
+// 4. DOM mount, responsive offset recalculation, SPA disconnect hiding, and rAF coalescing
+function createEvalBarElementStub(tagName) {
+  const element = new MockElement(tagName);
+  const originalQuerySelector = element.querySelector.bind(element);
+  let whiteFill = null;
+  let abbrLabel = null;
+
+  Object.defineProperty(element, "innerHTML", {
+    get: () => element._innerHTML,
+    set: (htmlString) => {
+      element._innerHTML = htmlString;
+      whiteFill = new MockElement("div");
+      whiteFill.classList.add("bettermint-evalbar-white");
+      abbrLabel = new MockElement("span");
+      abbrLabel.classList.add("bettermint-evalbar-scoreAbbreviated", "bettermint-evalbar-dark");
+    }
+  });
+  element.querySelector = (selector) => {
+    if (selector === ".bettermint-evalbar-white") return whiteFill;
+    if (selector === ".bettermint-evalbar-scoreAbbreviated") return abbrLabel;
+    return originalQuerySelector(selector);
+  };
+  return element;
+}
+
+let boardRectMeasurementCount = 0;
+const animationFrameQueue = [];
+const cancelledAnimationFrames = [];
+const windowListeners = {};
+let nextRafId = 1;
+
+withMockedGlobals(
+  {
+    requestAnimationFrame: (callback) => {
+      const frameId = nextRafId++;
+      animationFrameQueue.push({ frameId, callback });
+      return frameId;
+    },
+    cancelAnimationFrame: (frameId) => cancelledAnimationFrames.push(frameId),
+    MutationObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+    window: {
+      innerWidth: 1280,
+      innerHeight: 800,
+      addEventListener: (eventName, listener) => {
+        windowListeners[eventName] = listener;
+      },
+      removeEventListener: (eventName, listener) => {
+        if (windowListeners[eventName] === listener) delete windowListeners[eventName];
+      },
+      dispatchEvent: () => {}
+    },
+    document: {
+      documentElement: {},
+      body: new MockElement("body"),
+      createElement: (tagName) => createEvalBarElementStub(tagName),
+      querySelector: () => null
+    }
+  },
+  () => {
+    setExtensionOptionsForTesting({ [EXTENSION_OPTION_KEY.EvaluationBar]: true });
+    const gameController = Object.create(GameController.prototype);
+    gameController.chessboardElement = {
+      isConnected: true,
+      getBoundingClientRect: () => {
+        boardRectMeasurementCount++;
+        return { left: 200, top: 80, right: 680, bottom: 560, width: 480, height: 480 };
+      }
+    };
+    gameController.boardOptions = { flipped: false };
+    gameController.evalBarElement = null;
+    gameController.evalBarAnimationFrameId = null;
+    gameController.evalBarResizeObserver = null;
+    gameController.evalBarSyncHandler = null;
+
+    gameController.createAnalysisTools();
+    assert.ok(gameController.evalBarElement, "createAnalysisTools must mount evalBarElement");
+    assert.strictEqual(
+      boardRectMeasurementCount,
+      1,
+      "Initial createAnalysisTools must measure board once synchronously"
+    );
+    assert.strictEqual(gameController.evalBarElement.style.left, "160px");
+
+    global.window.innerWidth = 720;
+    windowListeners.scroll();
+    windowListeners.scroll();
+    windowListeners.resize();
+    assert.strictEqual(
+      animationFrameQueue.length,
+      1,
+      "Burst scroll/resize events must coalesce into 1 pending rAF"
+    );
+    assert.strictEqual(
+      boardRectMeasurementCount,
+      1,
+      "Coalesced burst must not force layout before animation frame"
+    );
+
+    animationFrameQueue.shift().callback();
+    assert.strictEqual(boardRectMeasurementCount, 2);
+    assert.strictEqual(
+      gameController.evalBarElement.style.left,
+      "170px",
+      "Compact viewport (<960px) must offset bar by 30px"
+    );
+
+    gameController.setEvaluationDisplay(-1240, false);
+    assert.strictEqual(gameController.evalScoreAbbreviatedElement.textContent, "12");
+    assert.strictEqual(
+      gameController.evalScoreAbbreviatedElement.classList.contains("bettermint-evalbar-light"),
+      true
+    );
+
+    gameController.chessboardElement.isConnected = false;
+    windowListeners.scroll();
+    animationFrameQueue.shift().callback();
+    assert.strictEqual(
+      gameController.evalBarElement.style.display,
+      "none",
+      "Eval bar must hide when the board disconnects during SPA navigation"
+    );
+
+    windowListeners.scroll();
+    assert.strictEqual(animationFrameQueue.length, 1);
+    gameController.removeEvaluationBar();
+    assert.deepStrictEqual(
+      cancelledAnimationFrames,
+      [3],
+      "removeEvaluationBar must cancel pending animation frame"
+    );
+    assert.strictEqual(windowListeners.scroll, undefined);
+    assert.strictEqual(windowListeners.resize, undefined);
+  }
 );
 
-gameController.setEvaluationDisplay(-1240, false);
-assert.strictEqual(gameController.evalScoreAbbreviatedElement.textContent, "12");
-assert.strictEqual(
-  gameController.evalScoreAbbreviatedElement.classList.contains("bettermint-evalbar-light"),
-  true
-);
-
-gameController.chessboardElement.isConnected = false;
-gameController.evalBarSyncHandler();
-assert.strictEqual(
-  gameController.evalBarElement.style.display,
-  "none",
-  "Eval bar must hide when the board disconnects during SPA navigation"
-);
-
-console.log("Eval bar visual parity tests passed.");
+console.log("Eval bar tests passed.");

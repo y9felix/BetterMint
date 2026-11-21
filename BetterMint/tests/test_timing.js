@@ -1,10 +1,11 @@
 const assert = require("assert");
 const path = require("path");
+const { EXTENSION_ROOT_DIR, withMockedGlobals } = require("./helpers");
 const {
   UciEngineClient,
   EXTENSION_OPTION_KEY,
   setExtensionOptionsForTesting
-} = require(path.join(__dirname, "../js/Mint.js"));
+} = require(path.join(EXTENSION_ROOT_DIR, "js/Mint.js"));
 
 const baseTimingOptions = {
   [EXTENSION_OPTION_KEY.HumanLikeMoves]: true,
@@ -44,12 +45,14 @@ setExtensionOptionsForTesting({
   ...baseTimingOptions,
   [EXTENSION_OPTION_KEY.HumanLikeMoves]: false
 });
-const instantEngine = createEngineWithGameContext();
-assert.strictEqual(instantEngine.calculateAutoMoveDelayMs({ from: "e2", to: "e4" }), 0);
+assert.strictEqual(
+  createEngineWithGameContext().calculateAutoMoveDelayMs({ from: "e2", to: "e4" }),
+  0,
+  "HumanLikeMoves=false must produce 0ms delay"
+);
 
 setExtensionOptionsForTesting(baseTimingOptions);
 const normalEngine = createEngineWithGameContext({ moveNumber: 15 });
-
 for (let sampleIndex = 0; sampleIndex < 500; sampleIndex++) {
   const delayMs = normalEngine.calculateAutoMoveDelayMs({ from: "e2", to: "e4" });
   assert.ok(
@@ -58,65 +61,65 @@ for (let sampleIndex = 0; sampleIndex < 500; sampleIndex++) {
   );
 }
 
-const forcedEngine = createEngineWithGameContext({ isForced: true, moveNumber: 15 });
-const forcedDelayMs = forcedEngine.calculateAutoMoveDelayMs({ from: "e2", to: "e4" });
-assert.ok(forcedDelayMs >= baseTimingOptions[EXTENSION_OPTION_KEY.PhysicalFloor]);
-
-const recaptureEngine = createEngineWithGameContext({ isRecapture: true, moveNumber: 15 });
-const recaptureDelayMs = recaptureEngine.calculateAutoMoveDelayMs({ from: "d1", to: "e4" });
-assert.ok(recaptureDelayMs >= baseTimingOptions[EXTENSION_OPTION_KEY.PhysicalFloor]);
+assert.ok(
+  createEngineWithGameContext({ isForced: true, moveNumber: 15 }).calculateAutoMoveDelayMs({
+    from: "e2",
+    to: "e4"
+  }) >= baseTimingOptions[EXTENSION_OPTION_KEY.PhysicalFloor]
+);
+assert.ok(
+  createEngineWithGameContext({ isRecapture: true, moveNumber: 15 }).calculateAutoMoveDelayMs({
+    from: "d1",
+    to: "e4"
+  }) >= baseTimingOptions[EXTENSION_OPTION_KEY.PhysicalFloor]
+);
 
 const originalRandom = Math.random;
 Math.random = () => 0.25;
 try {
-  const prevDocument = global.document;
-  global.document = {
-    querySelector: () => ({ textContent: "0:30" })
-  };
+  withMockedGlobals({ document: { querySelector: () => ({ textContent: "0:30" }) } }, () => {
+    setExtensionOptionsForTesting({
+      [EXTENSION_OPTION_KEY.HumanLikeMoves]: true,
+      [EXTENSION_OPTION_KEY.MovePace]: 10.0,
+      [EXTENSION_OPTION_KEY.PhysicalFloor]: 500,
+      [EXTENSION_OPTION_KEY.TimingSpread]: 0.01,
+      [EXTENSION_OPTION_KEY.ReflexMultiplier]: 0.25,
+      [EXTENSION_OPTION_KEY.OpeningMovesThreshold]: 0,
+      [EXTENSION_OPTION_KEY.OpeningMultiplier]: 0.40,
+      [EXTENSION_OPTION_KEY.ClockThreshold]: 0
+    });
+    const baseMedianDelay = createEngineWithGameContext({ moveNumber: 3 }).calculateAutoMoveDelayMs({
+      from: "e2",
+      to: "e4"
+    });
+    const reflexMedianDelay = createEngineWithGameContext({
+      isRecapture: true,
+      moveNumber: 15
+    }).calculateAutoMoveDelayMs({ from: "d1", to: "e4" });
+    assert.ok(
+      reflexMedianDelay < baseMedianDelay * 0.4,
+      "Reflex multiplier < 1 must speed up recaptures/forced moves while OpeningMoves=0 stays off"
+    );
 
-  setExtensionOptionsForTesting({
-    [EXTENSION_OPTION_KEY.HumanLikeMoves]: true,
-    [EXTENSION_OPTION_KEY.MovePace]: 10.0,
-    [EXTENSION_OPTION_KEY.PhysicalFloor]: 500,
-    [EXTENSION_OPTION_KEY.TimingSpread]: 0.01,
-    [EXTENSION_OPTION_KEY.ReflexMultiplier]: 0.25,
-    [EXTENSION_OPTION_KEY.OpeningMovesThreshold]: 0,
-    [EXTENSION_OPTION_KEY.OpeningMultiplier]: 0.40,
-    [EXTENSION_OPTION_KEY.ClockThreshold]: 0
+    setExtensionOptionsForTesting({
+      [EXTENSION_OPTION_KEY.HumanLikeMoves]: true,
+      [EXTENSION_OPTION_KEY.MovePace]: 10.0,
+      [EXTENSION_OPTION_KEY.PhysicalFloor]: 500,
+      [EXTENSION_OPTION_KEY.TimingSpread]: 0.01,
+      [EXTENSION_OPTION_KEY.ReflexMultiplier]: 1.0,
+      [EXTENSION_OPTION_KEY.OpeningMovesThreshold]: 0,
+      [EXTENSION_OPTION_KEY.OpeningMultiplier]: 1.0,
+      [EXTENSION_OPTION_KEY.ClockThreshold]: 120
+    });
+    const lowClockDelay = createEngineWithGameContext({ moveNumber: 15 }).calculateAutoMoveDelayMs({
+      from: "e2",
+      to: "e4"
+    });
+    assert.ok(
+      lowClockDelay < baseMedianDelay * 0.4 && lowClockDelay >= 500,
+      "Clock threshold must scale delay linearly toward physical floor"
+    );
   });
-  const baseMedianDelay = createEngineWithGameContext({ moveNumber: 3 }).calculateAutoMoveDelayMs({
-    from: "e2",
-    to: "e4"
-  });
-  const reflexMedianDelay = createEngineWithGameContext({
-    isRecapture: true,
-    moveNumber: 15
-  }).calculateAutoMoveDelayMs({ from: "d1", to: "e4" });
-  assert.ok(
-    reflexMedianDelay < baseMedianDelay * 0.4,
-    "Reflex multiplier < 1 must speed up recaptures/forced moves while OpeningMoves=0 stays off"
-  );
-
-  setExtensionOptionsForTesting({
-    [EXTENSION_OPTION_KEY.HumanLikeMoves]: true,
-    [EXTENSION_OPTION_KEY.MovePace]: 10.0,
-    [EXTENSION_OPTION_KEY.PhysicalFloor]: 500,
-    [EXTENSION_OPTION_KEY.TimingSpread]: 0.01,
-    [EXTENSION_OPTION_KEY.ReflexMultiplier]: 1.0,
-    [EXTENSION_OPTION_KEY.OpeningMovesThreshold]: 0,
-    [EXTENSION_OPTION_KEY.OpeningMultiplier]: 1.0,
-    [EXTENSION_OPTION_KEY.ClockThreshold]: 120
-  });
-  const lowClockDelay = createEngineWithGameContext({ moveNumber: 15 }).calculateAutoMoveDelayMs({
-    from: "e2",
-    to: "e4"
-  });
-  assert.ok(
-    lowClockDelay < baseMedianDelay * 0.4 && lowClockDelay >= 500,
-    "Clock threshold must scale delay linearly toward physical floor without hardcoded min multiplier"
-  );
-
-  global.document = prevDocument;
 } finally {
   Math.random = originalRandom;
 }

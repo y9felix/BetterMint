@@ -11,7 +11,9 @@ from websockets.exceptions import ConnectionClosedOK, InvalidStatus
 from websockets.frames import Close
 from websockets.protocol import State
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from helpers import FakeWebSocket, make_engine_mock
 from main import (
     EngineProcess,
     handle_websocket_connection,
@@ -21,37 +23,10 @@ from main import (
     validate_websocket_handshake,
 )
 
-class FakeWebSocket:
-    def __init__(self, message_generator=None):
-        self.state = State.OPEN
-        self.sent_messages = []
-        self.close = AsyncMock(side_effect=self._mark_closed)
-        self._message_generator = message_generator
-
-    async def _mark_closed(self, code=1000, reason=""):
-        self.state = State.CLOSED
-
-    async def send(self, message):
-        self.sent_messages.append(message)
-
-    def __aiter__(self):
-        if self._message_generator is None:
-            async def empty_stream():
-                return
-                yield
-            return empty_stream()
-        return self._message_generator()
 
 class TestServerLogging(unittest.TestCase):
     def _make_engine_mock(self):
-        mock_engine = MagicMock()
-        mock_engine.start = AsyncMock(return_value=mock_engine)
-        mock_engine.send_uci = AsyncMock()
-        mock_engine.wait_until_closed = AsyncMock()
-        mock_engine.stderr = None
-        mock_engine.has_sent_quit = False
-        mock_engine.exit_code = None
-        return mock_engine
+        return make_engine_mock()
 
     def test_serve_engine_websocket_logs_spawn_and_uci_in(self):
         async def fake_messages():

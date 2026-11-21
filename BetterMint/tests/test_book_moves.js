@@ -1,39 +1,25 @@
 const assert = require("assert");
 const path = require("path");
 const {
+  EXTENSION_ROOT_DIR,
+  createAutoOpenWebSocketClass,
+  createMockChessComGame,
+  captureConsole
+} = require("./helpers");
+
+global.WebSocket = createAutoOpenWebSocketClass();
+
+const {
   UciEngineClient,
   GameController,
   EXTENSION_OPTION_KEY,
   setExtensionOptionsForTesting
-} = require(path.join(__dirname, "../js/Mint.js"));
-
-class MockWebSocket {
-  constructor(engineUrl) {
-    this.url = engineUrl;
-    this.readyState = MockWebSocket.OPEN;
-    this.listeners = {};
-    this.sentMessages = [];
-  }
-  addEventListener(eventName, listener) {
-    if (!this.listeners[eventName]) this.listeners[eventName] = [];
-    this.listeners[eventName].push(listener);
-  }
-  send(messageText) {
-    this.sentMessages.push(messageText);
-  }
-  close() {
-    this.readyState = MockWebSocket.CLOSED;
-  }
-}
-MockWebSocket.CONNECTING = 0;
-MockWebSocket.OPEN = 1;
-MockWebSocket.CLOSED = 3;
-global.WebSocket = MockWebSocket;
+} = require(path.join(EXTENSION_ROOT_DIR, "js/Mint.js"));
 
 assert.strictEqual(
   GameController.HIGHLIGHT_COLORS.Book,
   "#a88865",
-  "Upstream Book highlight color #a88865 must be defined"
+  "Book highlight color #a88865 must be defined"
 );
 
 setExtensionOptionsForTesting({
@@ -46,8 +32,12 @@ setExtensionOptionsForTesting({
 });
 
 let lastPlayedMove = null;
-const addedMarkings = [];
 const hintBatches = [];
+const { chessComGame, addedMarkings } = createMockChessComGame({
+  getTurn: () => 2,
+  getLastMove: () => lastPlayedMove
+});
+
 const gameController = Object.create(GameController.prototype);
 gameController.lastAnalysisMarkings = [];
 gameController.activeHintMarkings = [];
@@ -56,15 +46,7 @@ gameController.boardOptions = {};
 gameController.renderMoveHints = (moves) => {
   hintBatches.push(moves);
 };
-gameController.chessComGame = {
-  getPlayingAs: () => 1,
-  getTurn: () => 2,
-  getLastMove: () => lastPlayedMove,
-  markings: {
-    addOne: (marking) => addedMarkings.push(marking),
-    removeOne: () => {}
-  }
-};
+gameController.chessComGame = chessComGame;
 
 const engineClient = new UciEngineClient({
   extensionOptions: {
@@ -76,12 +58,8 @@ const engineClient = new UciEngineClient({
 engineClient.isEngineLoaded = true;
 engineClient.isEngineReady = true;
 
-const originalWarn = console.warn;
-const warnMessages = [];
-console.warn = (msg) => warnMessages.push(String(msg));
-
-try {
-  // Position 1: 1. e4 -> current position still hits book with replies e7e5, c7c5
+const capturedWarnings = captureConsole(["warn"], () => {
+  // 1. Position still hits book with replies e7e5, c7c5
   lastPlayedMove = { from: "e2", to: "e4" };
   addedMarkings.length = 0;
   engineClient.setPositionAndSearch("fen_after_e4", true, "position startpos moves e2e4");
@@ -90,7 +68,6 @@ try {
   engineClient.processEngineMessage("bestmove e7e5");
 
   assert.strictEqual(hintBatches[hintBatches.length - 1][0].uciMove, "e7e5");
-  assert.strictEqual(warnMessages.length, 0, "Book bestmove without PV info must not emit warning");
   assert.deepStrictEqual(addedMarkings, [
     {
       data: { opacity: 0.5, color: "#a88865", square: "e4" },
@@ -106,40 +83,37 @@ try {
     }
   ]);
 
-  // Position 2: Black plays 1... e5 (in previousPositionBookMoves), resulting position leaves book (miss)
+  // 2. Final leaf move matching previousPositionBookMoves still marks Book on book exit
   lastPlayedMove = { from: "e7", to: "e5" };
   addedMarkings.length = 0;
   engineClient.setPositionAndSearch("fen_after_e4_e5", false, "position startpos moves e2e4 e7e5");
   engineClient.processEngineMessage("info depth 10 score cp 35 pv g1f3");
   engineClient.processEngineMessage("bestmove g1f3");
-
   assert.strictEqual(
     addedMarkings.find((m) => m.type === "effect")?.data.type,
     "Book",
     "Final leaf move matching previousPositionBookMoves must still be marked Book on book exit"
   );
 
-  // Position 3: Out-of-book sideline (e7e5 -> g1f3 was expected bestmove at +0.35; White plays h2h3 dropping eval)
-  // Note previousPositionBookMoves was empty after Position 2, and Position 3 is a book miss.
+  // 3. Out-of-book sideline falls back to engine centipawn evaluation
   lastPlayedMove = { from: "h2", to: "h3" };
   addedMarkings.length = 0;
   engineClient.setPositionAndSearch("fen_after_h3", false, "position startpos moves e2e4 e7e5 h2h3");
   engineClient.processEngineMessage("info depth 10 score cp 250 pv d7d5");
   engineClient.processEngineMessage("bestmove d7d5");
-
   assert.strictEqual(
     addedMarkings.find((m) => m.type === "effect")?.data.type,
     "Blunder",
     "Non-book move after leaving book must fall back to engine centipawn evaluation"
   );
 
-  // Stale book message while stop is in flight must be ignored
+  // 4. Stale book message while stop is in flight is ignored
   engineClient.setPositionAndSearch("fen_mid", false, "position startpos moves d2d4");
   engineClient.hasRequestedStop = true;
   engineClient.processEngineMessage("info string book d7d5");
   assert.strictEqual(engineClient.hasCurrentPositionBookHit, false);
 
-  // isNewGame must reset previousPositionBookMoves
+  // 5. isNewGame resets previousPositionBookMoves
   engineClient.hasRequestedStop = false;
   engineClient.processEngineMessage("info string book d7d5");
   assert.strictEqual(engineClient.currentPositionBookMoves.has("d7d5"), true);
@@ -147,8 +121,12 @@ try {
   engineClient.processEngineMessage("readyok");
   assert.strictEqual(engineClient.previousPositionBookMoves.size, 0);
   assert.strictEqual(engineClient.hasCurrentPositionBookHit, false);
-} finally {
-  console.warn = originalWarn;
-}
+});
+
+assert.strictEqual(
+  capturedWarnings.warn.length,
+  0,
+  "Book bestmove without PV info must not emit console.warn"
+);
 
 console.log("Book move tests passed.");

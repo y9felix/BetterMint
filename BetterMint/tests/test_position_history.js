@@ -1,6 +1,14 @@
 const assert = require("assert");
 const path = require("path");
 const {
+  EXTENSION_ROOT_DIR,
+  createAutoOpenWebSocketClass,
+  createMockChessComGame
+} = require("./helpers");
+
+global.WebSocket = createAutoOpenWebSocketClass();
+
+const {
   UciEngineClient,
   GameController,
   EXTENSION_OPTION_KEY,
@@ -8,30 +16,7 @@ const {
   buildUciPositionCommand,
   STANDARD_STARTPOS_FEN,
   setExtensionOptionsForTesting
-} = require(path.join(__dirname, "../js/Mint.js"));
-
-class MockWebSocket {
-  constructor(engineUrl) {
-    this.url = engineUrl;
-    this.readyState = MockWebSocket.OPEN;
-    this.listeners = {};
-    this.sentMessages = [];
-  }
-  addEventListener(eventName, listener) {
-    if (!this.listeners[eventName]) this.listeners[eventName] = [];
-    this.listeners[eventName].push(listener);
-  }
-  send(messageText) {
-    this.sentMessages.push(messageText);
-  }
-  close() {
-    this.readyState = MockWebSocket.CLOSED;
-  }
-}
-MockWebSocket.CONNECTING = 0;
-MockWebSocket.OPEN = 1;
-MockWebSocket.CLOSED = 3;
-global.WebSocket = MockWebSocket;
+} = require(path.join(EXTENSION_ROOT_DIR, "js/Mint.js"));
 
 setExtensionOptionsForTesting({
   [EXTENSION_OPTION_KEY.EngineWebSocketUrl]: "ws://localhost:8000/ws",
@@ -60,27 +45,20 @@ assert.strictEqual(
   `position fen ${customAnchorFen} moves f1b5`
 );
 
-function createMockBoardHarness(initialFen, extraGameMethods = {}) {
+function createBoardHarness(initialFen, extraGameMethods = {}) {
   let activeFen = initialFen;
   let lastPlayedMove = null;
   let turnValue = activeFen.split(" ")[1] === "b" ? 2 : 1;
-  const eventHandlers = {};
 
-  const chessComGame = Object.assign(
-    {
-      getOptions: () => ({ flipped: false }),
-      getPlayingAs: () => 1,
-      getTurn: () => turnValue,
-      getMode: () => "playing",
-      getFEN: () => activeFen,
-      getLastMove: () => lastPlayedMove,
-      getLegalMoves: () => [],
-      markings: { removeOne: () => {}, addOne: () => {}, addMany: () => {} },
-      on: (eventName, handler) => {
-        eventHandlers[eventName] = handler;
-      }
-    },
-    extraGameMethods
+  const { chessComGame, eventHandlers } = createMockChessComGame(
+    Object.assign(
+      {
+        getTurn: () => turnValue,
+        getFEN: () => activeFen,
+        getLastMove: () => lastPlayedMove
+      },
+      extraGameMethods
+    )
   );
 
   const extension = {
@@ -121,7 +99,7 @@ function createMockBoardHarness(initialFen, extraGameMethods = {}) {
 }
 
 // 1. Sequential moves from startpos build full UCI move history including repetition cycles
-const standardHarness = createMockBoardHarness(STANDARD_STARTPOS_FEN);
+const standardHarness = createBoardHarness(STANDARD_STARTPOS_FEN);
 standardHarness.extension.gameController.updateEnginePosition(true);
 standardHarness.engineClient.processEngineMessage("readyok");
 assert.ok(standardHarness.engineClient.websocket.sentMessages.includes("position startpos"));
@@ -150,7 +128,7 @@ assert.strictEqual(
   "Sequential moves must accumulate into full startpos move history"
 );
 
-// 2. Idempotent re-query on same FEN (e.g. changing options / switching engines) must not duplicate last move
+// 2. Idempotent re-query on same FEN must not duplicate last move
 standardHarness.engineClient.isEvaluating = false;
 standardHarness.extension.gameController.updateEnginePosition(false);
 const afterRequeryPositions = standardHarness.engineClient.websocket.sentMessages.filter((msg) =>
@@ -196,15 +174,13 @@ let mockBoardHistory = [
   { from: "c2", to: "c4" }
 ];
 const midGameFen = "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2";
-const apiHarness = createMockBoardHarness(midGameFen, {
+const apiHarness = createBoardHarness(midGameFen, {
   getHistory: () => mockBoardHistory,
   getStartingFEN: () => STANDARD_STARTPOS_FEN
 });
 apiHarness.extension.gameController.updateEnginePosition(false);
 assert.ok(
-  apiHarness.engineClient.websocket.sentMessages.includes(
-    "position startpos moves d2d4 d7d5 c2c4"
-  ),
+  apiHarness.engineClient.websocket.sentMessages.includes("position startpos moves d2d4 d7d5 c2c4"),
   "Board history API must supply full move list on mid-game attach"
 );
 
@@ -224,7 +200,7 @@ assert.strictEqual(
 );
 
 // 6. SAN-only getMoves() is rejected safely and falls back to incremental tracking
-const sanFallbackHarness = createMockBoardHarness(STANDARD_STARTPOS_FEN, {
+const sanFallbackHarness = createBoardHarness(STANDARD_STARTPOS_FEN, {
   getMoves: () => ["e4", "e5"]
 });
 sanFallbackHarness.playMove(
@@ -273,7 +249,7 @@ assert.strictEqual(
 
 // 8. Custom non-standard starting FEN anchors at fen and tracks promotion moves
 const puzzleStartFen = "8/4P3/8/8/8/8/4K3/4k3 w - - 0 40";
-const puzzleHarness = createMockBoardHarness(puzzleStartFen);
+const puzzleHarness = createBoardHarness(puzzleStartFen);
 puzzleHarness.playMove("4Q3/8/8/8/8/8/4K3/4k3 b - - 0 40", {
   from: "e7",
   to: "e8",
@@ -289,7 +265,11 @@ assert.ok(
 // 9. Early move recorded before engineClient is attached survives until readyok sync
 let preClientFen = STANDARD_STARTPOS_FEN;
 let preClientMove = null;
-const preClientHandlers = {};
+const { chessComGame: preClientGame, eventHandlers: preClientHandlers } = createMockChessComGame({
+  getTurn: () => (preClientFen.split(" ")[1] === "b" ? 2 : 1),
+  getFEN: () => preClientFen,
+  getLastMove: () => preClientMove
+});
 const preClientExtension = {
   extensionOptions: {
     [EXTENSION_OPTION_KEY.EngineWebSocketUrl]: "ws://localhost:8000/ws",
@@ -303,20 +283,7 @@ const preClientExtension = {
   gameController: null,
   engineClient: null
 };
-preClientExtension.gameController = new GameController(preClientExtension, {
-  game: {
-    getOptions: () => ({ flipped: false }),
-    getPlayingAs: () => 1,
-    getTurn: () => (preClientFen.split(" ")[1] === "b" ? 2 : 1),
-    getMode: () => "playing",
-    getFEN: () => preClientFen,
-    getLastMove: () => preClientMove,
-    markings: { removeOne: () => {}, addOne: () => {}, addMany: () => {} },
-    on: (eventName, handler) => {
-      preClientHandlers[eventName] = handler;
-    }
-  }
-});
+preClientExtension.gameController = new GameController(preClientExtension, { game: preClientGame });
 preClientFen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
 preClientMove = { from: "e2", to: "e4" };
 preClientHandlers.Move();

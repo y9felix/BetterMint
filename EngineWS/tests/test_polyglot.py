@@ -4,11 +4,13 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 from websockets.asyncio.client import connect
 from websockets.asyncio.server import serve
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from helpers import FakeWebSocket, make_engine_mock
 import main
 from main import handle_websocket_connection, validate_websocket_handshake
 from polyglot import (
@@ -204,22 +206,11 @@ class TestPolyglot(unittest.TestCase):
             yield "go depth 5"
             await asyncio.sleep(0.05)
 
-        fake_ws = MagicMock()
-        fake_ws.state = main.State.OPEN
-        fake_ws.send = AsyncMock()
-        fake_ws.close = AsyncMock()
-        fake_ws.__aiter__ = lambda self=fake_ws: fake_messages()
+        fake_ws = FakeWebSocket(fake_messages)
 
         stdout_trap = io.StringIO()
         with patch("sys.stdout", stdout_trap), patch("main.EngineProcess") as mock_proc:
-            mock_engine = MagicMock()
-            mock_engine.start = AsyncMock(return_value=mock_engine)
-            mock_engine.send_uci = AsyncMock()
-            mock_engine.wait_until_closed = AsyncMock()
-            mock_engine.read_stdout_line = AsyncMock(side_effect=["bestmove d2d4", None])
-            mock_engine.stderr = None
-            mock_engine.has_sent_quit = False
-            mock_engine.exit_code = None
+            mock_engine = make_engine_mock(stdout_lines=["bestmove d2d4", None])
             mock_proc.return_value = mock_engine
             asyncio.run(main.serve_engine_websocket(fake_ws, ["stockfish"], book_path="/nonexistent/missing.bin"))
 
@@ -253,21 +244,10 @@ class TestPolyglot(unittest.TestCase):
                 yield "go depth 5"
                 await asyncio.sleep(0.05)
 
-            fake_ws = MagicMock()
-            fake_ws.state = main.State.OPEN
-            fake_ws.send = AsyncMock()
-            fake_ws.close = AsyncMock()
-            fake_ws.__aiter__ = lambda self=fake_ws: fake_messages()
+            fake_ws = FakeWebSocket(fake_messages)
 
             with patch("main.EngineProcess") as mock_proc:
-                mock_engine = MagicMock()
-                mock_engine.start = AsyncMock(return_value=mock_engine)
-                mock_engine.send_uci = AsyncMock()
-                mock_engine.wait_until_closed = AsyncMock()
-                mock_engine.read_stdout_line = AsyncMock(side_effect=["bestmove d2d4", None])
-                mock_engine.stderr = None
-                mock_engine.has_sent_quit = False
-                mock_engine.exit_code = None
+                mock_engine = make_engine_mock(stdout_lines=["bestmove d2d4", None])
                 mock_proc.return_value = mock_engine
                 asyncio.run(main.serve_engine_websocket(fake_ws, ["stockfish"], book_path=book_path))
 
@@ -276,8 +256,7 @@ class TestPolyglot(unittest.TestCase):
                 sent_uci,
                 ["position startpos", "position fen invalid_fen_string", "go depth 5"],
             )
-            ws_sent = [call.args[0] for call in fake_ws.send.await_args_list]
-            self.assertEqual(ws_sent, ["bestmove d2d4"])
+            self.assertEqual(fake_ws.sent_messages, ["bestmove d2d4"])
 
     def test_apply_uci_move_rejects_wrong_turn_self_move_and_friendly_capture(self):
         board = PolyglotBoard()
