@@ -342,17 +342,11 @@ class PolyglotBoard:
         )
 
 def resolve_book_path(engine_config: dict, engine_name: str | None, base_dir: str) -> str | None:
-    if not isinstance(engine_config, dict):
-        return None
     books_map = engine_config.get("books")
-    raw_book = None
-    has_explicit_override = False
-    if isinstance(books_map, dict):
-        lookup_name = engine_name if engine_name else engine_config.get("default")
-        if lookup_name and lookup_name in books_map:
-            raw_book = books_map[lookup_name]
-            has_explicit_override = True
-    if not has_explicit_override:
+    lookup_name = engine_name or engine_config.get("default")
+    if isinstance(books_map, dict) and lookup_name in books_map:
+        raw_book = books_map[lookup_name]
+    else:
         raw_book = engine_config.get("book")
     if not isinstance(raw_book, str):
         return None
@@ -378,10 +372,7 @@ def lookup_polyglot_moves(board: PolyglotBoard, book_path: str | None) -> list[t
             while lo < hi:
                 mid = (lo + hi) // 2
                 book_file.seek(mid * ENTRY_STRUCT.size)
-                entry_bytes = book_file.read(ENTRY_STRUCT.size)
-                if len(entry_bytes) < ENTRY_STRUCT.size:
-                    break
-                entry_key, _, _, _ = ENTRY_STRUCT.unpack(entry_bytes)
+                entry_key, _, _, _ = ENTRY_STRUCT.unpack(book_file.read(ENTRY_STRUCT.size))
                 if entry_key < target_key:
                     lo = mid + 1
                 else:
@@ -397,8 +388,7 @@ def lookup_polyglot_moves(board: PolyglotBoard, book_path: str | None) -> list[t
                 if entry_key != target_key:
                     break
                 uci_move = board.decode_polyglot_move(raw_move)
-                if UCI_MOVE_RE.match(uci_move):
-                    move_weights[uci_move] = move_weights.get(uci_move, 0) + weight
+                move_weights[uci_move] = move_weights.get(uci_move, 0) + weight
             return list(move_weights.items())
     except OSError:
         return []

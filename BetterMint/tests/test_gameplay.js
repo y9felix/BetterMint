@@ -20,7 +20,6 @@ const {
   setExtensionOptionsForTesting
 } = require(path.join(EXTENSION_ROOT_DIR, "js/Mint.js"));
 
-// 1. Legal move resolution (castling, promotions, and illegal/Chess960 rejection)
 const standardLegalMoves = [
   { from: "e1", to: "g1", san: "O-O", flags: "k" },
   { from: "e1", to: "c1", san: "O-O-O", flags: "q" },
@@ -58,7 +57,6 @@ assert.strictEqual(
   "Illegal same-rank rook move must return null"
 );
 
-// 2. Win-probability move quality classification
 function classifyMoveQuality(preMoveCandidate, postMoveCandidate, playedMove) {
   const { chessComGame, addedMarkings } = createMockChessComGame({
     getLastMove: () => playedMove
@@ -170,7 +168,6 @@ assert.strictEqual(
 assert.strictEqual(GameController.HIGHLIGHT_COLORS.Brilliant, undefined);
 assert.strictEqual(GameController.HIGHLIGHT_COLORS.GreatFind, undefined);
 
-// 3. Hint rendering, signature dedupe, analysis-marking preservation, and terminal positions
 setExtensionOptionsForTesting({
   [EXTENSION_OPTION_KEY.EngineWebSocketUrl]: "ws://localhost:8000/ws",
   [EXTENSION_OPTION_KEY.Depth]: 10,
@@ -253,7 +250,6 @@ assert.strictEqual(
   "Terminal position must clear existing hint arrows"
 );
 
-// 4. Auto Move safety guards and recovery after rejected/throwing board moves
 setExtensionOptionsForTesting({
   [EXTENSION_OPTION_KEY.EngineWebSocketUrl]: "ws://localhost:8000/ws",
   [EXTENSION_OPTION_KEY.Depth]: 10,
@@ -338,7 +334,6 @@ assert.strictEqual(executedAutoMoves[0].promotion, "q");
 assert.strictEqual(executedAutoMoves[0].userGenerated, true);
 assert.strictEqual(autoMoveClient.lastAutoMovedFen, "fen_active");
 
-// 5. Auto Queue button priority and active-game guard
 let clickedButtonLabels = [];
 const createMockQueueButton = (labelText) => ({
   textContent: labelText,
@@ -423,7 +418,6 @@ withMockedGlobals(
   }
 );
 
-// 6. GameController teardown and gameOver cleanup
 const teardownTimers = createFakeTimers();
 withMockedGlobals(teardownTimers.globals, () => {
   let postDestroyEngineUpdateCount = 0;
@@ -511,5 +505,156 @@ withMockedGlobals(gameOverTimers.globals, () => {
   assert.ok(gameOverTimers.clearedIntervalIds.includes(gameOverTimers.intervals[0].id));
   gameOverController.destroy();
 });
+
+const observerTimers = createFakeTimers();
+let activeObserverCallback = null;
+let observerDisconnectCount = 0;
+class MockAutoQueueMutationObserver {
+  constructor(callback) {
+    activeObserverCallback = callback;
+  }
+  observe() {}
+  disconnect() {
+    observerDisconnectCount++;
+  }
+}
+
+let currentOnlineMode = "playing";
+let queryScanCount = 0;
+let observerClickedLabels = [];
+let primaryQueueButtons = [];
+let genericQueueButtons = [];
+const createTimedQueueButton = (labelText) => ({
+  textContent: labelText,
+  disabled: false,
+  offsetWidth: 100,
+  offsetHeight: 36,
+  getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 36 }),
+  dispatchEvent: () => {},
+  click: () => observerClickedLabels.push(labelText)
+});
+
+withMockedGlobals(
+  Object.assign({}, observerTimers.globals, {
+    MutationObserver: MockAutoQueueMutationObserver,
+    window: { addEventListener: () => {} },
+    PointerEvent: function () {},
+    MouseEvent: function () {},
+    document: {
+      body: {},
+      addEventListener: () => {},
+      querySelectorAll: (selector) => {
+        queryScanCount++;
+        return selector.includes("game-over-button-primary")
+          ? primaryQueueButtons
+          : genericQueueButtons;
+      }
+    }
+  }),
+  () => {
+    const { chessComGame, eventHandlers } = createMockChessComGame({
+      getMode: () => currentOnlineMode
+    });
+    setExtensionOptionsForTesting({
+      [EXTENSION_OPTION_KEY.EvaluationBar]: false,
+      [EXTENSION_OPTION_KEY.AutoQueue]: true,
+      [EXTENSION_OPTION_KEY.RematchFirst]: false
+    });
+
+    const onlineController = new GameController(
+      { engineClient: { updatePosition: () => {}, stopEvaluation: () => {} } },
+      { game: chessComGame }
+    );
+    const addedNodeMutation = [{ addedNodes: [{ nodeType: 1 }] }];
+
+    activeObserverCallback(addedNodeMutation);
+    activeObserverCallback(addedNodeMutation);
+    assert.strictEqual(
+      observerTimers.timeouts.length,
+      1,
+      "Mutation burst must coalesce into a single trailing scan timer"
+    );
+    assert.strictEqual(observerTimers.timeouts[0].delayMs, 250);
+    observerTimers.timeouts[0].callback();
+    assert.strictEqual(
+      queryScanCount,
+      0,
+      "Trailing observer scan must skip DOM queries while still playing"
+    );
+
+    activeObserverCallback(addedNodeMutation);
+    assert.strictEqual(observerTimers.timeouts.length, 2);
+    currentOnlineMode = "idle";
+    genericQueueButtons = [createTimedQueueButton("New 3 min")];
+    activeObserverCallback(addedNodeMutation);
+    assert.strictEqual(observerTimers.timeouts.length, 2);
+    observerTimers.timeouts[1].callback();
+    assert.deepStrictEqual(
+      observerClickedLabels,
+      ["New 3 min"],
+      "Trailing coalesced timer must click New 3 min mounted during burst"
+    );
+    assert.strictEqual(
+      onlineController.gameOverRetryIntervalId,
+      null,
+      "Successful trailing click must not start a redundant retry interval"
+    );
+
+    observerClickedLabels = [];
+    primaryQueueButtons = [];
+    genericQueueButtons = [];
+    onlineController.lastAutoQueueClickMs = 0;
+    currentOnlineMode = "playing";
+    eventHandlers.Move();
+    currentOnlineMode = "idle";
+    activeObserverCallback(addedNodeMutation);
+    observerTimers.timeouts[observerTimers.timeouts.length - 1].callback();
+    assert.ok(
+      onlineController.gameOverRetryIntervalId !== null,
+      "Exiting playing mode with no visible button must start handleGameOver retry loop"
+    );
+    const retryInterval = observerTimers.intervals[observerTimers.intervals.length - 1];
+    genericQueueButtons = [createTimedQueueButton("New 3 min")];
+    retryInterval.callback();
+    assert.deepStrictEqual(
+      observerClickedLabels,
+      ["New 3 min"],
+      "Retry loop must click New 3 min once button finishes mounting"
+    );
+    assert.strictEqual(onlineController.gameOverRetryIntervalId, null);
+
+    observerClickedLabels = [];
+    genericQueueButtons = [];
+    onlineController.lastAutoQueueClickMs = 0;
+    currentOnlineMode = "playing";
+    eventHandlers.ResetGame();
+    currentOnlineMode = "analysis";
+    eventHandlers.ModeChanged({ data: "analysis" });
+    assert.ok(
+      onlineController.gameOverRetryIntervalId !== null,
+      "ModeChanged out of playing must start retry loop when button is not yet visible"
+    );
+    onlineController.clearGameOverRetryInterval();
+
+    activeObserverCallback(addedNodeMutation);
+    observerTimers.timeouts[observerTimers.timeouts.length - 1].callback();
+    assert.strictEqual(
+      onlineController.gameOverRetryIntervalId,
+      null,
+      "Non-playing analysis session must not start background game-over retry loop"
+    );
+
+    activeObserverCallback(addedNodeMutation);
+    const pendingScanTimer = observerTimers.timeouts[observerTimers.timeouts.length - 1];
+    assert.strictEqual(pendingScanTimer.isCleared, false);
+    onlineController.destroy();
+    assert.strictEqual(
+      pendingScanTimer.isCleared,
+      true,
+      "destroy must clear any pending Auto Queue trailing scan timer"
+    );
+    assert.ok(observerDisconnectCount >= 1);
+  }
+);
 
 console.log("Gameplay tests passed.");

@@ -7,12 +7,13 @@ const EVAL_BAR_DESKTOP_WIDTH_PX = 30;
 const EVAL_BAR_COMPACT_WIDTH_PX = 20;
 const EVAL_BAR_GUTTER_PX = 10;
 const AUTO_QUEUE_COOLDOWN_MS = 4000;
+const AUTO_QUEUE_SCAN_DELAY_MS = 250;
 const AUTO_QUEUE_RETRY_MS = 500;
 const AUTO_QUEUE_MAX_ATTEMPTS = 60;
 const ENGINE_STOP_TIMEOUT_MS = 1000;
-const OPTIONS_REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_SEARCH_DEPTH = 3;
 const STANDARD_STARTPOS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const SQUARE_RE = /^[a-h][1-8]$/;
 const UCI_MOVE_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
 let nextOptionsRequestId = 0;
@@ -20,19 +21,12 @@ let nextOptionsRequestId = 0;
 function requestExtensionOptions() {
   const pendingRequestId = nextOptionsRequestId++;
   return new Promise((resolve) => {
-    let responseTimeoutId = null;
     const onOptionsResponse = (optionsEvent) => {
-      if (optionsEvent.detail?.requestId === pendingRequestId) {
-        if (responseTimeoutId !== null) clearTimeout(responseTimeoutId);
+      if (optionsEvent.detail.requestId === pendingRequestId) {
         window.removeEventListener("BetterMintSendOptions", onOptionsResponse);
         resolve(optionsEvent.detail.extensionOptions);
       }
     };
-    responseTimeoutId = setTimeout(() => {
-      window.removeEventListener("BetterMintSendOptions", onOptionsResponse);
-      console.warn("[BetterMint] Timed out waiting for extension options; using fallback.");
-      resolve({});
-    }, OPTIONS_REQUEST_TIMEOUT_MS);
     window.addEventListener("BetterMintSendOptions", onOptionsResponse);
     window.dispatchEvent(
       new CustomEvent("BetterMintGetOptions", { detail: { requestId: pendingRequestId } })
@@ -74,11 +68,8 @@ function centipawnsToWinProbability(centipawns) {
 }
 
 function getEvalBarOffsetPx(viewportWidth) {
-  const effectiveWidth = Number.isFinite(viewportWidth)
-    ? viewportWidth
-    : EVAL_BAR_DESKTOP_MIN_WIDTH_PX;
   const barWidth =
-    effectiveWidth >= EVAL_BAR_DESKTOP_MIN_WIDTH_PX
+    viewportWidth >= EVAL_BAR_DESKTOP_MIN_WIDTH_PX
       ? EVAL_BAR_DESKTOP_WIDTH_PX
       : EVAL_BAR_COMPACT_WIDTH_PX;
   return barWidth + EVAL_BAR_GUTTER_PX;
@@ -113,9 +104,7 @@ function formatEvaluationDisplay(scoreValue, isMateScore) {
 }
 
 function getRemainingPlayerTimeSeconds() {
-  const clockElement =
-    typeof document !== "undefined" ? document.querySelector(CLOCK_BOTTOM_SELECTOR) : null;
-  const clockText = clockElement?.textContent?.trim();
+  const clockText = document.querySelector(CLOCK_BOTTOM_SELECTOR)?.textContent.trim();
   if (!clockText) return null;
   const colonMatch = clockText.match(/(\d+):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
   if (colonMatch) {
@@ -143,16 +132,13 @@ function getPositiveFloatOption(optionKey, fallbackValue) {
 }
 
 function getNonNegativeIntOption(optionKey, fallbackValue = 0) {
-  const rawValue = getExtensionOption(optionKey);
-  if (rawValue === undefined || rawValue === null || rawValue === "") return fallbackValue;
-  const parsedInt = parseInt(rawValue, 10);
-  return Number.isNaN(parsedInt) || parsedInt < 0 ? fallbackValue : parsedInt;
+  const parsedInt = parseInt(getExtensionOption(optionKey), 10);
+  return parsedInt >= 0 ? parsedInt : fallbackValue;
 }
 
 function resolveLegalMove(legalMoves, candidateMove) {
-  if (!Array.isArray(legalMoves) || !candidateMove) return null;
-  const candidatePromotion =
-    typeof candidateMove.promotion === "string" ? candidateMove.promotion.toLowerCase() : "";
+  if (!legalMoves || !candidateMove) return null;
+  const candidatePromotion = candidateMove.promotion ? candidateMove.promotion.toLowerCase() : "";
   return (
     legalMoves.find(
       (legalMove) =>
@@ -160,7 +146,7 @@ function resolveLegalMove(legalMoves, candidateMove) {
         legalMove.to === candidateMove.to &&
         (!candidatePromotion ||
           !legalMove.promotion ||
-          String(legalMove.promotion).toLowerCase() === candidatePromotion)
+          legalMove.promotion.toLowerCase() === candidatePromotion)
     ) || null
   );
 }
@@ -175,47 +161,32 @@ function hasAddedElementMutation(mutationRecords) {
 }
 
 function isStandardStartposFen(fen) {
-  if (typeof fen !== "string") return false;
   const trimmedFen = fen.trim();
   return trimmedFen === "startpos" || trimmedFen === STANDARD_STARTPOS_FEN;
 }
 
 function formatMoveToUci(moveRecord) {
+  if (!moveRecord) return null;
   if (typeof moveRecord === "string") {
     const uciToken = moveRecord.trim().toLowerCase();
     return UCI_MOVE_RE.test(uciToken) ? uciToken : null;
   }
-  if (!moveRecord || typeof moveRecord !== "object") return null;
-  const fromSquare =
-    typeof moveRecord.from === "string" ? moveRecord.from.trim().toLowerCase() : "";
-  const toSquare =
-    typeof moveRecord.to === "string" ? moveRecord.to.trim().toLowerCase() : "";
-  if (!/^[a-h][1-8]$/.test(fromSquare) || !/^[a-h][1-8]$/.test(toSquare)) {
-    return null;
-  }
-  let promotionPiece = "";
-  if (typeof moveRecord.promotion === "string") {
-    const trimmedPromotion = moveRecord.promotion.trim().toLowerCase();
-    if (/^[qrbn]$/.test(trimmedPromotion)) {
-      promotionPiece = trimmedPromotion;
-    }
-  }
+  const fromSquare = moveRecord.from?.trim().toLowerCase() || "";
+  const toSquare = moveRecord.to?.trim().toLowerCase() || "";
+  if (!SQUARE_RE.test(fromSquare) || !SQUARE_RE.test(toSquare)) return null;
+  const trimmedPromotion = moveRecord.promotion?.trim().toLowerCase() || "";
+  const promotionPiece = /^[qrbn]$/.test(trimmedPromotion) ? trimmedPromotion : "";
   return `${fromSquare}${toSquare}${promotionPiece}`;
 }
 
 function getFenPlyIndex(fen) {
-  if (typeof fen !== "string") return null;
   const trimmedFen = fen.trim();
   if (trimmedFen === "startpos") return 0;
   const fenFields = trimmedFen.split(/\s+/);
   if (fenFields.length < 6) return null;
   const activeColor = fenFields[1];
   const fullMoveNumber = parseInt(fenFields[5], 10);
-  if (
-    (activeColor !== "w" && activeColor !== "b") ||
-    !Number.isInteger(fullMoveNumber) ||
-    fullMoveNumber < 1
-  ) {
+  if ((activeColor !== "w" && activeColor !== "b") || fullMoveNumber < 1 || Number.isNaN(fullMoveNumber)) {
     return null;
   }
   return (fullMoveNumber - 1) * 2 + (activeColor === "b" ? 1 : 0);
@@ -229,20 +200,11 @@ function getFenPlyDelta(fromFen, toFen) {
 }
 
 function extractBoardMoveHistory(chessComGame, currentFen) {
-  if (!chessComGame || typeof currentFen !== "string") return null;
-  let rawMoves = null;
-  if (typeof chessComGame.getHistory === "function") {
-    rawMoves = chessComGame.getHistory();
-  }
-  if (!Array.isArray(rawMoves) && typeof chessComGame.getMoves === "function") {
-    rawMoves = chessComGame.getMoves();
-  }
+  const rawMoves = chessComGame.getHistory?.() ?? chessComGame.getMoves?.();
   if (!Array.isArray(rawMoves)) return null;
 
   const startingFen =
-    (typeof chessComGame.getStartingFEN === "function" && chessComGame.getStartingFEN()) ||
-    (typeof chessComGame.getInitialFEN === "function" && chessComGame.getInitialFEN()) ||
-    STANDARD_STARTPOS_FEN;
+    chessComGame.getStartingFEN?.() || chessComGame.getInitialFEN?.() || STANDARD_STARTPOS_FEN;
 
   if (rawMoves.length === 0) {
     return currentFen === startingFen || isStandardStartposFen(currentFen)
@@ -257,27 +219,16 @@ function extractBoardMoveHistory(chessComGame, currentFen) {
     uciMoves.push(uciMove);
   }
   const lastEntry = rawMoves[rawMoves.length - 1];
-  if (
-    lastEntry &&
-    typeof lastEntry === "object" &&
-    typeof lastEntry.fen === "string" &&
-    lastEntry.fen !== currentFen
-  ) {
-    return null;
-  }
-  const expectedPlyDelta = getFenPlyDelta(startingFen, currentFen);
-  if (expectedPlyDelta !== uciMoves.length) return null;
+  if (lastEntry?.fen && lastEntry.fen !== currentFen) return null;
+  if (getFenPlyDelta(startingFen, currentFen) !== uciMoves.length) return null;
   return { anchorFen: startingFen, uciMoves };
 }
 
 function buildUciPositionCommand(anchorFen, uciMoves = []) {
-  if (typeof anchorFen !== "string" || !anchorFen.trim()) return null;
   const basePosition = isStandardStartposFen(anchorFen)
     ? "position startpos"
     : `position fen ${anchorFen.trim()}`;
-  return Array.isArray(uciMoves) && uciMoves.length > 0
-    ? `${basePosition} moves ${uciMoves.join(" ")}`
-    : basePosition;
+  return uciMoves.length > 0 ? `${basePosition} moves ${uciMoves.join(" ")}` : basePosition;
 }
 
 class CandidateMove {
@@ -349,14 +300,17 @@ class GameController {
     this.modeResetTimeoutId = null;
     this.resetGameTimeoutId = null;
     this.autoMoveTimeoutId = null;
+    this.autoQueueScanTimeoutId = null;
     this.gameOverRetryIntervalId = null;
     this.lastAutoQueueClickMs = 0;
+    this.wasPlaying = this.chessComGame?.getMode?.() === "playing";
     this.anchorPositionFen = null;
     this.recordedUciMoves = [];
     this.lastObservedFen = null;
 
     this.chessComGame.on("Move", () => {
       if (this.isDestroyed) return;
+      if (this.chessComGame?.getMode?.() === "playing") this.wasPlaying = true;
       this.clearAutoMoveTimer();
       this.removeCurrentHintMarkings();
       if (this.chessComGame.getPlayingAs() === this.chessComGame.getTurn()) {
@@ -371,18 +325,21 @@ class GameController {
 
     this.chessComGame.on("ModeChanged", (modeEvent) => {
       if (this.isDestroyed) return;
-      if (modeEvent?.data === "playing") {
+      const nextMode = modeEvent?.data;
+      if (nextMode === "playing") {
+        this.wasPlaying = true;
         if (this.modeResetTimeoutId !== null) clearTimeout(this.modeResetTimeoutId);
         this.modeResetTimeoutId = setTimeout(() => {
           this.modeResetTimeoutId = null;
           if (this.isDestroyed) return;
           this.resetGame();
         }, 100);
-      } else if (modeEvent?.data === "gameOver") {
+      } else if (nextMode === "gameOver" || (this.wasPlaying && nextMode)) {
+        this.wasPlaying = false;
         this.clearAutoMoveTimer();
-        this.extension?.engineClient?.stopEvaluation?.();
+        this.extension.engineClient?.stopEvaluation?.();
         this.removeCurrentHintMarkings();
-        this.handleGameOver();
+        if (!this.triggerAutoQueue()) this.handleGameOver();
       }
     });
 
@@ -393,6 +350,7 @@ class GameController {
 
     this.chessComGame.on("ResetGame", () => {
       if (this.isDestroyed) return;
+      this.wasPlaying = this.chessComGame?.getMode?.() === "playing";
       if (this.resetGameTimeoutId !== null) clearTimeout(this.resetGameTimeoutId);
       this.resetGameTimeoutId = setTimeout(() => {
         this.resetGameTimeoutId = null;
@@ -408,7 +366,7 @@ class GameController {
       if (optionsEvent?.data?.flipped !== undefined && this.evalBarElement) {
         this.evalBarElement.classList.toggle(
           "bettermint-evalbar-flipped",
-          Boolean(this.boardOptions?.flipped)
+          Boolean(this.boardOptions.flipped)
         );
       }
       this.setupAutoQueueObserver();
@@ -422,6 +380,13 @@ class GameController {
     if (this.autoMoveTimeoutId !== null) {
       clearTimeout(this.autoMoveTimeoutId);
       this.autoMoveTimeoutId = null;
+    }
+  }
+
+  clearAutoQueueScanTimer() {
+    if (this.autoQueueScanTimeoutId !== null) {
+      clearTimeout(this.autoQueueScanTimeoutId);
+      this.autoQueueScanTimeoutId = null;
     }
   }
 
@@ -468,7 +433,7 @@ class GameController {
       const candidateButtons = document.querySelectorAll(buttonSelector);
       for (const candidateButton of candidateButtons) {
         if (candidateButton.disabled) continue;
-        const buttonText = candidateButton.textContent?.trim().toLowerCase();
+        const buttonText = candidateButton.textContent.trim().toLowerCase();
         if (!buttonText || !labelPredicate(buttonText)) {
           continue;
         }
@@ -504,6 +469,7 @@ class GameController {
 
   setupAutoQueueObserver() {
     if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) {
+      this.clearAutoQueueScanTimer();
       this.clearGameOverRetryInterval();
       if (this.autoQueueMutationObserver) {
         this.autoQueueMutationObserver.disconnect();
@@ -517,14 +483,16 @@ class GameController {
       typeof document !== "undefined" ? document.body || document.documentElement : null;
     if (!observeRoot) return;
 
-    let lastScanTimestampMs = 0;
     this.autoQueueMutationObserver = new MutationObserver((mutationRecords) => {
-      if (this.chessComGame?.getMode?.() === "playing") return;
-      if (Array.isArray(mutationRecords) && !hasAddedElementMutation(mutationRecords)) return;
-      const nowMs = Date.now();
-      if (nowMs - lastScanTimestampMs < 250) return;
-      lastScanTimestampMs = nowMs;
-      this.triggerAutoQueue();
+      if (!hasAddedElementMutation(mutationRecords)) return;
+      if (this.autoQueueScanTimeoutId !== null) return;
+      this.autoQueueScanTimeoutId = setTimeout(() => {
+        this.autoQueueScanTimeoutId = null;
+        if (this.isDestroyed || this.chessComGame?.getMode?.() === "playing") return;
+        const exitedPlaying = this.wasPlaying;
+        this.wasPlaying = false;
+        if (!this.triggerAutoQueue() && exitedPlaying) this.handleGameOver();
+      }, AUTO_QUEUE_SCAN_DELAY_MS);
     });
 
     this.autoQueueMutationObserver.observe(observeRoot, { childList: true, subtree: true });
@@ -545,7 +513,7 @@ class GameController {
   }
 
   removeLastAnalysisMarkings() {
-    if (this.lastAnalysisMarkings?.length > 0) {
+    if (this.lastAnalysisMarkings.length > 0) {
       this.lastAnalysisMarkings.forEach((markingKey) => {
         this.chessComGame.markings.removeOne(markingKey);
       });
@@ -588,11 +556,7 @@ class GameController {
   }
 
   removeEvaluationBar() {
-    if (
-      this.evalBarAnimationFrameId !== null &&
-      this.evalBarAnimationFrameId !== undefined &&
-      typeof cancelAnimationFrame === "function"
-    ) {
+    if (this.evalBarAnimationFrameId !== null) {
       cancelAnimationFrame(this.evalBarAnimationFrameId);
       this.evalBarAnimationFrameId = null;
     }
@@ -650,11 +614,10 @@ class GameController {
       this.resetGameTimeoutId = null;
     }
     this.removeEvaluationBar();
-    if (this.chessComGame?.markings) {
-      this.removeCurrentHintMarkings();
-      this.removeLastAnalysisMarkings();
-    }
+    this.removeCurrentHintMarkings();
+    this.removeLastAnalysisMarkings();
     this.clearAutoMoveTimer();
+    this.clearAutoQueueScanTimer();
     this.clearGameOverRetryInterval();
     if (this.autoQueueMutationObserver) {
       this.autoQueueMutationObserver.disconnect();
@@ -676,13 +639,11 @@ class GameController {
     if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) || this.evalBarElement) {
       return;
     }
-    const documentBody = document.body || document.documentElement;
-    if (!documentBody) return;
 
     const evalBarElement = document.createElement("div");
     evalBarElement.className = "bettermint-evalbar";
     evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
-    documentBody.appendChild(evalBarElement);
+    document.body.appendChild(evalBarElement);
 
     this.evalBarElement = evalBarElement;
     this.evalBarWhiteFill = evalBarElement.querySelector(".bettermint-evalbar-white");
@@ -693,7 +654,7 @@ class GameController {
     const measureBoardRect = () => {
       const innerBoardElement =
         this.chessboardElement.querySelector?.(".board, chess-board, svg.coordinates") ||
-        this.chessboardElement.shadowRoot?.querySelector?.(".board, svg.coordinates");
+        this.chessboardElement.shadowRoot?.querySelector(".board, svg.coordinates");
       const boundingRect = (innerBoardElement || this.chessboardElement).getBoundingClientRect();
       if (boundingRect.width > boundingRect.height + 2 && boundingRect.height >= 50) {
         const boardSideLength = boundingRect.height;
@@ -712,7 +673,7 @@ class GameController {
     let lastLayoutSignature = "";
     const syncEvalBarPosition = () => {
       if (!this.evalBarElement) return;
-      if (!this.chessboardElement?.isConnected) {
+      if (!this.chessboardElement.isConnected) {
         if (lastLayoutSignature !== "none") {
           this.evalBarElement.style.display = "none";
           lastLayoutSignature = "none";
@@ -732,9 +693,7 @@ class GameController {
         }
         return;
       }
-      const offsetPx = getEvalBarOffsetPx(
-        typeof window !== "undefined" ? window.innerWidth : undefined
-      );
+      const offsetPx = getEvalBarOffsetPx(window.innerWidth);
       const topPx = Math.round(boardRect.top);
       const heightPx = Math.round(boardRect.height);
       const leftPx = Math.max(4, Math.round(boardRect.left - offsetPx));
@@ -749,13 +708,7 @@ class GameController {
     };
 
     const scheduleSyncPosition = () => {
-      if (typeof requestAnimationFrame !== "function") {
-        syncEvalBarPosition();
-        return;
-      }
-      if (this.evalBarAnimationFrameId !== null && this.evalBarAnimationFrameId !== undefined) {
-        return;
-      }
+      if (this.evalBarAnimationFrameId !== null) return;
       this.evalBarAnimationFrameId = requestAnimationFrame(() => {
         this.evalBarAnimationFrameId = null;
         syncEvalBarPosition();
@@ -769,18 +722,16 @@ class GameController {
       if (this.chessboardElement.parentElement) {
         this.evalBarResizeObserver.observe(this.chessboardElement.parentElement);
       }
-      if (document.body) {
-        this.evalBarResizeObserver.observe(document.body);
-      }
+      this.evalBarResizeObserver.observe(document.body);
     }
     this.evalBarSyncHandler = scheduleSyncPosition;
     window.addEventListener("scroll", scheduleSyncPosition, { passive: true, capture: true });
     window.addEventListener("resize", scheduleSyncPosition, { passive: true });
 
-    if (this.boardOptions?.flipped) {
+    if (this.boardOptions.flipped) {
       this.evalBarElement.classList.add("bettermint-evalbar-flipped");
     }
-    if (this.extension?.engineClient?.candidateMoves?.length > 0) {
+    if (this.extension?.engineClient?.candidateMoves.length > 0) {
       this.updateEvaluationFromMove(this.extension.engineClient.candidateMoves[0]);
     }
   }
@@ -790,10 +741,10 @@ class GameController {
     if (this.evalBarElement?.isConnected) {
       this.evalBarElement.classList.toggle(
         "bettermint-evalbar-flipped",
-        Boolean(this.boardOptions?.flipped)
+        Boolean(this.boardOptions.flipped)
       );
       this.setEvaluationDisplay(0, false);
-      this.evalBarSyncHandler?.();
+      this.evalBarSyncHandler();
     } else {
       this.removeEvaluationBar();
       this.createAnalysisTools();
@@ -801,10 +752,8 @@ class GameController {
   }
 
   syncPositionHistory(isNewGame = false) {
-    const currentFen = this.chessComGame?.getFEN?.() ?? null;
-    if (typeof currentFen !== "string" || !currentFen) {
-      return { fen: currentFen, positionCommand: null };
-    }
+    const currentFen = this.chessComGame.getFEN();
+    if (!currentFen) return { fen: null, positionCommand: null };
 
     const boardHistory = extractBoardMoveHistory(this.chessComGame, currentFen);
     if (boardHistory) {
@@ -826,7 +775,7 @@ class GameController {
 
     if (!isNewGame && this.anchorPositionFen !== null && this.lastObservedFen !== null) {
       const plyDelta = getFenPlyDelta(this.lastObservedFen, currentFen);
-      const lastPlayedUciMove = formatMoveToUci(this.chessComGame?.getLastMove?.());
+      const lastPlayedUciMove = formatMoveToUci(this.chessComGame.getLastMove());
       if (plyDelta === 1 && lastPlayedUciMove) {
         this.recordedUciMoves.push(lastPlayedUciMove);
         this.lastObservedFen = currentFen;
@@ -855,7 +804,9 @@ class GameController {
 
   resetGame() {
     this.lastAutoQueueClickMs = 0;
+    this.wasPlaying = this.chessComGame?.getMode?.() === "playing";
     this.clearAutoMoveTimer();
+    this.clearAutoQueueScanTimer();
     this.clearGameOverRetryInterval();
     this.removeCurrentHintMarkings();
     this.removeLastAnalysisMarkings();
@@ -870,12 +821,9 @@ class GameController {
   removeCurrentHintMarkings() {
     this.lastHintSignature = "";
     this.activeHintMarkings.forEach((marking) => {
-      const targetKey =
-        marking.data.square !== undefined && marking.data.square !== null
-          ? marking.data.square
-          : `${marking.data.from}${marking.data.to}`;
+      const targetKey = marking.data.square ?? `${marking.data.from}${marking.data.to}`;
       const markingId = `${marking.type}|${targetKey}`;
-      if (marking.type === "effect" && this.lastAnalysisMarkings?.includes(markingId)) {
+      if (marking.type === "effect" && this.lastAnalysisMarkings.includes(markingId)) {
         return;
       }
       this.chessComGame.markings.removeOne(markingId);
@@ -888,13 +836,11 @@ class GameController {
     if (!bestCandidateMove) return;
 
     if (getExtensionOption(EXTENSION_OPTION_KEY.ShowHints)) {
-      const legalMoves = this.chessComGame.getLegalMoves?.();
-      if (Array.isArray(legalMoves) && legalMoves.length === 0) {
+      const legalMoves = this.chessComGame.getLegalMoves();
+      if (legalMoves.length === 0) {
         this.removeCurrentHintMarkings();
       } else {
-        const isSquareCoordinate = (squareName) =>
-          typeof squareName === "string" && /^[a-h][1-8]$/.test(squareName);
-        const arrowColors = this.boardOptions?.arrowColors || {};
+        const arrowColors = this.boardOptions.arrowColors || {};
         const seenMateEffectSquares = new Set();
         const nextMarkings = [];
         let hintSignature = "";
@@ -903,11 +849,7 @@ class GameController {
           const resolvedMove = resolveLegalMove(legalMoves, candidateMove);
           const fromSquare = resolvedMove ? resolvedMove.from : candidateMove.from;
           const toSquare = resolvedMove ? resolvedMove.to : candidateMove.to;
-          if (
-            !isSquareCoordinate(fromSquare) ||
-            !isSquareCoordinate(toSquare) ||
-            fromSquare === toSquare
-          ) {
+          if (!SQUARE_RE.test(fromSquare) || !SQUARE_RE.test(toSquare) || fromSquare === toSquare) {
             return;
           }
 
@@ -936,7 +878,7 @@ class GameController {
           if (
             candidateMove.mateInMoves !== null &&
             !seenMateEffectSquares.has(toSquare) &&
-            !this.lastAnalysisMarkings?.includes(`effect|${toSquare}`)
+            !this.lastAnalysisMarkings.includes(`effect|${toSquare}`)
           ) {
             seenMateEffectSquares.add(toSquare);
             hintSignature += `E:${toSquare}:${candidateMove.mateInMoves < 0 ? 0 : 1};`;
@@ -1031,7 +973,6 @@ class UciEngineClient {
   static BESTMOVE_RE = /^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?|\(none\)|0000)/i;
 
   static parseUciOptionLine(uciLine) {
-    if (typeof uciLine !== "string") return null;
     const headerMatch = uciLine.match(/^option name (.+?) type (\S+)(?:\s+(.*))?$/);
     if (!headerMatch) return null;
     const optionName = headerMatch[1].trim();
@@ -1081,10 +1022,10 @@ class UciEngineClient {
     this.fatalErrorMessage = null;
     this.resetSessionState();
 
-    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    if (typeof window !== "undefined") {
       window.addEventListener("focus", () => this.reconnectNow());
     }
-    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
           this.reconnectNow();
@@ -1187,11 +1128,7 @@ class UciEngineClient {
       if (this.websocket) {
         const previousSocket = this.websocket;
         this.websocket = null;
-        try {
-          previousSocket.close();
-        } catch (closeError) {
-          console.warn("[BetterMint] Failed to close previous engine WebSocket:", closeError);
-        }
+        previousSocket.close();
       }
       this.currentEngineUrl = nextEngineUrl;
       this.fatalErrorMessage = null;
@@ -1202,8 +1139,7 @@ class UciEngineClient {
   }
 
   sendUciCommand(uciCommand) {
-    const sanitizedCommand =
-      typeof uciCommand === "string" ? uciCommand.replace(/[\r\n]+/g, " ").trim() : "";
+    const sanitizedCommand = uciCommand.replace(/[\r\n]+/g, " ").trim();
     if (!sanitizedCommand) return;
     if (this.isWebSocketOpen()) {
       this.websocket.send(sanitizedCommand);
@@ -1308,10 +1244,10 @@ class UciEngineClient {
 
   stopEvaluation(callback) {
     if (!this.isEvaluating) {
-      if (typeof callback === "function") callback();
+      if (callback) callback();
       return;
     }
-    if (typeof callback === "function") {
+    if (callback) {
       this.stopCompletionCallbacks.push(callback);
     }
     if (!this.hasRequestedStop) {
@@ -1346,10 +1282,8 @@ class UciEngineClient {
     const lastPlayedMove = chessComGame.getLastMove();
 
     const reflexMultiplier = getPositiveFloatOption(EXTENSION_OPTION_KEY.ReflexMultiplier, 0.25);
-    const isForcedMove = legalMoves?.length === 1;
-    const isRecapture = Boolean(
-      lastPlayedMove && bestCandidateMove && bestCandidateMove.to === lastPlayedMove.to
-    );
+    const isForcedMove = legalMoves.length === 1;
+    const isRecapture = Boolean(lastPlayedMove && bestCandidateMove.to === lastPlayedMove.to);
 
     if (reflexMultiplier < 1 && (isForcedMove || isRecapture)) {
       medianThinkMs *= reflexMultiplier;
@@ -1363,7 +1297,7 @@ class UciEngineClient {
         0.40
       );
       if (openingMoveThreshold > 0 && openingMultiplier < 1) {
-        const fullMoveNumber = parseInt((chessComGame.getFEN() || "").split(" ")[5], 10) || 1;
+        const fullMoveNumber = parseInt(chessComGame.getFEN().split(" ")[5], 10) || 1;
         if (fullMoveNumber <= openingMoveThreshold) {
           medianThinkMs *= openingMultiplier;
         }
@@ -1397,8 +1331,8 @@ class UciEngineClient {
     }
     const hadPendingPosition = this.pendingPositionUpdate !== null;
     this.pendingPositionUpdate = {
-      fen: positionState?.fen ?? null,
-      positionCommand: positionState?.positionCommand ?? null,
+      fen: positionState.fen,
+      positionCommand: positionState.positionCommand,
       isNewGame: hadPendingPosition
         ? this.pendingPositionUpdate.isNewGame || isNewGame
         : isNewGame
@@ -1421,61 +1355,49 @@ class UciEngineClient {
     });
   }
 
+  runWhenIdle(action) {
+    const execute = () => {
+      if (this.isSwitchingEngine) return;
+      if (this.isEvaluating) {
+        this.stopEvaluation(execute);
+        return;
+      }
+      action();
+      this.extension?.gameController?.updateEnginePosition(false);
+    };
+    this.stopEvaluation(execute);
+  }
+
   applyExtensionOptions(optionUpdates = {}) {
     const nextEngineUrl = optionUpdates[EXTENSION_OPTION_KEY.EngineWebSocketUrl];
     if (nextEngineUrl && nextEngineUrl !== (this.targetEngineUrl || this.currentEngineUrl)) {
-      this.uciOptionOverrides =
-        optionUpdates.customEngineOptions && typeof optionUpdates.customEngineOptions === "object"
-          ? Object.assign({}, optionUpdates.customEngineOptions)
-          : {};
+      this.uciOptionOverrides = Object.assign({}, optionUpdates.customEngineOptions);
       this.switchEngine(nextEngineUrl);
       return;
     }
 
-    if (typeof optionUpdates.uciButton === "string" && optionUpdates.uciButton.length > 0) {
+    if (optionUpdates.uciButton) {
       const buttonOptionName = optionUpdates.uciButton;
-      const applyButtonWhenIdle = () => {
-        if (this.isSwitchingEngine) return;
-        if (this.isEvaluating) {
-          this.stopEvaluation(applyButtonWhenIdle);
-          return;
-        }
+      this.runWhenIdle(() => {
         if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(buttonOptionName)) {
           this.sendUciCommand(`setoption name ${buttonOptionName}`);
           this.markEngineUnready();
         }
-        if (this.extension && this.extension.gameController) {
-          this.extension.gameController.updateEnginePosition(false);
-        }
-      };
-      this.stopEvaluation(applyButtonWhenIdle);
+      });
       return;
     }
 
-    const incomingUciOverrides = optionUpdates.customEngineOptions;
-    if (incomingUciOverrides && typeof incomingUciOverrides === "object") {
-      this.uciOptionOverrides = Object.assign({}, incomingUciOverrides);
-      const applyOverridesWhenIdle = () => {
-        if (this.isSwitchingEngine) return;
-        if (this.isEvaluating) {
-          this.stopEvaluation(applyOverridesWhenIdle);
-          return;
-        }
-        this.applyUciOptions(this.uciOptionOverrides);
-        if (this.extension && this.extension.gameController) {
-          this.extension.gameController.updateEnginePosition(false);
-        }
-      };
-      this.stopEvaluation(applyOverridesWhenIdle);
+    if (optionUpdates.customEngineOptions) {
+      this.uciOptionOverrides = Object.assign({}, optionUpdates.customEngineOptions);
+      this.runWhenIdle(() => this.applyUciOptions(this.uciOptionOverrides));
       return;
     }
 
     const hasGoSettingsChanged = Object.keys(optionUpdates).some((optionKey) =>
       SEARCH_GO_OPTION_KEYS.has(optionKey)
     );
-
-    if (hasGoSettingsChanged && this.extension && this.extension.gameController) {
-      this.extension.gameController.updateEnginePosition(false);
+    if (hasGoSettingsChanged) {
+      this.extension?.gameController?.updateEnginePosition(false);
       return;
     }
 
@@ -1484,40 +1406,32 @@ class UciEngineClient {
     } else if (
       getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
       !this.isEvaluating &&
-      this.isWebSocketOpen() &&
-      this.extension &&
-      this.extension.gameController
+      this.isWebSocketOpen()
     ) {
-      this.extension.gameController.updateEnginePosition(false);
+      this.extension?.gameController?.updateEnginePosition(false);
     }
   }
 
   applyUciOptions(uciOptionsMap = null) {
     const targetUciOptions = uciOptionsMap || this.uciOptionOverrides;
-    if (!targetUciOptions || typeof targetUciOptions !== "object") return;
     let hasSentAnyUciOption = false;
 
     for (const [previousOptionName, previousOptionValue] of Object.entries(this.appliedUciOptions)) {
-      const nextOptionValue = Object.prototype.hasOwnProperty.call(
-        targetUciOptions,
-        previousOptionName
-      )
+      const nextOptionValue = Object.hasOwn(targetUciOptions, previousOptionName)
         ? targetUciOptions[previousOptionName]
         : undefined;
-      const isOptionActive =
-        nextOptionValue !== "" && nextOptionValue !== undefined && nextOptionValue !== null;
-      if (isOptionActive) continue;
+      if (nextOptionValue !== "" && nextOptionValue !== undefined && nextOptionValue !== null) {
+        continue;
+      }
 
       const defaultValue = this.supportedUciOptions.get(previousOptionName);
-      if (defaultValue !== undefined) {
-        if (String(previousOptionValue) !== String(defaultValue)) {
-          this.sendUciCommand(
-            defaultValue === ""
-              ? `setoption name ${previousOptionName} value`
-              : `setoption name ${previousOptionName} value ${defaultValue}`
-          );
-          hasSentAnyUciOption = true;
-        }
+      if (defaultValue !== undefined && String(previousOptionValue) !== String(defaultValue)) {
+        this.sendUciCommand(
+          defaultValue === ""
+            ? `setoption name ${previousOptionName} value`
+            : `setoption name ${previousOptionName} value ${defaultValue}`
+        );
+        hasSentAnyUciOption = true;
       }
       delete this.appliedUciOptions[previousOptionName];
     }
@@ -1536,7 +1450,7 @@ class UciEngineClient {
   }
 
   processEngineMessage(rawMessage) {
-    if (typeof rawMessage !== "string" || !rawMessage) return;
+    if (!rawMessage) return;
 
     for (const rawLine of rawMessage.split(/\r?\n/)) {
       const uciLine = rawLine.trim();
@@ -1765,12 +1679,10 @@ class UciEngineClient {
       this.candidateMoves.sort(UciEngineClient.compareCandidateMoves);
     }
 
-    const multiPvCount = Math.max(1, parseInt(this.uciOptionOverrides?.["MultiPV"], 10) || 1);
+    const multiPvCount = Math.max(1, parseInt(this.uciOptionOverrides["MultiPV"], 10) || 1);
 
     if (!hasSelectedBestMove && candidateMove !== null) {
-      if (this.extension?.gameController?.renderMoveHints) {
-        this.extension.gameController.renderMoveHints(this.candidateMoves.slice(0, multiPvCount));
-      }
+      this.extension.gameController.renderMoveHints(this.candidateMoves.slice(0, multiPvCount));
       return;
     }
 
@@ -1802,7 +1714,7 @@ class UciEngineClient {
     const canExecuteAutoMove = () =>
       getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
       chessComGame.getPlayingAs() === chessComGame.getTurn() &&
-      !UciEngineClient.NON_PLAYING_MODES.has(chessComGame.getMode?.());
+      !UciEngineClient.NON_PLAYING_MODES.has(chessComGame.getMode());
 
     if (!canExecuteAutoMove()) return;
 
@@ -1837,10 +1749,7 @@ class UciEngineClient {
     };
 
     const targetDelayMs = this.calculateAutoMoveDelayMs(bestCandidateMove);
-    const elapsedTurnMs =
-      typeof gameController.turnStartTimestampMs === "number"
-        ? performance.now() - gameController.turnStartTimestampMs
-        : 0;
+    const elapsedTurnMs = performance.now() - gameController.turnStartTimestampMs;
     const remainingDelayMs = Math.max(0, targetDelayMs - elapsedTurnMs);
 
     if (remainingDelayMs <= 0) {
@@ -1857,19 +1766,13 @@ class UciEngineClient {
 class BetterMintExtension {
   constructor(chessboardElement, initialExtensionOptions) {
     this.extensionOptions = Object.assign({}, initialExtensionOptions);
-    const previousExtension = activeExtension;
     activeExtension = this;
-    try {
-      this.gameController = new GameController(this, chessboardElement);
-      this.engineClient = new UciEngineClient(this);
-    } catch (initError) {
-      activeExtension = previousExtension;
-      throw initError;
-    }
+    this.gameController = new GameController(this, chessboardElement);
+    this.engineClient = new UciEngineClient(this);
     window.addEventListener(
       "BetterMintUpdateOptions",
       (optionsEvent) => {
-        if (!optionsEvent?.detail || typeof optionsEvent.detail !== "object") return;
+        if (!optionsEvent.detail) return;
         this.extensionOptions = Object.assign({}, this.extensionOptions, optionsEvent.detail);
         this.gameController.applyExtensionOptions();
         this.engineClient.applyExtensionOptions(optionsEvent.detail);
@@ -1880,7 +1783,7 @@ class BetterMintExtension {
 }
 
 function attachBoardController(chessboardElement) {
-  activeExtension.gameController?.destroy?.();
+  activeExtension.gameController.destroy();
   activeExtension.gameController = new GameController(activeExtension, chessboardElement);
   activeExtension.gameController.updateEnginePosition(true);
 }
@@ -1891,11 +1794,7 @@ let pendingOptionsPromise = null;
 function initializeBetterMintExtension(chessboardElement) {
   pendingBoardElement = chessboardElement;
   if (activeExtension) {
-    try {
-      attachBoardController(chessboardElement);
-    } catch (initError) {
-      console.error("Failed to attach BetterMint to board:", initError);
-    }
+    attachBoardController(chessboardElement);
     return;
   }
 
@@ -1904,11 +1803,7 @@ function initializeBetterMintExtension(chessboardElement) {
       pendingOptionsPromise = null;
       const targetBoardElement = pendingBoardElement;
       pendingBoardElement = null;
-      try {
-        activeExtension = new BetterMintExtension(targetBoardElement, loadedOptions);
-      } catch (initError) {
-        console.error("Failed to initialize BetterMint:", initError);
-      }
+      activeExtension = new BetterMintExtension(targetBoardElement, loadedOptions);
     });
   }
 }
@@ -1950,19 +1845,16 @@ if (typeof document !== "undefined") {
   const scheduleBoardScan = () => {
     if (isBoardScanScheduled || activeBoardElement?.isConnected) return;
     isBoardScanScheduled = true;
-    const scheduleScan =
-      typeof requestAnimationFrame === "function"
-        ? requestAnimationFrame
-        : (callback) => setTimeout(callback, 16);
-    scheduleScan(() => {
+    requestAnimationFrame(() => {
       isBoardScanScheduled = false;
       if (activeBoardElement?.isConnected) return;
-      const hadDisconnectedBoard = Boolean(activeBoardElement && !activeBoardElement.isConnected);
-      if (hadDisconnectedBoard) {
+      if (activeBoardElement) {
         activeBoardElement = null;
-        activeExtension?.gameController?.evalBarSyncHandler?.();
-        activeExtension?.gameController?.clearAutoMoveTimer?.();
-        activeExtension?.engineClient?.stopEvaluation?.();
+        if (activeExtension) {
+          activeExtension.gameController.evalBarSyncHandler?.();
+          activeExtension.gameController.clearAutoMoveTimer();
+          activeExtension.engineClient.stopEvaluation();
+        }
       }
       const detectedBoard = document.querySelector("wc-chess-board, chess-board");
       if (detectedBoard && detectedBoard !== activeBoardElement) {

@@ -49,7 +49,7 @@ def load_engine_config(config_path: str = CONFIG_PATH) -> dict:
 def resolve_engine_command(engine_config: dict, engine_name: str | None) -> list[str]:
     engines_map = engine_config.get("engines")
     if not isinstance(engines_map, dict):
-        engines_map = {}
+        return ["stockfish"]
     if engine_name and engine_name in engines_map:
         raw_command = engines_map[engine_name]
     else:
@@ -62,7 +62,7 @@ def resolve_engine_command(engine_config: dict, engine_name: str | None) -> list
     return ["stockfish"]
 
 def resolve_engine_name_from_path(raw_path: str) -> tuple[bool, str | None]:
-    parsed_path = urlparse(raw_path or "").path.rstrip("/")
+    parsed_path = urlparse(raw_path).path.rstrip("/")
     if parsed_path == "/ws":
         return True, None
     if parsed_path.startswith("/ws/"):
@@ -72,9 +72,7 @@ def resolve_engine_name_from_path(raw_path: str) -> tuple[bool, str | None]:
     return False, None
 
 def is_allowed_websocket_origin(origin: str | None) -> bool:
-    if not isinstance(origin, str):
-        return True
-    if origin.startswith("chrome-extension://"):
+    if origin is None or origin.startswith("chrome-extension://"):
         return True
     parsed_origin = urlparse(origin)
     hostname = (parsed_origin.hostname or "").lower()
@@ -106,11 +104,11 @@ class EngineProcess:
 
     @property
     def exit_code(self) -> int | None:
-        return self._process.returncode if self._process else None
+        return self._process.returncode
 
     @property
     def stderr(self):
-        return self._process.stderr if self._process else None
+        return self._process.stderr
 
     async def start(self):
         self._process = await asyncio.create_subprocess_exec(
@@ -122,7 +120,7 @@ class EngineProcess:
         return self
 
     def _write_uci_lines(self, uci_lines) -> bool:
-        if not self._process or not self._process.stdin or self._process.returncode is not None or self._has_sent_quit:
+        if self._process.returncode is not None or self._has_sent_quit:
             return False
         has_written = False
         for clean_line in uci_lines:
@@ -147,16 +145,12 @@ class EngineProcess:
                 pass
 
     async def read_stdout_line(self) -> str | None:
-        if not self._process or not self._process.stdout:
-            return None
         raw_bytes = await self._process.stdout.readline()
         if not raw_bytes:
             return None
         return raw_bytes.decode("utf-8", errors="replace").strip()
 
     def terminate(self):
-        if not self._process:
-            return
         try:
             if not self._has_sent_quit:
                 self._write_uci_lines(("quit",))
@@ -166,13 +160,10 @@ class EngineProcess:
             pass
 
     async def wait_until_closed(self):
-        if not self._process:
-            return
-        if self._process.stdin:
-            try:
-                self._process.stdin.close()
-            except OSError:
-                pass
+        try:
+            self._process.stdin.close()
+        except OSError:
+            pass
         try:
             await asyncio.wait_for(self._process.wait(), timeout=2.0)
         except asyncio.TimeoutError:
@@ -189,7 +180,7 @@ async def send_error_and_close(websocket: ServerConnection, error_message: str, 
             await websocket.close()
         else:
             await websocket.close(code=code)
-    except (ConnectionClosed, RuntimeError, OSError):
+    except ConnectionClosed:
         pass
 
 async def serve_engine_websocket(
@@ -229,11 +220,6 @@ async def serve_engine_websocket(
 
         board_state = PolyglotBoard() if active_book_path else None
         is_board_synced = True
-        websocket_send_lock = asyncio.Lock()
-
-        async def send_ws_line(text: str):
-            async with websocket_send_lock:
-                await websocket.send(text)
 
         async def forward_websocket_to_engine():
             nonlocal is_board_synced
@@ -263,14 +249,12 @@ async def serve_engine_websocket(
                                 book_selection = pick_book_moves(book_entries)
                                 if book_selection:
                                     selected_move, ordered_moves = book_selection
-                                    await send_ws_line(f"info string book {' '.join(ordered_moves)}")
-                                    await send_ws_line(f"bestmove {selected_move}")
+                                    await websocket.send(f"info string book {' '.join(ordered_moves)}")
+                                    await websocket.send(f"bestmove {selected_move}")
                                     continue
                         await engine_process.send_uci(clean_line)
             except ConnectionClosed:
                 pass
-            except Exception as ingress_error:
-                print(f"[WS ERROR] Ingress: {ingress_error}", flush=True)
 
         async def forward_engine_to_websocket():
             try:
@@ -279,27 +263,22 @@ async def serve_engine_websocket(
                     if stdout_line is None:
                         break
                     if stdout_line:
-                        await send_ws_line(stdout_line)
+                        await websocket.send(stdout_line)
             except ConnectionClosed:
                 pass
-            except Exception as egress_error:
-                print(f"[WS ERROR] Egress: {egress_error}", flush=True)
 
         last_stderr_line = ""
 
         async def log_engine_stderr():
             nonlocal last_stderr_line
-            try:
-                stderr_stream = engine_process.stderr
-                if not stderr_stream:
-                    return
-                while stderr_bytes := await stderr_stream.readline():
-                    stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
-                    if stderr_text:
-                        last_stderr_line = stderr_text
-                        print(f"[ENGINE STDERR] {stderr_text}", flush=True)
-            except Exception as stderr_error:
-                print(f"[ENGINE ERROR] Stderr: {stderr_error}", flush=True)
+            stderr_stream = engine_process.stderr
+            if not stderr_stream:
+                return
+            while stderr_bytes := await stderr_stream.readline():
+                stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+                if stderr_text:
+                    last_stderr_line = stderr_text
+                    print(f"[ENGINE STDERR] {stderr_text}", flush=True)
 
         ingress_task = asyncio.create_task(forward_websocket_to_engine())
         egress_task = asyncio.create_task(forward_engine_to_websocket())
@@ -324,12 +303,7 @@ async def serve_engine_websocket(
             engine_process.terminate()
             await engine_process.wait_until_closed()
             exit_code = engine_process.exit_code
-            if (
-                isinstance(exit_code, int)
-                and exit_code != 0
-                and not had_sent_quit
-                and websocket.state is State.OPEN
-            ):
+            if exit_code and not had_sent_quit and websocket.state is State.OPEN:
                 error_detail = f": {last_stderr_line}" if last_stderr_line else ""
                 await send_error_and_close(
                     websocket,
@@ -339,8 +313,7 @@ async def serve_engine_websocket(
             print(f"[ENGINE STOP] {' '.join(engine_command)}", flush=True)
 
 async def handle_websocket_connection(websocket: ServerConnection):
-    request_path = websocket.request.path if websocket.request else "/ws"
-    _, engine_name = resolve_engine_name_from_path(request_path)
+    _, engine_name = resolve_engine_name_from_path(websocket.request.path)
     engine_config = load_engine_config()
     engine_command = resolve_engine_command(engine_config, engine_name)
     book_path = resolve_book_path(engine_config, engine_name, ENGINEWS_DIR)
