@@ -35,11 +35,13 @@ function injectPageScript(scriptRelativePath) {
 }
 
 function dispatchOptionsWithEngineSettings(extensionOptions, onReady) {
+  const safeExtensionOptions =
+    extensionOptions && typeof extensionOptions === "object" ? extensionOptions : {};
   const engineOptionsStorageKey = getEngineOptionsStorageKey(
-    extensionOptions["option-url-api-stockfish"]
+    safeExtensionOptions["option-url-api-stockfish"]
   );
-  if (!engineOptionsStorageKey || extensionOptions.customEngineOptions) {
-    onReady(extensionOptions);
+  if (!engineOptionsStorageKey || safeExtensionOptions.customEngineOptions) {
+    onReady(safeExtensionOptions);
     return;
   }
   chrome.storage.local.get([engineOptionsStorageKey], (storedEngineResult) => {
@@ -49,9 +51,11 @@ function dispatchOptionsWithEngineSettings(extensionOptions, onReady) {
         chrome.runtime.lastError.message
       );
     }
+    const storedMap =
+      storedEngineResult && typeof storedEngineResult === "object" ? storedEngineResult : {};
     onReady(
-      Object.assign({}, extensionOptions, {
-        customEngineOptions: storedEngineResult[engineOptionsStorageKey] || {}
+      Object.assign({}, safeExtensionOptions, {
+        customEngineOptions: storedMap[engineOptionsStorageKey] || {}
       })
     );
   });
@@ -59,7 +63,14 @@ function dispatchOptionsWithEngineSettings(extensionOptions, onReady) {
 
 if (typeof window !== "undefined" && window.location.protocol !== "chrome-extension:") {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!message || message.type !== "UpdateOptions" || !message.extensionOptions) return;
+    if (
+      !message ||
+      message.type !== "UpdateOptions" ||
+      !message.extensionOptions ||
+      typeof message.extensionOptions !== "object"
+    ) {
+      return;
+    }
     dispatchOptionsWithEngineSettings(message.extensionOptions, (mergedExtensionOptions) => {
       window.dispatchEvent(new CustomEvent("BetterMintUpdateOptions", { detail: mergedExtensionOptions }));
     });
@@ -71,6 +82,8 @@ if (typeof window !== "undefined" && window.location.protocol !== "chrome-extens
       window.removeEventListener("BetterMintGetOptions", handleGetOptionsRequest);
       return;
     }
+    const requestId = requestEvent?.detail?.requestId;
+    if (requestId === undefined) return;
     chrome.storage.sync.get(DEFAULT_EXTENSION_OPTIONS, (extensionOptions) => {
       if (chrome.runtime.lastError) {
         console.warn(
@@ -78,11 +91,15 @@ if (typeof window !== "undefined" && window.location.protocol !== "chrome-extens
           chrome.runtime.lastError.message
         );
       }
-      dispatchOptionsWithEngineSettings(extensionOptions, (mergedExtensionOptions) => {
+      const resolvedOptions =
+        extensionOptions && typeof extensionOptions === "object"
+          ? extensionOptions
+          : Object.assign({}, DEFAULT_EXTENSION_OPTIONS);
+      dispatchOptionsWithEngineSettings(resolvedOptions, (mergedExtensionOptions) => {
         window.dispatchEvent(
           new CustomEvent("BetterMintSendOptions", {
             detail: {
-              requestId: requestEvent.detail.requestId,
+              requestId,
               extensionOptions: mergedExtensionOptions
             }
           })

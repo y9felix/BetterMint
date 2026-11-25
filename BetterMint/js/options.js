@@ -8,22 +8,22 @@ const THEMES = {
   dark: {
     label: "Dark",
     nextThemeId: "light",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>'
+    iconSvg: `<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>`
   },
   light: {
     label: "Light",
     nextThemeId: "black",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>'
+    iconSvg: `<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>`
   },
   black: {
     label: "Black",
     nextThemeId: "chesscom",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 15A7 7 0 1 0 8 1zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16"/></svg>'
+    iconSvg: `<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 15A7 7 0 1 0 8 1zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16"/></svg>`
   },
   chesscom: {
     label: "Chess.com",
     nextThemeId: "dark",
-    iconSvg: '<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6.5 6.38A2.9 2.9 0 1 1 9.5 6.38C11.1 6.45 11.2 7.65 9.7 7.8C9.9 10.1 10.9 11.7 12.3 12.6C13.1 13 13.4 13.6 13.4 14.3C13.4 14.75 13.05 15 12.6 15H3.4C2.95 15 2.6 14.75 2.6 14.3C2.6 13.6 2.9 13 3.7 12.6C5.1 11.7 6.1 10.1 6.3 7.8C4.8 7.65 4.9 6.45 6.5 6.38Z"/></svg>'
+    iconSvg: `<svg viewBox="0 0 16 16" class="svg-icon" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6.5 6.38A2.9 2.9 0 1 1 9.5 6.38C11.1 6.45 11.2 7.65 9.7 7.8C9.9 10.1 10.9 11.7 12.3 12.6C13.1 13 13.4 13.6 13.4 14.3C13.4 14.75 13.05 15 12.6 15H3.4C2.95 15 2.6 14.75 2.6 14.3C2.6 13.6 2.9 13 3.7 12.6C5.1 11.7 6.1 10.1 6.3 7.8C4.8 7.65 4.9 6.45 6.5 6.38Z"/></svg>`
   }
 };
 
@@ -45,8 +45,16 @@ const VISIBILITY_TOGGLE_GROUPS = [
   ["option-human-like-moves", "human-pace-group"]
 ];
 
+const DISCLOSURE_PANEL_IDS = [
+  "go-command-details",
+  "engine-options-details",
+  "advanced-timing-details"
+];
+
 const EXPAND_SCROLL_DURATION_MS = 260;
 const EXPAND_SCROLL_PADDING_PX = 10;
+const WEBSOCKET_URL_RE = /^wss?:\/\//i;
+const UCI_OPTION_HEADER_RE = /^option name (.+?) type (\S+)(?:\s+(.*))?$/;
 const UCI_OPTION_KEYWORDS = new Set(["default", "min", "max", "var"]);
 const EXTENSION_OPTION_KEYS = Object.keys(DEFAULT_EXTENSION_OPTIONS);
 
@@ -94,11 +102,15 @@ function restoreBaseSliderStep(rangeInput) {
   }
 }
 
-function updateSliderTrackFill(rangeInput) {
-  const sliderMin = parseFloat(rangeInput.min) || 0;
+function getSliderBounds(rangeInput) {
+  const min = parseFloat(rangeInput.min) || 0;
   const parsedMax = parseFloat(rangeInput.max);
+  return { min, max: Number.isNaN(parsedMax) ? 100 : parsedMax };
+}
+
+function updateSliderTrackFill(rangeInput) {
+  const { min: sliderMin, max: sliderMax } = getSliderBounds(rangeInput);
   const parsedValue = parseFloat(rangeInput.value);
-  const sliderMax = Number.isNaN(parsedMax) ? 100 : parsedMax;
   const sliderValue = Number.isNaN(parsedValue) ? sliderMin : parsedValue;
   const rangeSpan = sliderMax - sliderMin;
   const progressPercent =
@@ -137,9 +149,7 @@ function parseAndClampSliderInput(rangeInput, rawText, optionKey = null) {
     if (!Number.isFinite(parsedNumber)) return null;
   }
 
-  const sliderMin = parseFloat(rangeInput.min) || 0;
-  const parsedMax = parseFloat(rangeInput.max);
-  const sliderMax = Number.isNaN(parsedMax) ? 100 : parsedMax;
+  const { min: sliderMin, max: sliderMax } = getSliderBounds(rangeInput);
   const clampedNumber = Math.min(sliderMax, Math.max(sliderMin, parsedNumber));
 
   const stepText = getBaseSliderStep(rangeInput);
@@ -163,10 +173,12 @@ function bindEditableSliderBadge(badgeElement, rangeInput, { optionKey = null, o
       className: "badge-input",
       value: String(rangeInput.value),
       spellcheck: false,
-      autocomplete: "off"
+      autocomplete: "off",
+      attrs: {
+        inputmode: "decimal",
+        "aria-label": badgeElement.getAttribute("aria-label") || "Edit value"
+      }
     });
-    inlineEditor.setAttribute("inputmode", "decimal");
-    inlineEditor.setAttribute("aria-label", badgeElement.getAttribute("aria-label") || "Edit value");
 
     badgeElement.classList.add("hidden");
     headerElement.appendChild(inlineEditor);
@@ -297,78 +309,81 @@ function updateDependentGroupVisibility() {
   }
 }
 
-function parseUciOptionLine(uciLine) {
-  if (!uciLine || !uciLine.startsWith("option name ")) return null;
-  const declarationBody = uciLine.slice(12);
-  const typeDelimiterIndex = declarationBody.indexOf(" type ");
-  if (typeDelimiterIndex === -1) return null;
-  const optionName = declarationBody.slice(0, typeDelimiterIndex).trim();
-  const typeAndAttributes = declarationBody.slice(typeDelimiterIndex + 6).trim();
-  const attributeTokens = typeAndAttributes.split(/\s+/);
-  const optionType = attributeTokens[0];
-  if (!optionType) return null;
+function parseOptionalUciInt(rawValue) {
+  if (!/^-?\d+$/.test(rawValue)) return null;
+  const parsedInt = parseInt(rawValue, 10);
+  return Number.isNaN(parsedInt) ? null : parsedInt;
+}
 
-  if (optionType === "string") {
-    const defaultMatch = typeAndAttributes.match(/^string\s+default\s*(.*)$/);
-    const rawDefault = defaultMatch ? defaultMatch[1].trim() : "";
-    return {
-      name: optionName,
-      type: optionType,
-      default: rawDefault === "<empty>" ? "" : rawDefault,
-      min: null,
-      max: null,
-      vars: []
-    };
+function applyParsedUciAttribute(parsedOption, keyword, valueWords) {
+  const attributeValue = valueWords.join(" ").trim();
+  if (keyword === "default") {
+    parsedOption.default = attributeValue;
+  } else if (keyword === "min") {
+    parsedOption.min = parseOptionalUciInt(attributeValue);
+  } else if (keyword === "max") {
+    parsedOption.max = parseOptionalUciInt(attributeValue);
+  } else if (keyword === "var" && attributeValue) {
+    parsedOption.vars.push(attributeValue);
   }
+}
 
-  let defaultValue = "";
-  let minValue = null;
-  let maxValue = null;
-  const allowedVariants = [];
+function parseUciOptionLine(uciLine) {
+  if (typeof uciLine !== "string") return null;
+  const headerMatch = uciLine.match(UCI_OPTION_HEADER_RE);
+  if (!headerMatch) return null;
+  const optionName = headerMatch[1].trim();
+  if (!optionName) return null;
+  const optionType = headerMatch[2];
+  const attributesText = (headerMatch[3] || "").trim();
 
-  let activeAttributeKeyword = null;
-  let collectedValueWords = [];
-
-  const commitActiveAttribute = () => {
-    if (!activeAttributeKeyword) return;
-    const attributeValue = collectedValueWords.join(" ").trim();
-    if (activeAttributeKeyword === "default") {
-      defaultValue = attributeValue;
-    } else if (activeAttributeKeyword === "min") {
-      minValue = attributeValue ? parseInt(attributeValue, 10) : null;
-    } else if (activeAttributeKeyword === "max") {
-      maxValue = attributeValue ? parseInt(attributeValue, 10) : null;
-    } else if (activeAttributeKeyword === "var") {
-      if (attributeValue) allowedVariants.push(attributeValue);
-    }
-    collectedValueWords = [];
+  const parsedOption = {
+    name: optionName,
+    type: optionType,
+    default: "",
+    min: null,
+    max: null,
+    vars: []
   };
 
-  for (let tokenIndex = 1; tokenIndex < attributeTokens.length; tokenIndex++) {
-    const token = attributeTokens[tokenIndex];
+  if (optionType === "string") {
+    const defaultMatch = attributesText.match(/^default(?:\s+(.*))?$/);
+    const rawDefault = defaultMatch ? (defaultMatch[1] || "").trim() : "";
+    parsedOption.default = rawDefault === "<empty>" ? "" : rawDefault;
+    return parsedOption;
+  }
+
+  if (!attributesText) return parsedOption;
+
+  let activeKeyword = null;
+  let collectedValueWords = [];
+  for (const token of attributesText.split(/\s+/)) {
     if (UCI_OPTION_KEYWORDS.has(token)) {
-      commitActiveAttribute();
-      activeAttributeKeyword = token;
-    } else if (activeAttributeKeyword) {
+      if (activeKeyword) {
+        applyParsedUciAttribute(parsedOption, activeKeyword, collectedValueWords);
+      }
+      activeKeyword = token;
+      collectedValueWords = [];
+    } else if (activeKeyword) {
       collectedValueWords.push(token);
     }
   }
-  commitActiveAttribute();
-
-  return {
-    name: optionName,
-    type: optionType,
-    default: defaultValue,
-    min: minValue,
-    max: maxValue,
-    vars: allowedVariants
-  };
+  if (activeKeyword) {
+    applyParsedUciAttribute(parsedOption, activeKeyword, collectedValueWords);
+  }
+  return parsedOption;
 }
 
 function createDomElement(tagName, properties = {}, childNodes = []) {
   const element = document.createElement(tagName);
   for (const [propertyName, propertyValue] of Object.entries(properties)) {
-    if (propertyValue !== undefined && propertyValue !== null) {
+    if (propertyName === "attrs" && propertyValue) {
+      for (const [attrName, attrValue] of Object.entries(propertyValue)) {
+        if (attrValue !== undefined && attrValue !== null) {
+          element.setAttribute(attrName, String(attrValue));
+        }
+      }
+    } else if (propertyValue !== undefined && propertyValue !== null) {
       element[propertyName] = propertyValue;
     }
   }
@@ -391,9 +406,9 @@ const uciOptionControlRenderers = {
     const valueBadge = createDomElement("button", {
       type: "button",
       className: "badge",
-      textContent: currentValue
+      textContent: currentValue,
+      attrs: { "aria-label": `Edit ${uciOption.name} value` }
     });
-    valueBadge.setAttribute("aria-label", `Edit ${uciOption.name} value`);
     const rangeInput = createDomElement("input", {
       id: controlId,
       type: "range",
@@ -413,9 +428,9 @@ const uciOptionControlRenderers = {
     });
     const titleLabel = createDomElement("label", {
       className: "title",
-      textContent: uciOption.name
+      textContent: uciOption.name,
+      attrs: { for: controlId }
     });
-    titleLabel.setAttribute("for", controlId);
     return createDomElement("div", { className: "control-col" }, [
       createDomElement("div", { className: "slider-header" }, [titleLabel, valueBadge]),
       rangeInput
@@ -431,15 +446,15 @@ const uciOptionControlRenderers = {
     checkboxInput.addEventListener("change", () => {
       onUciOptionChange?.(uciOption.name, checkboxInput.checked, false);
     });
-    const toggleVisual = createDomElement("span", { className: "toggle-slider" });
-    toggleVisual.setAttribute("aria-hidden", "true");
-    const rowLabel = createDomElement("label", { className: "control-row" }, [
+    const toggleVisual = createDomElement("span", {
+      className: "toggle-slider",
+      attrs: { "aria-hidden": "true" }
+    });
+    return createDomElement("label", { className: "control-row", attrs: { for: controlId } }, [
       createDomElement("span", { className: "control-label-text", textContent: uciOption.name }),
       checkboxInput,
       toggleVisual
     ]);
-    rowLabel.setAttribute("for", controlId);
-    return rowLabel;
   },
   combo(uciOption, currentValue, onUciOptionChange, controlId) {
     const selectInput = createDomElement(
@@ -458,9 +473,9 @@ const uciOptionControlRenderers = {
     });
     const fieldLabel = createDomElement("label", {
       className: "control-label-text",
-      textContent: uciOption.name
+      textContent: uciOption.name,
+      attrs: { for: controlId }
     });
-    fieldLabel.setAttribute("for", controlId);
     return createDomElement("div", { className: "control-col" }, [fieldLabel, selectInput]);
   },
   string(uciOption, currentValue, onUciOptionChange, controlId) {
@@ -477,9 +492,9 @@ const uciOptionControlRenderers = {
     });
     const fieldLabel = createDomElement("label", {
       className: "control-label-text",
-      textContent: uciOption.name
+      textContent: uciOption.name,
+      attrs: { for: controlId }
     });
-    fieldLabel.setAttribute("for", controlId);
     return createDomElement("div", { className: "control-col" }, [fieldLabel, textInput]);
   },
   button(uciOption, _currentValue, onUciOptionChange) {
@@ -503,7 +518,7 @@ function renderDynamicUciOptions(uciOptionDefinitions, savedUciValues, container
   containerElement.innerHTML = "";
   if (uciOptionDefinitions.length === 0) {
     containerElement.innerHTML =
-      '<span class="status-text">No configurable options reported by engine.</span>';
+      `<span class="status-text">No configurable options reported by engine.</span>`;
     return;
   }
 
@@ -526,11 +541,9 @@ function setEngineOptionsStatusMessage(
 
   const statusTextElement = createDomElement("span", {
     className: "status-text",
-    textContent: statusMessage
+    textContent: statusMessage,
+    attrs: isError ? { role: "alert" } : undefined
   });
-  if (isError) {
-    statusTextElement.setAttribute("role", "alert");
-  }
   containerElement.appendChild(statusTextElement);
 }
 
@@ -550,7 +563,7 @@ function probeEngineUciOptions(engineUrl, onProbeComplete = loadAndRenderEngineU
   const containerElement = document.getElementById("engine-options-container");
   resetEngineProbe();
 
-  if (!engineUrl || !/^wss?:\/\//i.test(engineUrl)) {
+  if (!engineUrl || !WEBSOCKET_URL_RE.test(engineUrl)) {
     setEngineOptionsStatusMessage("Invalid WebSocket URL (use ws:// or wss://).", { isError: true });
     return;
   }
@@ -889,14 +902,6 @@ function deleteCustomConfigProfile(profileName) {
   writeChromeStorage("local", storageUpdates);
 }
 
-function formatConfigProfileSummary(extensionOptions) {
-  const depth = extensionOptions["option-depth"] ?? DEFAULT_EXTENSION_OPTIONS["option-depth"];
-  const movePace =
-    extensionOptions["option-move-pace"] ?? DEFAULT_EXTENSION_OPTIONS["option-move-pace"];
-  const autoMoveMode = extensionOptions["option-legit-auto-move"] ? "Auto" : "Manual";
-  return `D${depth} · ${autoMoveMode} · ${movePace}s`;
-}
-
 function renderSavedConfigList() {
   const listContainer = document.getElementById("config-load-list");
   listContainer.innerHTML = "";
@@ -917,19 +922,11 @@ function renderSavedConfigList() {
       "button",
       {
         type: "button",
-        className: isActiveProfile ? "config-item-btn is-active" : "config-item-btn"
+        className: isActiveProfile ? "config-item-btn is-active" : "config-item-btn",
+        attrs: isActiveProfile ? { "aria-current": "true" } : undefined
       },
-      [
-        createDomElement("span", { className: "config-item-name", textContent: savedProfile.name }),
-        createDomElement("span", {
-          className: "config-item-meta",
-          textContent: formatConfigProfileSummary(savedProfile.settings)
-        })
-      ]
+      [createDomElement("span", { className: "config-item-name", textContent: savedProfile.name })]
     );
-    if (isActiveProfile) {
-      selectProfileButton.setAttribute("aria-current", "true");
-    }
     selectProfileButton.addEventListener("click", () => {
       applyConfigProfile(savedProfile.settings, savedProfile.customEngineOptions, {
         profileName: savedProfile.name,
@@ -943,9 +940,9 @@ function renderSavedConfigList() {
       type: "button",
       className: "config-delete-btn",
       title: `Delete ${savedProfile.name}`,
-      textContent: "×"
+      textContent: "×",
+      attrs: { "aria-label": `Delete ${savedProfile.name}` }
     });
-    deleteProfileButton.setAttribute("aria-label", `Delete ${savedProfile.name}`);
     deleteProfileButton.addEventListener("click", (clickEvent) => {
       clickEvent.stopPropagation?.();
       deleteCustomConfigProfile(savedProfile.name);
@@ -1071,92 +1068,96 @@ function handleExtensionOptionChange(changedOptionKey) {
   notifyActiveChessComTabs(changedPayload);
 }
 
+function bindExtensionOptionInputs() {
+  EXTENSION_OPTION_KEYS.forEach((optionKey) => {
+    const inputElement = document.getElementById(optionKey);
+    if (!inputElement) return;
+    extensionOptionInputs[optionKey] = inputElement;
+
+    if (inputElement.type === "range") {
+      const badgeElement = document.getElementById("badge-" + optionKey);
+      updateSliderTrackFill(inputElement);
+      inputElement.addEventListener("input", () => {
+        updateSliderTrackFill(inputElement);
+        if (badgeElement) {
+          badgeElement.textContent = formatSliderBadgeValue(optionKey, inputElement.value);
+        }
+      });
+      if (badgeElement) {
+        bindEditableSliderBadge(badgeElement, inputElement, {
+          optionKey,
+          onCommit: () => handleExtensionOptionChange(optionKey)
+        });
+      }
+    }
+    inputElement.addEventListener("change", () => handleExtensionOptionChange(optionKey));
+  });
+}
+
+function bindDisclosurePanels() {
+  document
+    .getElementById("engine-options-details")
+    .addEventListener("toggle", probeEngineIfPanelExpanded);
+
+  for (const disclosureId of DISCLOSURE_PANEL_IDS) {
+    const detailsElement = document.getElementById(disclosureId);
+    detailsElement?.addEventListener("toggle", () => {
+      if (detailsElement.open && document.body.classList.contains("is-ready")) {
+        scrollExpandedElementIntoView(detailsElement);
+      }
+    });
+  }
+}
+
+function bindConfigPopoverControls() {
+  document.getElementById("config-toggle").addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation?.();
+    setConfigPopoverOpen(!isConfigPopoverOpen);
+  });
+
+  document.getElementById("config-close").addEventListener("click", () => {
+    setConfigPopoverOpen(false, { shouldRestoreFocus: true });
+  });
+  document.getElementById("config-save-confirm").addEventListener("click", handleSaveProfileSubmit);
+
+  const profileNameInput = document.getElementById("config-save-name");
+  profileNameInput.addEventListener("input", updateConfigSaveButtonState);
+  profileNameInput.addEventListener("keydown", (keyEvent) => {
+    if (keyEvent.key === "Enter") {
+      keyEvent.preventDefault();
+      handleSaveProfileSubmit();
+    }
+  });
+  updateConfigSaveButtonState();
+
+  document.addEventListener?.("click", (clickEvent) => {
+    if (!isConfigPopoverOpen) return;
+    const popoverElement = document.getElementById("config-popover");
+    const configToggleButton = document.getElementById("config-toggle");
+    if (popoverElement.contains(clickEvent.target) || configToggleButton.contains(clickEvent.target)) {
+      return;
+    }
+    setConfigPopoverOpen(false);
+  });
+
+  document.addEventListener?.("keydown", (keyEvent) => {
+    if (keyEvent.key === "Escape" && isConfigPopoverOpen) {
+      setConfigPopoverOpen(false, { shouldRestoreFocus: true });
+    }
+  });
+}
+
 function initializeOptionsPage() {
   if (!isPageInitialized) {
     isPageInitialized = true;
-
-    EXTENSION_OPTION_KEYS.forEach((optionKey) => {
-      const inputElement = document.getElementById(optionKey);
-      if (!inputElement) return;
-      extensionOptionInputs[optionKey] = inputElement;
-
-      if (inputElement.type === "range") {
-        const badgeElement = document.getElementById("badge-" + optionKey);
-        updateSliderTrackFill(inputElement);
-        inputElement.addEventListener("input", () => {
-          updateSliderTrackFill(inputElement);
-          if (badgeElement) {
-            badgeElement.textContent = formatSliderBadgeValue(optionKey, inputElement.value);
-          }
-        });
-        if (badgeElement) {
-          bindEditableSliderBadge(badgeElement, inputElement, {
-            optionKey,
-            onCommit: () => handleExtensionOptionChange(optionKey)
-          });
-        }
-      }
-      inputElement.addEventListener("change", () => handleExtensionOptionChange(optionKey));
-    });
-
-    document
-      .getElementById("engine-options-details")
-      .addEventListener("toggle", probeEngineIfPanelExpanded);
-
-    const disclosureIds = [
-      "go-command-details",
-      "engine-options-details",
-      "advanced-timing-details"
-    ];
-    for (const disclosureId of disclosureIds) {
-      const detailsElement = document.getElementById(disclosureId);
-      detailsElement?.addEventListener("toggle", () => {
-        if (detailsElement.open && document.body.classList.contains("is-ready")) {
-          scrollExpandedElementIntoView(detailsElement);
-        }
-      });
-    }
+    bindExtensionOptionInputs();
+    bindDisclosurePanels();
+    bindConfigPopoverControls();
 
     document.getElementById("theme-toggle").addEventListener("click", () => {
       const nextThemeId = THEMES[activeThemeId].nextThemeId;
       applyTheme(nextThemeId);
       writeChromeStorage("local", { theme: nextThemeId });
-    });
-
-    document.getElementById("config-toggle").addEventListener("click", (clickEvent) => {
-      clickEvent.stopPropagation?.();
-      setConfigPopoverOpen(!isConfigPopoverOpen);
-    });
-
-    document.getElementById("config-close").addEventListener("click", () => {
-      setConfigPopoverOpen(false, { shouldRestoreFocus: true });
-    });
-    document.getElementById("config-save-confirm").addEventListener("click", handleSaveProfileSubmit);
-
-    const profileNameInput = document.getElementById("config-save-name");
-    profileNameInput.addEventListener("input", updateConfigSaveButtonState);
-    profileNameInput.addEventListener("keydown", (keyEvent) => {
-      if (keyEvent.key === "Enter") {
-        keyEvent.preventDefault();
-        handleSaveProfileSubmit();
-      }
-    });
-    updateConfigSaveButtonState();
-
-    document.addEventListener?.("click", (clickEvent) => {
-      if (!isConfigPopoverOpen) return;
-      const popoverElement = document.getElementById("config-popover");
-      const configToggleButton = document.getElementById("config-toggle");
-      if (popoverElement.contains(clickEvent.target) || configToggleButton.contains(clickEvent.target)) {
-        return;
-      }
-      setConfigPopoverOpen(false);
-    });
-
-    document.addEventListener?.("keydown", (keyEvent) => {
-      if (keyEvent.key === "Escape" && isConfigPopoverOpen) {
-        setConfigPopoverOpen(false, { shouldRestoreFocus: true });
-      }
     });
   }
 
@@ -1189,13 +1190,6 @@ if (typeof module !== "undefined" && module.exports) {
     renderDynamicUciOptions,
     probeEngineUciOptions,
     initializeOptionsPage,
-    handleExtensionOptionChange,
-    resetProbeStateForTesting: () => {
-      lastProbedEngineUrl = null;
-      lastProbedUciOptions = [];
-      activeConfigProfileName = null;
-      customConfigProfiles = [];
-      isConfigPopoverOpen = false;
-    }
+    handleExtensionOptionChange
   };
 }

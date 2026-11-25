@@ -13,26 +13,11 @@ const AUTO_QUEUE_MAX_ATTEMPTS = 60;
 const ENGINE_STOP_TIMEOUT_MS = 1000;
 const DEFAULT_SEARCH_DEPTH = 3;
 const STANDARD_STARTPOS_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const CHESSBOARD_SELECTOR = "wc-chess-board, chess-board";
+const CLOCK_BOTTOM_SELECTOR = ".clock-bottom";
 const SQUARE_RE = /^[a-h][1-8]$/;
 const UCI_MOVE_RE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
-
-let nextOptionsRequestId = 0;
-
-function requestExtensionOptions() {
-  const pendingRequestId = nextOptionsRequestId++;
-  return new Promise((resolve) => {
-    const onOptionsResponse = (optionsEvent) => {
-      if (optionsEvent.detail.requestId === pendingRequestId) {
-        window.removeEventListener("BetterMintSendOptions", onOptionsResponse);
-        resolve(optionsEvent.detail.extensionOptions);
-      }
-    };
-    window.addEventListener("BetterMintSendOptions", onOptionsResponse);
-    window.dispatchEvent(
-      new CustomEvent("BetterMintGetOptions", { detail: { requestId: pendingRequestId } })
-    );
-  });
-}
+const WEBSOCKET_URL_RE = /^wss?:\/\//i;
 
 const EXTENSION_OPTION_KEY = {
   EngineWebSocketUrl: "option-url-api-stockfish",
@@ -61,7 +46,23 @@ const SEARCH_GO_OPTION_KEYS = new Set([
   EXTENSION_OPTION_KEY.GoNodes
 ]);
 
-const CLOCK_BOTTOM_SELECTOR = ".clock-bottom";
+let nextOptionsRequestId = 0;
+
+function requestExtensionOptions() {
+  const pendingRequestId = nextOptionsRequestId++;
+  return new Promise((resolve) => {
+    const onOptionsResponse = (optionsEvent) => {
+      if (optionsEvent.detail?.requestId === pendingRequestId) {
+        window.removeEventListener("BetterMintSendOptions", onOptionsResponse);
+        resolve(optionsEvent.detail.extensionOptions || {});
+      }
+    };
+    window.addEventListener("BetterMintSendOptions", onOptionsResponse);
+    window.dispatchEvent(
+      new CustomEvent("BetterMintGetOptions", { detail: { requestId: pendingRequestId } })
+    );
+  });
+}
 
 function centipawnsToWinProbability(centipawns) {
   return 1 / (1 + Math.exp(-0.00368208 * centipawns));
@@ -119,21 +120,57 @@ function getRemainingPlayerTimeSeconds() {
   return secondsMatch ? Number(secondsMatch[1]) : null;
 }
 
-let activeExtension;
-let fallbackExtensionOptions = {};
-
-function getExtensionOption(optionKey) {
-  return (activeExtension ? activeExtension.extensionOptions : fallbackExtensionOptions)[optionKey];
+function getExtensionOption(extension, optionKey) {
+  return extension?.extensionOptions?.[optionKey];
 }
 
-function getPositiveFloatOption(optionKey, fallbackValue) {
-  const parsedValue = parseFloat(getExtensionOption(optionKey));
+function getPositiveFloatOption(extension, optionKey, fallbackValue) {
+  const parsedValue = parseFloat(getExtensionOption(extension, optionKey));
   return parsedValue > 0 ? parsedValue : fallbackValue;
 }
 
-function getNonNegativeIntOption(optionKey, fallbackValue = 0) {
-  const parsedInt = parseInt(getExtensionOption(optionKey), 10);
+function getNonNegativeIntOption(extension, optionKey, fallbackValue = 0) {
+  const parsedInt = parseInt(getExtensionOption(extension, optionKey), 10);
   return parsedInt >= 0 ? parsedInt : fallbackValue;
+}
+
+function hasUciOptionValue(optionValue) {
+  return optionValue !== "" && optionValue !== undefined && optionValue !== null;
+}
+
+function measureChessboardRect(chessboardElement) {
+  const innerBoardElement =
+    chessboardElement.querySelector?.(".board, chess-board, svg.coordinates") ||
+    chessboardElement.shadowRoot?.querySelector(".board, svg.coordinates");
+  const boundingRect = (innerBoardElement || chessboardElement).getBoundingClientRect();
+  if (boundingRect.width > boundingRect.height + 2 && boundingRect.height >= 50) {
+    const boardSideLength = boundingRect.height;
+    const horizontalInset = (boundingRect.width - boardSideLength) / 2;
+    return {
+      left: boundingRect.left + horizontalInset,
+      top: boundingRect.top,
+      bottom: boundingRect.bottom,
+      width: boardSideLength,
+      height: boardSideLength
+    };
+  }
+  return boundingRect;
+}
+
+function matchesQueueKeyword(buttonText, shouldMatchLeadingNew) {
+  return GameController.AUTO_QUEUE_KEYWORDS.some((keyword) => {
+    if (keyword === "new") {
+      return shouldMatchLeadingNew ? /^new\b/.test(buttonText) : /\bnew\b/.test(buttonText);
+    }
+    return buttonText.includes(keyword);
+  });
+}
+
+function getHintArrowColor(rankIndex, arrowColors) {
+  if (rankIndex === 0) return arrowColors.alt || "#15781b";
+  if (rankIndex <= 2) return arrowColors.shift || "#e68f00";
+  if (rankIndex <= 5) return arrowColors.default || "#003088";
+  return arrowColors.ctrl || "#882020";
 }
 
 function resolveLegalMove(legalMoves, candidateMove) {
@@ -249,8 +286,8 @@ class GameController {
     ".game-over-button-primary",
     ".game-over-button-button",
     ".game-over-buttons-playAgain",
-    '[data-action="next-game"]',
-    '[data-testid="next-game"]',
+    "[data-action='next-game']",
+    "[data-testid='next-game']",
     "button.game-over-button",
     ".game-over-modal-container button",
     ".board-modal-container button",
@@ -260,6 +297,8 @@ class GameController {
     ".ui_v5-button-component.ui_v5-button-primary",
     ".cc-button-primary"
   ].join(", ");
+
+  static AUTO_QUEUE_GENERIC_SELECTOR = "button:not([disabled]), [role='button']:not([disabled])";
 
   static AUTO_QUEUE_KEYWORDS = [
     "play again",
@@ -292,6 +331,7 @@ class GameController {
     this.evalBarResizeObserver = null;
     this.evalBarSyncHandler = null;
     this.evalBarAnimationFrameId = null;
+    this.lastEvalBarLayoutSignature = "";
     this.activeHintMarkings = [];
     this.lastHintSignature = "";
     this.lastAnalysisMarkings = [];
@@ -319,7 +359,7 @@ class GameController {
       this.updateEnginePosition(false);
     });
 
-    if (getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) {
+    if (getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EvaluationBar)) {
       this.createAnalysisTools();
     }
 
@@ -413,62 +453,55 @@ class GameController {
     targetElement.click();
   }
 
+  findAndClickQueueButton(buttonSelector, labelPredicate, nowMs) {
+    const candidateButtons = document.querySelectorAll(buttonSelector);
+    for (const candidateButton of candidateButtons) {
+      if (candidateButton.disabled) continue;
+      const buttonText = candidateButton.textContent.trim().toLowerCase();
+      if (!buttonText || !labelPredicate(buttonText)) continue;
+      if (candidateButton.offsetWidth > 0 && candidateButton.offsetHeight > 0) {
+        this.lastAutoQueueClickMs = nowMs;
+        this.dispatchSimulatedClick(candidateButton);
+        return true;
+      }
+    }
+    return false;
+  }
+
   triggerAutoQueue() {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return false;
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.AutoQueue)) return false;
     if (this.chessComGame?.getMode?.() === "playing") return false;
     const nowMs = Date.now();
     if (this.lastAutoQueueClickMs && nowMs - this.lastAutoQueueClickMs < AUTO_QUEUE_COOLDOWN_MS) {
       return false;
     }
 
-    const matchesQueueKeyword = (buttonText, shouldMatchLeadingNew) =>
-      GameController.AUTO_QUEUE_KEYWORDS.some((keyword) => {
-        if (keyword === "new") {
-          return shouldMatchLeadingNew ? /^new\b/.test(buttonText) : /\bnew\b/.test(buttonText);
-        }
-        return buttonText.includes(keyword);
-      });
-
-    const findAndClickMatchingButton = (buttonSelector, labelPredicate) => {
-      const candidateButtons = document.querySelectorAll(buttonSelector);
-      for (const candidateButton of candidateButtons) {
-        if (candidateButton.disabled) continue;
-        const buttonText = candidateButton.textContent.trim().toLowerCase();
-        if (!buttonText || !labelPredicate(buttonText)) {
-          continue;
-        }
-        if (candidateButton.offsetWidth > 0 && candidateButton.offsetHeight > 0) {
-          this.lastAutoQueueClickMs = nowMs;
-          this.dispatchSimulatedClick(candidateButton);
-          return true;
-        }
-      }
-      return false;
-    };
-
-    const genericButtonSelector = "button:not([disabled]), [role='button']:not([disabled])";
-    if (getExtensionOption(EXTENSION_OPTION_KEY.RematchFirst)) {
+    if (getExtensionOption(this.extension, EXTENSION_OPTION_KEY.RematchFirst)) {
       const isRematchButton = (buttonText) => buttonText.includes("rematch");
-      if (findAndClickMatchingButton(GameController.AUTO_QUEUE_SELECTORS, isRematchButton)) {
+      if (
+        this.findAndClickQueueButton(GameController.AUTO_QUEUE_SELECTORS, isRematchButton, nowMs) ||
+        this.findAndClickQueueButton(GameController.AUTO_QUEUE_GENERIC_SELECTOR, isRematchButton, nowMs)
+      ) {
         return true;
       }
-      if (findAndClickMatchingButton(genericButtonSelector, isRematchButton)) return true;
     }
 
-    if (
-      findAndClickMatchingButton(GameController.AUTO_QUEUE_SELECTORS, (buttonText) =>
-        matchesQueueKeyword(buttonText, false)
+    return (
+      this.findAndClickQueueButton(
+        GameController.AUTO_QUEUE_SELECTORS,
+        (buttonText) => matchesQueueKeyword(buttonText, false),
+        nowMs
+      ) ||
+      this.findAndClickQueueButton(
+        GameController.AUTO_QUEUE_GENERIC_SELECTOR,
+        (buttonText) => matchesQueueKeyword(buttonText, true),
+        nowMs
       )
-    ) {
-      return true;
-    }
-    return findAndClickMatchingButton(genericButtonSelector, (buttonText) =>
-      matchesQueueKeyword(buttonText, true)
     );
   }
 
   setupAutoQueueObserver() {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) {
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.AutoQueue)) {
       this.clearAutoQueueScanTimer();
       this.clearGameOverRetryInterval();
       if (this.autoQueueMutationObserver) {
@@ -500,7 +533,7 @@ class GameController {
   }
 
   handleGameOver() {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.AutoQueue)) return;
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.AutoQueue)) return;
     this.setupAutoQueueObserver();
     this.clearGameOverRetryInterval();
     let attemptCount = 0;
@@ -575,30 +608,31 @@ class GameController {
     }
     this.evalBarWhiteFill = null;
     this.evalScoreAbbreviatedElement = null;
+    this.lastEvalBarLayoutSignature = "";
   }
 
   applyExtensionOptions() {
     if (
-      getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) &&
+      getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EvaluationBar) &&
       (!this.evalBarElement || !this.evalBarElement.isConnected)
     ) {
       this.removeEvaluationBar();
       this.createAnalysisTools();
     } else if (
-      !getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) &&
+      !getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EvaluationBar) &&
       this.evalBarElement
     ) {
       this.removeEvaluationBar();
     }
 
     this.setupAutoQueueObserver();
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.ShowHints)) {
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.ShowHints)) {
       this.removeCurrentHintMarkings();
     }
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.MoveAnalysis)) {
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.MoveAnalysis)) {
       this.removeLastAnalysisMarkings();
     }
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove)) {
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.LegitAutoMove)) {
       this.clearAutoMoveTimer();
     }
   }
@@ -635,87 +669,84 @@ class GameController {
     this.setEvaluationDisplay(orientedScore, candidateMove.mateInMoves !== null);
   }
 
+  syncEvalBarPosition() {
+    if (!this.evalBarElement) return;
+    if (!this.chessboardElement.isConnected) {
+      if (this.lastEvalBarLayoutSignature !== "none") {
+        this.evalBarElement.style.display = "none";
+        this.lastEvalBarLayoutSignature = "none";
+      }
+      return;
+    }
+    const boardRect = measureChessboardRect(this.chessboardElement);
+    if (
+      boardRect.width < 50 ||
+      boardRect.height < 50 ||
+      boardRect.bottom <= 0 ||
+      boardRect.top >= window.innerHeight
+    ) {
+      if (this.lastEvalBarLayoutSignature !== "none") {
+        this.evalBarElement.style.display = "none";
+        this.lastEvalBarLayoutSignature = "none";
+      }
+      return;
+    }
+    const offsetPx = getEvalBarOffsetPx(window.innerWidth);
+    const topPx = Math.round(boardRect.top);
+    const heightPx = Math.round(boardRect.height);
+    const leftPx = Math.max(4, Math.round(boardRect.left - offsetPx));
+    const nextLayoutSignature = `${topPx}:${heightPx}:${leftPx}:${offsetPx}`;
+    if (nextLayoutSignature === this.lastEvalBarLayoutSignature) return;
+    this.lastEvalBarLayoutSignature = nextLayoutSignature;
+
+    this.evalBarElement.style.display = "block";
+    this.evalBarElement.style.top = `${topPx}px`;
+    this.evalBarElement.style.height = `${heightPx}px`;
+    this.evalBarElement.style.left = `${leftPx}px`;
+  }
+
+  scheduleEvalBarSync() {
+    if (this.evalBarAnimationFrameId !== null) return;
+    this.evalBarAnimationFrameId = requestAnimationFrame(() => {
+      this.evalBarAnimationFrameId = null;
+      this.syncEvalBarPosition();
+    });
+  }
+
   createAnalysisTools() {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar) || this.evalBarElement) {
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EvaluationBar) || this.evalBarElement) {
       return;
     }
 
     const evalBarElement = document.createElement("div");
-    evalBarElement.className = "bettermint-evalbar";
-    evalBarElement.innerHTML = `<span class="bettermint-evalbar-scoreAbbreviated bettermint-evalbar-dark">0.0</span><div class="bettermint-evalbar-fill"><div class="bettermint-evalbar-white" style="transform: translate3d(0px, 50%, 0px);"></div></div>`;
+    evalBarElement.classList.add("bettermint-evalbar");
+
+    const scoreAbbreviatedElement = document.createElement("span");
+    scoreAbbreviatedElement.classList.add(
+      "bettermint-evalbar-scoreAbbreviated",
+      "bettermint-evalbar-dark"
+    );
+    scoreAbbreviatedElement.textContent = "0.0";
+
+    const fillContainerElement = document.createElement("div");
+    fillContainerElement.classList.add("bettermint-evalbar-fill");
+
+    const whiteFillElement = document.createElement("div");
+    whiteFillElement.classList.add("bettermint-evalbar-white");
+    whiteFillElement.style.transform = "translate3d(0px, 50%, 0px)";
+
+    fillContainerElement.appendChild(whiteFillElement);
+    evalBarElement.appendChild(scoreAbbreviatedElement);
+    evalBarElement.appendChild(fillContainerElement);
     document.body.appendChild(evalBarElement);
 
     this.evalBarElement = evalBarElement;
-    this.evalBarWhiteFill = evalBarElement.querySelector(".bettermint-evalbar-white");
-    this.evalScoreAbbreviatedElement = evalBarElement.querySelector(
-      ".bettermint-evalbar-scoreAbbreviated"
-    );
+    this.evalBarWhiteFill = whiteFillElement;
+    this.evalScoreAbbreviatedElement = scoreAbbreviatedElement;
+    this.lastEvalBarLayoutSignature = "";
 
-    const measureBoardRect = () => {
-      const innerBoardElement =
-        this.chessboardElement.querySelector?.(".board, chess-board, svg.coordinates") ||
-        this.chessboardElement.shadowRoot?.querySelector(".board, svg.coordinates");
-      const boundingRect = (innerBoardElement || this.chessboardElement).getBoundingClientRect();
-      if (boundingRect.width > boundingRect.height + 2 && boundingRect.height >= 50) {
-        const boardSideLength = boundingRect.height;
-        const horizontalInset = (boundingRect.width - boardSideLength) / 2;
-        return {
-          left: boundingRect.left + horizontalInset,
-          top: boundingRect.top,
-          bottom: boundingRect.bottom,
-          width: boardSideLength,
-          height: boardSideLength
-        };
-      }
-      return boundingRect;
-    };
-
-    let lastLayoutSignature = "";
-    const syncEvalBarPosition = () => {
-      if (!this.evalBarElement) return;
-      if (!this.chessboardElement.isConnected) {
-        if (lastLayoutSignature !== "none") {
-          this.evalBarElement.style.display = "none";
-          lastLayoutSignature = "none";
-        }
-        return;
-      }
-      const boardRect = measureBoardRect();
-      if (
-        boardRect.width < 50 ||
-        boardRect.height < 50 ||
-        boardRect.bottom <= 0 ||
-        boardRect.top >= window.innerHeight
-      ) {
-        if (lastLayoutSignature !== "none") {
-          this.evalBarElement.style.display = "none";
-          lastLayoutSignature = "none";
-        }
-        return;
-      }
-      const offsetPx = getEvalBarOffsetPx(window.innerWidth);
-      const topPx = Math.round(boardRect.top);
-      const heightPx = Math.round(boardRect.height);
-      const leftPx = Math.max(4, Math.round(boardRect.left - offsetPx));
-      const nextLayoutSignature = `${topPx}:${heightPx}:${leftPx}:${offsetPx}`;
-      if (nextLayoutSignature === lastLayoutSignature) return;
-      lastLayoutSignature = nextLayoutSignature;
-
-      this.evalBarElement.style.display = "block";
-      this.evalBarElement.style.top = `${topPx}px`;
-      this.evalBarElement.style.height = `${heightPx}px`;
-      this.evalBarElement.style.left = `${leftPx}px`;
-    };
-
-    const scheduleSyncPosition = () => {
-      if (this.evalBarAnimationFrameId !== null) return;
-      this.evalBarAnimationFrameId = requestAnimationFrame(() => {
-        this.evalBarAnimationFrameId = null;
-        syncEvalBarPosition();
-      });
-    };
-
-    syncEvalBarPosition();
+    const scheduleSyncPosition = () => this.scheduleEvalBarSync();
+    this.syncEvalBarPosition();
     if (typeof ResizeObserver !== "undefined") {
       this.evalBarResizeObserver = new ResizeObserver(scheduleSyncPosition);
       this.evalBarResizeObserver.observe(this.chessboardElement);
@@ -737,7 +768,7 @@ class GameController {
   }
 
   refreshEvaluationBar() {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) return;
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EvaluationBar)) return;
     if (this.evalBarElement?.isConnected) {
       this.evalBarElement.classList.toggle(
         "bettermint-evalbar-flipped",
@@ -760,35 +791,22 @@ class GameController {
       this.anchorPositionFen = boardHistory.anchorFen;
       this.recordedUciMoves = boardHistory.uciMoves;
       this.lastObservedFen = currentFen;
-      return {
-        fen: currentFen,
-        positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
-      };
-    }
-
-    if (!isNewGame && this.anchorPositionFen !== null && currentFen === this.lastObservedFen) {
-      return {
-        fen: currentFen,
-        positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
-      };
-    }
-
-    if (!isNewGame && this.anchorPositionFen !== null && this.lastObservedFen !== null) {
-      const plyDelta = getFenPlyDelta(this.lastObservedFen, currentFen);
-      const lastPlayedUciMove = formatMoveToUci(this.chessComGame.getLastMove());
-      if (plyDelta === 1 && lastPlayedUciMove) {
+    } else if (isNewGame || this.anchorPositionFen === null || currentFen !== this.lastObservedFen) {
+      const plyDelta =
+        !isNewGame && this.anchorPositionFen !== null && this.lastObservedFen !== null
+          ? getFenPlyDelta(this.lastObservedFen, currentFen)
+          : null;
+      const lastPlayedUciMove = plyDelta === 1 ? formatMoveToUci(this.chessComGame.getLastMove()) : null;
+      if (lastPlayedUciMove) {
         this.recordedUciMoves.push(lastPlayedUciMove);
         this.lastObservedFen = currentFen;
-        return {
-          fen: currentFen,
-          positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
-        };
+      } else {
+        this.anchorPositionFen = currentFen;
+        this.recordedUciMoves = [];
+        this.lastObservedFen = currentFen;
       }
     }
 
-    this.anchorPositionFen = currentFen;
-    this.recordedUciMoves = [];
-    this.lastObservedFen = currentFen;
     return {
       fen: currentFen,
       positionCommand: buildUciPositionCommand(this.anchorPositionFen, this.recordedUciMoves)
@@ -831,81 +849,78 @@ class GameController {
     this.activeHintMarkings = [];
   }
 
+  updateHintMarkings(candidateMoves) {
+    const legalMoves = this.chessComGame.getLegalMoves();
+    if (legalMoves.length === 0) {
+      this.removeCurrentHintMarkings();
+      return;
+    }
+
+    const arrowColors = this.boardOptions.arrowColors || {};
+    const seenMateEffectSquares = new Set();
+    const nextMarkings = [];
+    let hintSignature = "";
+
+    candidateMoves.forEach((candidateMove, rankIndex) => {
+      const resolvedMove = resolveLegalMove(legalMoves, candidateMove);
+      const fromSquare = resolvedMove ? resolvedMove.from : candidateMove.from;
+      const toSquare = resolvedMove ? resolvedMove.to : candidateMove.to;
+      if (!SQUARE_RE.test(fromSquare) || !SQUARE_RE.test(toSquare) || fromSquare === toSquare) {
+        return;
+      }
+
+      const arrowColor = getHintArrowColor(rankIndex, arrowColors);
+      hintSignature += `${fromSquare}${toSquare}${arrowColor};`;
+      nextMarkings.push({
+        data: {
+          from: fromSquare,
+          color: arrowColor,
+          opacity: 0.8,
+          to: toSquare
+        },
+        node: true,
+        persistent: true,
+        type: "arrow"
+      });
+
+      if (
+        candidateMove.mateInMoves !== null &&
+        !seenMateEffectSquares.has(toSquare) &&
+        !this.lastAnalysisMarkings.includes(`effect|${toSquare}`)
+      ) {
+        seenMateEffectSquares.add(toSquare);
+        hintSignature += `E:${toSquare}:${candidateMove.mateInMoves < 0 ? 0 : 1};`;
+        nextMarkings.push({
+          data: {
+            square: toSquare,
+            type: candidateMove.mateInMoves < 0 ? "ResignWhite" : "WinnerWhite"
+          },
+          node: true,
+          persistent: true,
+          type: "effect"
+        });
+      }
+    });
+
+    if (hintSignature !== this.lastHintSignature) {
+      this.removeCurrentHintMarkings();
+      this.lastHintSignature = hintSignature;
+      this.activeHintMarkings = nextMarkings.reverse();
+      if (this.activeHintMarkings.length > 0) {
+        this.chessComGame.markings.addMany(this.activeHintMarkings);
+      }
+    }
+  }
+
   renderMoveHints(candidateMoves) {
     const bestCandidateMove = candidateMoves[0];
     if (!bestCandidateMove) return;
 
-    if (getExtensionOption(EXTENSION_OPTION_KEY.ShowHints)) {
-      const legalMoves = this.chessComGame.getLegalMoves();
-      if (legalMoves.length === 0) {
-        this.removeCurrentHintMarkings();
-      } else {
-        const arrowColors = this.boardOptions.arrowColors || {};
-        const seenMateEffectSquares = new Set();
-        const nextMarkings = [];
-        let hintSignature = "";
-
-        candidateMoves.forEach((candidateMove, rankIndex) => {
-          const resolvedMove = resolveLegalMove(legalMoves, candidateMove);
-          const fromSquare = resolvedMove ? resolvedMove.from : candidateMove.from;
-          const toSquare = resolvedMove ? resolvedMove.to : candidateMove.to;
-          if (!SQUARE_RE.test(fromSquare) || !SQUARE_RE.test(toSquare) || fromSquare === toSquare) {
-            return;
-          }
-
-          const arrowColor =
-            rankIndex === 0
-              ? arrowColors.alt || "#15781b"
-              : rankIndex <= 2
-              ? arrowColors.shift || "#e68f00"
-              : rankIndex <= 5
-              ? arrowColors.default || "#003088"
-              : arrowColors.ctrl || "#882020";
-
-          hintSignature += `${fromSquare}${toSquare}${arrowColor};`;
-          nextMarkings.push({
-            data: {
-              from: fromSquare,
-              color: arrowColor,
-              opacity: 0.8,
-              to: toSquare
-            },
-            node: true,
-            persistent: true,
-            type: "arrow"
-          });
-
-          if (
-            candidateMove.mateInMoves !== null &&
-            !seenMateEffectSquares.has(toSquare) &&
-            !this.lastAnalysisMarkings.includes(`effect|${toSquare}`)
-          ) {
-            seenMateEffectSquares.add(toSquare);
-            hintSignature += `E:${toSquare}:${candidateMove.mateInMoves < 0 ? 0 : 1};`;
-            nextMarkings.push({
-              data: {
-                square: toSquare,
-                type: candidateMove.mateInMoves < 0 ? "ResignWhite" : "WinnerWhite"
-              },
-              node: true,
-              persistent: true,
-              type: "effect"
-            });
-          }
-        });
-
-        if (hintSignature !== this.lastHintSignature) {
-          this.removeCurrentHintMarkings();
-          this.lastHintSignature = hintSignature;
-          this.activeHintMarkings = nextMarkings.reverse();
-          if (this.activeHintMarkings.length > 0) {
-            this.chessComGame.markings.addMany(this.activeHintMarkings);
-          }
-        }
-      }
+    if (getExtensionOption(this.extension, EXTENSION_OPTION_KEY.ShowHints)) {
+      this.updateHintMarkings(candidateMoves);
     }
 
-    if (getExtensionOption(EXTENSION_OPTION_KEY.EvaluationBar)) {
+    if (getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EvaluationBar)) {
       this.updateEvaluationFromMove(bestCandidateMove);
     }
   }
@@ -930,6 +945,11 @@ class UciEngineClient {
     [0.10, "Inaccuracy"],
     [0.20, "Mistake"]
   ]);
+
+  static INFO_DEPTH_RE = /\bdepth (\d+)/;
+  static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
+  static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
+  static BESTMOVE_RE = /^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?|\(none\)|0000)/i;
 
   static evalToExpectedPoints(candidateMove) {
     if (!candidateMove) return null;
@@ -967,11 +987,6 @@ class UciEngineClient {
     return firstMove.mateInMoves < secondMove.mateInMoves ? 1 : -1;
   }
 
-  static INFO_DEPTH_RE = /\bdepth (\d+)/;
-  static INFO_SCORE_RE = /\bscore (cp|mate) (-?\d+)/;
-  static INFO_PV_RE = /\bpv ([a-h][1-8][a-h][1-8][qrbn]?(?: [a-h][1-8][a-h][1-8][qrbn]?)*)/;
-  static BESTMOVE_RE = /^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?|\(none\)|0000)/i;
-
   static parseUciOptionLine(uciLine) {
     const headerMatch = uciLine.match(/^option name (.+?) type (\S+)(?:\s+(.*))?$/);
     if (!headerMatch) return null;
@@ -1005,9 +1020,7 @@ class UciEngineClient {
     this.previousPositionCandidateMoves = [];
     this.currentPositionFen = null;
     this.lastAutoMovedFen = null;
-    this.currentEngineUrl =
-      extension?.extensionOptions?.[EXTENSION_OPTION_KEY.EngineWebSocketUrl] ||
-      getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl);
+    this.currentEngineUrl = getExtensionOption(extension, EXTENSION_OPTION_KEY.EngineWebSocketUrl);
     this.targetEngineUrl = this.currentEngineUrl;
     this.isSwitchingEngine = false;
     this.supportedUciOptions = new Map();
@@ -1062,16 +1075,16 @@ class UciEngineClient {
 
   initializeWebSocket(engineUrl) {
     const trimmedUrl = typeof engineUrl === "string" ? engineUrl.trim() : "";
-    if (!/^wss?:\/\//i.test(trimmedUrl)) {
+    if (!WEBSOCKET_URL_RE.test(trimmedUrl)) {
       if (trimmedUrl) {
-        console.error("Failed to initialize WebSocket: Invalid WebSocket URL:", trimmedUrl);
+        console.error("[BetterMint] Failed to initialize WebSocket: Invalid WebSocket URL:", trimmedUrl);
       }
       return;
     }
     try {
       this.websocket = new WebSocket(trimmedUrl);
     } catch (socketError) {
-      console.error("Failed to initialize WebSocket:", socketError);
+      console.error("[BetterMint] Failed to initialize WebSocket:", socketError);
       this.handleDisconnect();
       return;
     }
@@ -1101,7 +1114,7 @@ class UciEngineClient {
     activeSocket.addEventListener("close", () => {
       if (this.websocket !== activeSocket || this.isSwitchingEngine) return;
       if (this.reconnectAttempts === 0) {
-        console.error("WebSocket connection closed.");
+        console.error("[BetterMint] WebSocket connection closed.");
       }
       this.handleDisconnect();
     });
@@ -1109,7 +1122,7 @@ class UciEngineClient {
     activeSocket.addEventListener("error", (socketError) => {
       if (this.websocket !== activeSocket) return;
       if (this.reconnectAttempts === 0) {
-        console.error("WebSocket error:", socketError);
+        console.error("[BetterMint] WebSocket error:", socketError);
       }
     });
   }
@@ -1144,7 +1157,7 @@ class UciEngineClient {
     if (this.isWebSocketOpen()) {
       this.websocket.send(sanitizedCommand);
     } else {
-      console.warn("Attempted to send command while WebSocket is not open.");
+      console.warn("[BetterMint] Attempted to send command while WebSocket is not open.");
     }
   }
 
@@ -1154,9 +1167,13 @@ class UciEngineClient {
 
   buildGoCommand() {
     const commandParts = ["go"];
-    const depth = getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, DEFAULT_SEARCH_DEPTH);
-    const movetimeMs = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoMovetime, 0);
-    const nodeLimit = getNonNegativeIntOption(EXTENSION_OPTION_KEY.GoNodes, 0);
+    const depth = getNonNegativeIntOption(
+      this.extension,
+      EXTENSION_OPTION_KEY.Depth,
+      DEFAULT_SEARCH_DEPTH
+    );
+    const movetimeMs = getNonNegativeIntOption(this.extension, EXTENSION_OPTION_KEY.GoMovetime, 0);
+    const nodeLimit = getNonNegativeIntOption(this.extension, EXTENSION_OPTION_KEY.GoNodes, 0);
 
     if (depth > 0) commandParts.push("depth", String(depth));
     if (movetimeMs > 0) commandParts.push("movetime", String(movetimeMs));
@@ -1192,7 +1209,7 @@ class UciEngineClient {
     this.initializeWebSocket(
       this.targetEngineUrl ||
         this.currentEngineUrl ||
-        getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl)
+        getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EngineWebSocketUrl)
     );
   }
 
@@ -1207,7 +1224,7 @@ class UciEngineClient {
       this.maxReconnectDelayMs
     );
     if (this.reconnectAttempts === 1) {
-      console.log(`Attempting to reconnect in ${reconnectDelayMs / 1000} seconds...`);
+      console.log(`[BetterMint] Attempting to reconnect in ${reconnectDelayMs / 1000} seconds...`);
     }
     this.reconnectTimerId = setTimeout(() => {
       this.reconnectTimerId = null;
@@ -1215,7 +1232,7 @@ class UciEngineClient {
         this.initializeWebSocket(
           this.targetEngineUrl ||
             this.currentEngineUrl ||
-            getExtensionOption(EXTENSION_OPTION_KEY.EngineWebSocketUrl)
+            getExtensionOption(this.extension, EXTENSION_OPTION_KEY.EngineWebSocketUrl)
         );
       }
     }, reconnectDelayMs);
@@ -1268,12 +1285,16 @@ class UciEngineClient {
   }
 
   calculateAutoMoveDelayMs(bestCandidateMove) {
-    if (!getExtensionOption(EXTENSION_OPTION_KEY.HumanLikeMoves)) {
+    if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.HumanLikeMoves)) {
       return 0;
     }
-    const movePaceSeconds = getPositiveFloatOption(EXTENSION_OPTION_KEY.MovePace, 12.5);
-    const physicalFloorMs = getPositiveFloatOption(EXTENSION_OPTION_KEY.PhysicalFloor, 600);
-    const timingSpread = getPositiveFloatOption(EXTENSION_OPTION_KEY.TimingSpread, 0.80);
+    const movePaceSeconds = getPositiveFloatOption(this.extension, EXTENSION_OPTION_KEY.MovePace, 12.5);
+    const physicalFloorMs = getPositiveFloatOption(
+      this.extension,
+      EXTENSION_OPTION_KEY.PhysicalFloor,
+      600
+    );
+    const timingSpread = getPositiveFloatOption(this.extension, EXTENSION_OPTION_KEY.TimingSpread, 0.80);
 
     let medianThinkMs = movePaceSeconds * 1000;
 
@@ -1281,7 +1302,11 @@ class UciEngineClient {
     const legalMoves = chessComGame.getLegalMoves();
     const lastPlayedMove = chessComGame.getLastMove();
 
-    const reflexMultiplier = getPositiveFloatOption(EXTENSION_OPTION_KEY.ReflexMultiplier, 0.25);
+    const reflexMultiplier = getPositiveFloatOption(
+      this.extension,
+      EXTENSION_OPTION_KEY.ReflexMultiplier,
+      0.25
+    );
     const isForcedMove = legalMoves.length === 1;
     const isRecapture = Boolean(lastPlayedMove && bestCandidateMove.to === lastPlayedMove.to);
 
@@ -1289,10 +1314,12 @@ class UciEngineClient {
       medianThinkMs *= reflexMultiplier;
     } else {
       const openingMoveThreshold = getNonNegativeIntOption(
+        this.extension,
         EXTENSION_OPTION_KEY.OpeningMovesThreshold,
         10
       );
       const openingMultiplier = getPositiveFloatOption(
+        this.extension,
         EXTENSION_OPTION_KEY.OpeningMultiplier,
         0.40
       );
@@ -1305,6 +1332,7 @@ class UciEngineClient {
     }
 
     const clockThresholdSeconds = getNonNegativeIntOption(
+      this.extension,
       EXTENSION_OPTION_KEY.ClockThreshold,
       180
     );
@@ -1404,7 +1432,7 @@ class UciEngineClient {
     if (this.candidateMoves.length > 0) {
       this.handleCandidateMoveUpdate(null, !this.isEvaluating);
     } else if (
-      getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
+      getExtensionOption(this.extension, EXTENSION_OPTION_KEY.LegitAutoMove) &&
       !this.isEvaluating &&
       this.isWebSocketOpen()
     ) {
@@ -1420,7 +1448,7 @@ class UciEngineClient {
       const nextOptionValue = Object.hasOwn(targetUciOptions, previousOptionName)
         ? targetUciOptions[previousOptionName]
         : undefined;
-      if (nextOptionValue !== "" && nextOptionValue !== undefined && nextOptionValue !== null) {
+      if (hasUciOptionValue(nextOptionValue)) {
         continue;
       }
 
@@ -1437,7 +1465,7 @@ class UciEngineClient {
     }
 
     for (const [optionName, optionValue] of Object.entries(targetUciOptions)) {
-      if (optionValue === "" || optionValue === undefined || optionValue === null) continue;
+      if (!hasUciOptionValue(optionValue)) continue;
       if (this.supportedUciOptions.size === 0 || this.supportedUciOptions.has(optionName)) {
         this.sendUciCommand(`setoption name ${optionName} value ${optionValue}`);
         this.appliedUciOptions[optionName] = optionValue;
@@ -1460,124 +1488,143 @@ class UciEngineClient {
     }
   }
 
-  processEngineLine(uciLine) {
-    if (uciLine.startsWith("option name ")) {
-      const parsedUciOption = UciEngineClient.parseUciOptionLine(uciLine);
-      if (parsedUciOption) {
-        this.supportedUciOptions.set(
-          parsedUciOption.name,
-          parsedUciOption.hasDefault ? parsedUciOption.default : undefined
-        );
+  handleUciOptionLine(uciLine) {
+    const parsedUciOption = UciEngineClient.parseUciOptionLine(uciLine);
+    if (parsedUciOption) {
+      this.supportedUciOptions.set(
+        parsedUciOption.name,
+        parsedUciOption.hasDefault ? parsedUciOption.default : undefined
+      );
+    }
+  }
+
+  handleUciOk() {
+    this.isEngineLoaded = true;
+    this.reconnectAttempts = 0;
+    this.fatalErrorMessage = null;
+    this.applyUciOptions();
+    if (this.readyCallbacks.length > 0) {
+      this.sendIsReady();
+    }
+  }
+
+  handleBookMovesLine(uciLine) {
+    if (this.hasRequestedStop) return;
+    const bookMoveTokens = uciLine
+      .slice("info string book ".length)
+      .trim()
+      .toLowerCase()
+      .split(/\s+/);
+    for (const bookMoveToken of bookMoveTokens) {
+      if (UCI_MOVE_RE.test(bookMoveToken)) {
+        this.currentPositionBookMoves.add(bookMoveToken);
       }
+    }
+    if (this.currentPositionBookMoves.size > 0) {
+      this.hasCurrentPositionBookHit = true;
+    }
+  }
+
+  handleReadyOk() {
+    if (this.pendingReadyCount > 0) {
+      this.pendingReadyCount--;
+    }
+    if (this.pendingReadyCount > 0) return;
+
+    this.hasSentIsReady = false;
+    this.isEngineReady = true;
+    while (this.isEngineReady && this.readyCallbacks.length > 0) {
+      const readyCallback = this.readyCallbacks.shift();
+      readyCallback();
+    }
+    if (!this.isEngineReady && this.readyCallbacks.length > 0) {
+      this.sendIsReady();
+    }
+  }
+
+  handleInfoLine(uciLine) {
+    if (
+      this.hasRequestedStop ||
+      !uciLine.includes(" pv ") ||
+      /\b(?:upperbound|lowerbound)\b/.test(uciLine)
+    ) {
       return;
     }
 
-    if (uciLine === "uciok") {
-      this.isEngineLoaded = true;
-      this.reconnectAttempts = 0;
-      this.fatalErrorMessage = null;
-      this.applyUciOptions();
-      if (this.readyCallbacks.length > 0) {
-        this.sendIsReady();
-      }
+    const pvMatch = uciLine.match(UciEngineClient.INFO_PV_RE);
+    if (!pvMatch) return;
+    const depthMatch = uciLine.match(UciEngineClient.INFO_DEPTH_RE);
+    const scoreMatch = uciLine.match(UciEngineClient.INFO_SCORE_RE);
+    if (!depthMatch || !scoreMatch) return;
+
+    const searchDepth = parseInt(depthMatch[1], 10);
+    const scoreUnit = scoreMatch[1];
+    const numericScore = parseInt(scoreMatch[2], 10);
+    const centipawns = scoreUnit === "cp" ? numericScore : null;
+    const mateInMoves = scoreUnit === "mate" ? numericScore : null;
+    this.handleCandidateMoveUpdate(
+      new CandidateMove(pvMatch[1], searchDepth, centipawns, mateInMoves),
+      false
+    );
+  }
+
+  handleBestMoveLine(uciLine) {
+    const bestMoveMatch = uciLine.match(UciEngineClient.BESTMOVE_RE);
+    if (!bestMoveMatch) return;
+
+    if (this.staleBestMovesToIgnore > 0) {
+      this.staleBestMovesToIgnore--;
+      return;
+    }
+    if (this.stopFallbackTimeoutId !== null) {
+      clearTimeout(this.stopFallbackTimeoutId);
+      this.stopFallbackTimeoutId = null;
+    }
+    this.isEvaluating = false;
+    const hadRequestedStop = this.hasRequestedStop;
+    this.hasRequestedStop = false;
+
+    const completionCallbacks = this.stopCompletionCallbacks;
+    this.stopCompletionCallbacks = [];
+    completionCallbacks.forEach((completionCallback) => completionCallback());
+
+    const bestUciMove = bestMoveMatch[1].toLowerCase();
+    const isNullBestMove =
+      bestUciMove === "(none)" ||
+      bestUciMove === "0000" ||
+      bestUciMove.slice(0, 2) === bestUciMove.slice(2, 4);
+    if (hadRequestedStop || isNullBestMove) return;
+
+    const existingCandidate = this.candidateMoves.find(
+      (candidate) => candidate.uciMove === bestUciMove
+    );
+    const resolvedCandidate =
+      existingCandidate ||
+      new CandidateMove(
+        bestUciMove,
+        getNonNegativeIntOption(this.extension, EXTENSION_OPTION_KEY.Depth, 1) || 1,
+        null,
+        null
+      );
+    this.handleCandidateMoveUpdate(resolvedCandidate, true);
+  }
+
+  processEngineLine(uciLine) {
+    if (uciLine.startsWith("option name ")) {
+      this.handleUciOptionLine(uciLine);
+    } else if (uciLine === "uciok") {
+      this.handleUciOk();
     } else if (uciLine.startsWith("info string Error:")) {
       this.fatalErrorMessage = uciLine.slice("info string ".length);
       console.error(`[BetterMint] ${this.fatalErrorMessage}`);
     } else if (uciLine.startsWith("info string book ")) {
-      if (this.hasRequestedStop) return;
-      const bookMoveTokens = uciLine
-        .slice("info string book ".length)
-        .trim()
-        .toLowerCase()
-        .split(/\s+/);
-      for (const bookMoveToken of bookMoveTokens) {
-        if (UCI_MOVE_RE.test(bookMoveToken)) {
-          this.currentPositionBookMoves.add(bookMoveToken);
-        }
-      }
-      if (this.currentPositionBookMoves.size > 0) {
-        this.hasCurrentPositionBookHit = true;
-      }
+      this.handleBookMovesLine(uciLine);
     } else if (uciLine === "readyok") {
-      if (this.pendingReadyCount > 0) {
-        this.pendingReadyCount--;
-      }
-      if (this.pendingReadyCount > 0) {
-        return;
-      }
-      this.hasSentIsReady = false;
-      this.isEngineReady = true;
-      while (this.isEngineReady && this.readyCallbacks.length > 0) {
-        const readyCallback = this.readyCallbacks.shift();
-        readyCallback();
-      }
-      if (!this.isEngineReady && this.readyCallbacks.length > 0) {
-        this.sendIsReady();
-      }
+      this.handleReadyOk();
     } else if (uciLine.startsWith("info ")) {
-      if (
-        this.hasRequestedStop ||
-        !uciLine.includes(" pv ") ||
-        /\b(?:upperbound|lowerbound)\b/.test(uciLine)
-      ) {
-        return;
-      }
-
-      const pvMatch = uciLine.match(UciEngineClient.INFO_PV_RE);
-      if (!pvMatch) return;
-      const depthMatch = uciLine.match(UciEngineClient.INFO_DEPTH_RE);
-      const scoreMatch = uciLine.match(UciEngineClient.INFO_SCORE_RE);
-      if (!depthMatch || !scoreMatch) return;
-
-      const searchDepth = parseInt(depthMatch[1], 10);
-      const scoreUnit = scoreMatch[1];
-      const numericScore = parseInt(scoreMatch[2], 10);
-      const centipawns = scoreUnit === "cp" ? numericScore : null;
-      const mateInMoves = scoreUnit === "mate" ? numericScore : null;
-      const candidateMove = new CandidateMove(pvMatch[1], searchDepth, centipawns, mateInMoves);
-      this.handleCandidateMoveUpdate(candidateMove, false);
+      this.handleInfoLine(uciLine);
     } else if (uciLine.startsWith("bestmove ")) {
-      const bestMoveMatch = uciLine.match(UciEngineClient.BESTMOVE_RE);
-      if (bestMoveMatch) {
-        if (this.staleBestMovesToIgnore > 0) {
-          this.staleBestMovesToIgnore--;
-          return;
-        }
-        if (this.stopFallbackTimeoutId !== null) {
-          clearTimeout(this.stopFallbackTimeoutId);
-          this.stopFallbackTimeoutId = null;
-        }
-        this.isEvaluating = false;
-        const hadRequestedStop = this.hasRequestedStop;
-        this.hasRequestedStop = false;
-
-        const completionCallbacks = this.stopCompletionCallbacks;
-        this.stopCompletionCallbacks = [];
-        completionCallbacks.forEach((completionCallback) => completionCallback());
-
-        const bestUciMove = bestMoveMatch[1].toLowerCase();
-        const isNullBestMove =
-          bestUciMove === "(none)" ||
-          bestUciMove === "0000" ||
-          bestUciMove.slice(0, 2) === bestUciMove.slice(2, 4);
-        if (!hadRequestedStop && !isNullBestMove) {
-          const existingIndex = this.candidateMoves.findIndex(
-            (candidate) => candidate.uciMove === bestUciMove
-          );
-
-          if (existingIndex < 0) {
-            const fallbackBestCandidate = new CandidateMove(
-              bestUciMove,
-              getNonNegativeIntOption(EXTENSION_OPTION_KEY.Depth, 1) || 1,
-              null,
-              null
-            );
-            this.handleCandidateMoveUpdate(fallbackBestCandidate, true);
-          } else {
-            this.handleCandidateMoveUpdate(this.candidateMoves[existingIndex], true);
-          }
-        }
-      }
+      this.handleBestMoveLine(uciLine);
     }
   }
 
@@ -1698,7 +1745,7 @@ class UciEngineClient {
     if (topCandidateMoves.length > 0) {
       this.extension.gameController.renderMoveHints(topCandidateMoves);
 
-      if (hasSelectedBestMove && getExtensionOption(EXTENSION_OPTION_KEY.MoveAnalysis)) {
+      if (hasSelectedBestMove && getExtensionOption(this.extension, EXTENSION_OPTION_KEY.MoveAnalysis)) {
         this.analyzeLastMove();
       }
     }
@@ -1712,7 +1759,7 @@ class UciEngineClient {
     const gameController = this.extension.gameController;
     const chessComGame = gameController.chessComGame;
     const canExecuteAutoMove = () =>
-      getExtensionOption(EXTENSION_OPTION_KEY.LegitAutoMove) &&
+      getExtensionOption(this.extension, EXTENSION_OPTION_KEY.LegitAutoMove) &&
       chessComGame.getPlayingAs() === chessComGame.getTurn() &&
       !UciEngineClient.NON_PLAYING_MODES.has(chessComGame.getMode());
 
@@ -1744,7 +1791,7 @@ class UciEngineClient {
           this.lastAutoMovedFen = activeBoardFen;
         }
       } catch (moveError) {
-        console.error("Failed to execute auto move:", moveError);
+        console.error("[BetterMint] Failed to execute auto move:", moveError);
       }
     };
 
@@ -1766,13 +1813,12 @@ class UciEngineClient {
 class BetterMintExtension {
   constructor(chessboardElement, initialExtensionOptions) {
     this.extensionOptions = Object.assign({}, initialExtensionOptions);
-    activeExtension = this;
     this.gameController = new GameController(this, chessboardElement);
     this.engineClient = new UciEngineClient(this);
     window.addEventListener(
       "BetterMintUpdateOptions",
       (optionsEvent) => {
-        if (!optionsEvent.detail) return;
+        if (!optionsEvent.detail || typeof optionsEvent.detail !== "object") return;
         this.extensionOptions = Object.assign({}, this.extensionOptions, optionsEvent.detail);
         this.gameController.applyExtensionOptions();
         this.engineClient.applyExtensionOptions(optionsEvent.detail);
@@ -1782,29 +1828,34 @@ class BetterMintExtension {
   }
 }
 
+let activeExtension = null;
+let pendingBoardElement = null;
+let pendingOptionsPromise = null;
+
 function attachBoardController(chessboardElement) {
   activeExtension.gameController.destroy();
   activeExtension.gameController = new GameController(activeExtension, chessboardElement);
   activeExtension.gameController.updateEnginePosition(true);
 }
 
-let pendingBoardElement = null;
-let pendingOptionsPromise = null;
-
-function initializeBetterMintExtension(chessboardElement) {
+async function initializeBetterMintExtension(chessboardElement) {
   pendingBoardElement = chessboardElement;
   if (activeExtension) {
     attachBoardController(chessboardElement);
     return;
   }
 
-  if (!pendingOptionsPromise) {
-    pendingOptionsPromise = requestExtensionOptions().then((loadedOptions) => {
-      pendingOptionsPromise = null;
-      const targetBoardElement = pendingBoardElement;
-      pendingBoardElement = null;
+  if (pendingOptionsPromise) return;
+  pendingOptionsPromise = requestExtensionOptions();
+  try {
+    const loadedOptions = await pendingOptionsPromise;
+    const targetBoardElement = pendingBoardElement;
+    pendingBoardElement = null;
+    if (targetBoardElement) {
       activeExtension = new BetterMintExtension(targetBoardElement, loadedOptions);
-    });
+    }
+  } finally {
+    pendingOptionsPromise = null;
   }
 }
 
@@ -1833,7 +1884,7 @@ if (typeof document !== "undefined") {
       pollAttempts++;
       const currentBoard = candidateBoard.isConnected
         ? candidateBoard
-        : document.querySelector("wc-chess-board, chess-board");
+        : document.querySelector(CHESSBOARD_SELECTOR);
       if (tryAttachBoard(currentBoard) || pollAttempts >= 200) {
         clearInterval(boardReadyIntervalId);
         boardReadyIntervalId = null;
@@ -1856,8 +1907,8 @@ if (typeof document !== "undefined") {
           activeExtension.engineClient.stopEvaluation();
         }
       }
-      const detectedBoard = document.querySelector("wc-chess-board, chess-board");
-      if (detectedBoard && detectedBoard !== activeBoardElement) {
+      const detectedBoard = document.querySelector(CHESSBOARD_SELECTOR);
+      if (detectedBoard) {
         watchForBoardGameReady(detectedBoard);
       }
     });
@@ -1869,7 +1920,7 @@ if (typeof document !== "undefined") {
     scheduleBoardScan();
   });
 
-  const existingBoardElement = document.querySelector("wc-chess-board, chess-board");
+  const existingBoardElement = document.querySelector(CHESSBOARD_SELECTOR);
   if (existingBoardElement) {
     watchForBoardGameReady(existingBoardElement);
   }
@@ -1891,11 +1942,7 @@ if (typeof module !== "undefined" && module.exports) {
     buildUciPositionCommand,
     STANDARD_STARTPOS_FEN,
     formatEvaluationDisplay,
-    getEvalBarOffsetPx,
-    setExtensionOptionsForTesting: (extensionOptions) => {
-      activeExtension = undefined;
-      fallbackExtensionOptions = extensionOptions;
-    }
+    getEvalBarOffsetPx
   };
 }
 })();

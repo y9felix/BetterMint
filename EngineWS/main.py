@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from http import HTTPStatus
 import json
 import os
@@ -35,7 +36,7 @@ def load_engine_config(config_path: str = CONFIG_PATH) -> dict:
                 json.dump(DEFAULT_ENGINE_CONFIG, config_file, indent=2)
         except OSError as write_error:
             print(f"[CONFIG WARN] Failed to write default config '{config_path}': {write_error}", flush=True)
-        return dict(DEFAULT_ENGINE_CONFIG)
+        return copy.deepcopy(DEFAULT_ENGINE_CONFIG)
     try:
         with open(config_path, "r", encoding="utf-8") as config_file:
             parsed_config = json.load(config_file)
@@ -44,7 +45,7 @@ def load_engine_config(config_path: str = CONFIG_PATH) -> dict:
             print(f"[CONFIG WARN] Config '{config_path}' root is not an object; using defaults", flush=True)
     except (OSError, json.JSONDecodeError) as load_error:
         print(f"[CONFIG WARN] Failed to load '{config_path}': {load_error}; using defaults", flush=True)
-    return dict(DEFAULT_ENGINE_CONFIG)
+    return copy.deepcopy(DEFAULT_ENGINE_CONFIG)
 
 def resolve_engine_command(engine_config: dict, engine_name: str | None) -> list[str]:
     engines_map = engine_config.get("engines")
@@ -104,11 +105,11 @@ class EngineProcess:
 
     @property
     def exit_code(self) -> int | None:
-        return self._process.returncode
+        return self._process.returncode if self._process is not None else None
 
     @property
     def stderr(self):
-        return self._process.stderr
+        return self._process.stderr if self._process is not None else None
 
     async def start(self):
         self._process = await asyncio.create_subprocess_exec(
@@ -183,6 +184,87 @@ async def send_error_and_close(websocket: ServerConnection, error_message: str, 
     except ConnectionClosed:
         pass
 
+async def handle_book_uci_line(
+    websocket: ServerConnection,
+    engine_process: EngineProcess,
+    board_state: PolyglotBoard,
+    active_book_path: str,
+    is_board_synced: bool,
+    clean_line: str,
+) -> bool:
+    lower_line = " ".join(clean_line.lower().split())
+    if lower_line == "ucinewgame":
+        board_state.reset()
+        await engine_process.send_uci(clean_line)
+        return True
+    if lower_line.startswith("position "):
+        next_synced = board_state.apply_position_command(clean_line)
+        await engine_process.send_uci(clean_line)
+        return next_synced
+    if (lower_line == "go" or lower_line.startswith("go ")) and is_board_synced:
+        book_entries = lookup_polyglot_moves(board_state, active_book_path)
+        book_selection = pick_book_moves(book_entries)
+        if book_selection:
+            selected_move, ordered_moves = book_selection
+            await websocket.send(f"info string book {' '.join(ordered_moves)}")
+            await websocket.send(f"bestmove {selected_move}")
+            return is_board_synced
+    await engine_process.send_uci(clean_line)
+    return is_board_synced
+
+async def forward_websocket_to_engine(
+    websocket: ServerConnection,
+    engine_process: EngineProcess,
+    board_state: PolyglotBoard | None,
+    active_book_path: str | None,
+):
+    is_board_synced = True
+    try:
+        async for raw_message in websocket:
+            uci_message = (
+                raw_message.decode("utf-8", errors="replace")
+                if isinstance(raw_message, bytes)
+                else raw_message
+            )
+            if IS_VERBOSE_UCI_LOGGING:
+                escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
+                print(f"[UCI IN] {escaped_message}", flush=True)
+            if board_state is None or active_book_path is None:
+                await engine_process.send_uci(uci_message)
+                continue
+            for clean_line in iter_uci_lines(uci_message):
+                is_board_synced = await handle_book_uci_line(
+                    websocket,
+                    engine_process,
+                    board_state,
+                    active_book_path,
+                    is_board_synced,
+                    clean_line,
+                )
+    except ConnectionClosed:
+        pass
+
+async def forward_engine_to_websocket(websocket: ServerConnection, engine_process: EngineProcess):
+    try:
+        while websocket.state is State.OPEN:
+            stdout_line = await engine_process.read_stdout_line()
+            if stdout_line is None:
+                break
+            if stdout_line:
+                await websocket.send(stdout_line)
+    except ConnectionClosed:
+        pass
+
+async def log_engine_stderr(engine_process: EngineProcess, last_stderr_out: list[str]):
+    stderr_stream = engine_process.stderr
+    if not stderr_stream:
+        return
+    while stderr_bytes := await stderr_stream.readline():
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+        if stderr_text:
+            last_stderr_out[0] = stderr_text
+            print(f"[ENGINE STDERR] {stderr_text}", flush=True)
+
 async def serve_engine_websocket(
     websocket: ServerConnection,
     engine_command: list[str],
@@ -192,19 +274,20 @@ async def serve_engine_websocket(
         await websocket.close(code=1013)
         return
 
+    command_label = " ".join(engine_command)
     async with engine_concurrency_semaphore:
-        print(f"[ENGINE SPAWN] {' '.join(engine_command)}", flush=True)
+        print(f"[ENGINE SPAWN] {command_label}", flush=True)
         try:
             engine_process = await EngineProcess(engine_command).start()
         except FileNotFoundError:
-            print(f"[ENGINE ERROR] Binary not found: {' '.join(engine_command)}", flush=True)
+            print(f"[ENGINE ERROR] Binary not found: {command_label}", flush=True)
             await send_error_and_close(
                 websocket,
                 f"info string Error: Engine binary '{engine_command[0]}' not found",
             )
             return
         except OSError as launch_error:
-            print(f"[ENGINE ERROR] Failed to start engine '{' '.join(engine_command)}': {launch_error}", flush=True)
+            print(f"[ENGINE ERROR] Failed to start engine '{command_label}': {launch_error}", flush=True)
             await send_error_and_close(
                 websocket,
                 f"info string Error: Failed to start engine '{engine_command[0]}': {launch_error}",
@@ -219,70 +302,13 @@ async def serve_engine_websocket(
                 print(f"[CONFIG WARN] Polyglot book '{book_path}' not found; running without opening book", flush=True)
 
         board_state = PolyglotBoard() if active_book_path else None
-        is_board_synced = True
+        last_stderr_out = [""]
 
-        async def forward_websocket_to_engine():
-            nonlocal is_board_synced
-            try:
-                async for raw_message in websocket:
-                    uci_message = (
-                        raw_message.decode("utf-8", errors="replace")
-                        if isinstance(raw_message, bytes)
-                        else raw_message
-                    )
-                    if IS_VERBOSE_UCI_LOGGING:
-                        escaped_message = uci_message.replace("\r", "\\r").replace("\n", "\\n")
-                        print(f"[UCI IN] {escaped_message}", flush=True)
-                    if board_state is None:
-                        await engine_process.send_uci(uci_message)
-                        continue
-                    for clean_line in iter_uci_lines(uci_message):
-                        lower_line = " ".join(clean_line.lower().split())
-                        if lower_line == "ucinewgame":
-                            board_state.reset()
-                            is_board_synced = True
-                        elif lower_line.startswith("position "):
-                            is_board_synced = board_state.apply_position_command(clean_line)
-                        elif lower_line == "go" or lower_line.startswith("go "):
-                            if is_board_synced:
-                                book_entries = lookup_polyglot_moves(board_state, active_book_path)
-                                book_selection = pick_book_moves(book_entries)
-                                if book_selection:
-                                    selected_move, ordered_moves = book_selection
-                                    await websocket.send(f"info string book {' '.join(ordered_moves)}")
-                                    await websocket.send(f"bestmove {selected_move}")
-                                    continue
-                        await engine_process.send_uci(clean_line)
-            except ConnectionClosed:
-                pass
-
-        async def forward_engine_to_websocket():
-            try:
-                while websocket.state is State.OPEN:
-                    stdout_line = await engine_process.read_stdout_line()
-                    if stdout_line is None:
-                        break
-                    if stdout_line:
-                        await websocket.send(stdout_line)
-            except ConnectionClosed:
-                pass
-
-        last_stderr_line = ""
-
-        async def log_engine_stderr():
-            nonlocal last_stderr_line
-            stderr_stream = engine_process.stderr
-            if not stderr_stream:
-                return
-            while stderr_bytes := await stderr_stream.readline():
-                stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
-                if stderr_text:
-                    last_stderr_line = stderr_text
-                    print(f"[ENGINE STDERR] {stderr_text}", flush=True)
-
-        ingress_task = asyncio.create_task(forward_websocket_to_engine())
-        egress_task = asyncio.create_task(forward_engine_to_websocket())
-        stderr_task = asyncio.create_task(log_engine_stderr())
+        ingress_task = asyncio.create_task(
+            forward_websocket_to_engine(websocket, engine_process, board_state, active_book_path)
+        )
+        egress_task = asyncio.create_task(forward_engine_to_websocket(websocket, engine_process))
+        stderr_task = asyncio.create_task(log_engine_stderr(engine_process, last_stderr_out))
 
         try:
             await asyncio.wait(
@@ -304,13 +330,13 @@ async def serve_engine_websocket(
             await engine_process.wait_until_closed()
             exit_code = engine_process.exit_code
             if exit_code and not had_sent_quit and websocket.state is State.OPEN:
-                error_detail = f": {last_stderr_line}" if last_stderr_line else ""
+                error_detail = f": {last_stderr_out[0]}" if last_stderr_out[0] else ""
                 await send_error_and_close(
                     websocket,
                     f"info string Error: Engine crashed (exit {exit_code}){error_detail}",
                     code=1011,
                 )
-            print(f"[ENGINE STOP] {' '.join(engine_command)}", flush=True)
+            print(f"[ENGINE STOP] {command_label}", flush=True)
 
 async def handle_websocket_connection(websocket: ServerConnection):
     _, engine_name = resolve_engine_name_from_path(websocket.request.path)

@@ -630,8 +630,6 @@ body.is-ready .config-popover {
     min-height: 34px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
     background: transparent;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -653,14 +651,6 @@ body.is-ready .config-popover {
 .config-item-name {
     font-weight: 600;
     color: var(--text-primary);
-}
-
-.config-item-meta {
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-muted);
-    white-space: nowrap;
-    flex-shrink: 0;
 }
 
 .config-empty {

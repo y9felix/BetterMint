@@ -156,7 +156,6 @@ POLYGLOT_RANDOM_64 = (
     0xF8D626AAAF278509,
 )
 
-
 class PolyglotBoard:
     def __init__(self, fen: str = STARTPOS_FEN):
         self.squares = [None] * 64
@@ -180,8 +179,10 @@ class PolyglotBoard:
             rank = 7 - row_index
             file_index = 0
             for symbol in row_text:
-                if symbol.isdigit():
+                if "1" <= symbol <= "8":
                     file_index += int(symbol)
+                    if file_index > 8:
+                        return False
                 elif symbol in PIECE_KINDS and file_index < 8:
                     squares[rank * 8 + file_index] = symbol
                     file_index += 1
