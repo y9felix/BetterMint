@@ -10,6 +10,9 @@
 
 </div>
 
+> [!NOTE]
+> BetterMint is complete. Future updates will address only fixes for Chess.com DOM changes and Chromium updates. If a problem arises, open an issue on [GitHub](https://github.com/y9felix/BetterMint/issues).
+
 ## What it is
 
 BetterMint is a Manifest V3 Chrome extension that connects Chess.com to Universal Chess Interface engines over WebSocket.
