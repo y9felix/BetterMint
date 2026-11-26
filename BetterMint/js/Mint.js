@@ -138,6 +138,11 @@ function hasUciOptionValue(optionValue) {
   return optionValue !== "" && optionValue !== undefined && optionValue !== null;
 }
 
+function getGameModeName(modeValue) {
+  if (typeof modeValue === "string") return modeValue;
+  return typeof modeValue?.name === "string" ? modeValue.name : null;
+}
+
 function measureChessboardRect(chessboardElement) {
   const innerBoardElement =
     chessboardElement.querySelector?.(".board, chess-board, svg.coordinates") ||
@@ -343,14 +348,14 @@ class GameController {
     this.autoQueueScanTimeoutId = null;
     this.gameOverRetryIntervalId = null;
     this.lastAutoQueueClickMs = 0;
-    this.wasPlaying = this.chessComGame?.getMode?.() === "playing";
+    this.wasPlaying = getGameModeName(this.chessComGame?.getMode?.()) === "playing";
     this.anchorPositionFen = null;
     this.recordedUciMoves = [];
     this.lastObservedFen = null;
 
     this.chessComGame.on("Move", () => {
       if (this.isDestroyed) return;
-      if (this.chessComGame?.getMode?.() === "playing") this.wasPlaying = true;
+      if (getGameModeName(this.chessComGame?.getMode?.()) === "playing") this.wasPlaying = true;
       this.clearAutoMoveTimer();
       this.removeCurrentHintMarkings();
       if (this.chessComGame.getPlayingAs() === this.chessComGame.getTurn()) {
@@ -365,7 +370,7 @@ class GameController {
 
     this.chessComGame.on("ModeChanged", (modeEvent) => {
       if (this.isDestroyed) return;
-      const nextMode = modeEvent?.data;
+      const nextMode = getGameModeName(modeEvent?.data);
       if (nextMode === "playing") {
         this.wasPlaying = true;
         if (this.modeResetTimeoutId !== null) clearTimeout(this.modeResetTimeoutId);
@@ -383,14 +388,16 @@ class GameController {
       }
     });
 
-    this.chessComGame.on("RendererSet", () => {
-      if (this.isDestroyed) return;
-      this.resetGame();
-    });
+    for (const eventName of ["RendererSet", "Load"]) {
+      this.chessComGame.on(eventName, () => {
+        if (this.isDestroyed) return;
+        this.resetGame();
+      });
+    }
 
     this.chessComGame.on("ResetGame", () => {
       if (this.isDestroyed) return;
-      this.wasPlaying = this.chessComGame?.getMode?.() === "playing";
+      this.wasPlaying = getGameModeName(this.chessComGame?.getMode?.()) === "playing";
       if (this.resetGameTimeoutId !== null) clearTimeout(this.resetGameTimeoutId);
       this.resetGameTimeoutId = setTimeout(() => {
         this.resetGameTimeoutId = null;
@@ -470,7 +477,7 @@ class GameController {
 
   triggerAutoQueue() {
     if (!getExtensionOption(this.extension, EXTENSION_OPTION_KEY.AutoQueue)) return false;
-    if (this.chessComGame?.getMode?.() === "playing") return false;
+    if (getGameModeName(this.chessComGame?.getMode?.()) === "playing") return false;
     const nowMs = Date.now();
     if (this.lastAutoQueueClickMs && nowMs - this.lastAutoQueueClickMs < AUTO_QUEUE_COOLDOWN_MS) {
       return false;
@@ -521,7 +528,7 @@ class GameController {
       if (this.autoQueueScanTimeoutId !== null) return;
       this.autoQueueScanTimeoutId = setTimeout(() => {
         this.autoQueueScanTimeoutId = null;
-        if (this.isDestroyed || this.chessComGame?.getMode?.() === "playing") return;
+        if (this.isDestroyed || getGameModeName(this.chessComGame?.getMode?.()) === "playing") return;
         const exitedPlaying = this.wasPlaying;
         this.wasPlaying = false;
         if (!this.triggerAutoQueue() && exitedPlaying) this.handleGameOver();
@@ -822,7 +829,7 @@ class GameController {
 
   resetGame() {
     this.lastAutoQueueClickMs = 0;
-    this.wasPlaying = this.chessComGame?.getMode?.() === "playing";
+    this.wasPlaying = getGameModeName(this.chessComGame?.getMode?.()) === "playing";
     this.clearAutoMoveTimer();
     this.clearAutoQueueScanTimer();
     this.clearGameOverRetryInterval();
@@ -1099,7 +1106,7 @@ class UciEngineClient {
         this.sendUciCommand("ucinewgame");
         this.onReady(() => {
           const gameController = this.extension?.gameController;
-          if (gameController && gameController.chessComGame?.getMode?.() !== "gameOver") {
+          if (gameController && getGameModeName(gameController.chessComGame?.getMode?.()) !== "gameOver") {
             gameController.updateEnginePosition(false);
           }
         });
@@ -1761,7 +1768,7 @@ class UciEngineClient {
     const canExecuteAutoMove = () =>
       getExtensionOption(this.extension, EXTENSION_OPTION_KEY.LegitAutoMove) &&
       chessComGame.getPlayingAs() === chessComGame.getTurn() &&
-      !UciEngineClient.NON_PLAYING_MODES.has(chessComGame.getMode());
+      !UciEngineClient.NON_PLAYING_MODES.has(getGameModeName(chessComGame.getMode()));
 
     if (!canExecuteAutoMove()) return;
 
