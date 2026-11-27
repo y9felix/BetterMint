@@ -15,11 +15,15 @@
 
 ## What it is
 
-BetterMint is a Manifest V3 Chrome extension that connects Chess.com to UCI engines over WebSocket.
-It draws an evaluation bar, hint arrows, and move quality highlights on the board.
+BetterMint is a Manifest V3 Chrome extension that connects Chess.com to Stockfish and other UCI chess engines over WebSocket.
+It draws an evaluation bar, move hint arrows, and move analysis highlights on the board, and supports Polyglot opening books and human-like auto-move.
 You can connect BetterMint to hosted engine sockets or run local engines through EngineWS.
 
-Full guides, screenshots, and configuration details live in the [BetterMint Wiki](https://github.com/y9felix/BetterMint/wiki)!
+Full guides, screenshots, and configuration details live in the [BetterMint Wiki](https://github.com/y9felix/BetterMint/wiki).
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wiki/y9felix/BetterMint/images/home-overview.png" alt="BetterMint Chess.com evaluation bar, move hint arrows, and popup UI" width="720" />
+</p>
 
 ## Capabilities
 
