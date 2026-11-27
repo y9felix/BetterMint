@@ -1,6 +1,6 @@
 <div align="center">
 
-# BetterMint
+<h1><img src="BetterMint/img/betterlogo.png" alt="" height="32" align="absmiddle" /> BetterMint</h1>
 
 **Chess.com engine analysis and auto-move tool.**
 
@@ -15,7 +15,7 @@
 
 ## What it is
 
-BetterMint is a Manifest V3 Chrome extension that connects Chess.com to Universal Chess Interface engines over WebSocket.
+BetterMint is a Manifest V3 Chrome extension that connects Chess.com to UCI engines over WebSocket.
 It draws an evaluation bar, hint arrows, and move quality highlights on the board.
 You can connect BetterMint to hosted engine sockets or run local engines through EngineWS.
 
