@@ -1,6 +1,8 @@
 <div align="center">
 
-<h1><img src="BetterMint/img/betterlogo.png" alt="" height="32" align="absmiddle" /> BetterMint</h1>
+<img src="BetterMint/img/betterlogo.png" alt="BetterMint" height="120" />
+
+# BetterMint
 
 **Chess.com engine analysis and auto-move tool.**
 
